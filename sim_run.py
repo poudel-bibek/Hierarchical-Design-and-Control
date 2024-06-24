@@ -54,7 +54,7 @@ def scale_demand(input_file, output_file, scale_factor):
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write(pretty_xml_str)
 
-    print(f"Demand scaled by factor {scale_factor}. Output written to {output_file}")
+    print(f"Demand scaled by factor {scale_factor}.") # Output written to {output_file}")
 
 class CraverRoadEnv(gym.Env):
     def __init__(self, args):
@@ -385,7 +385,7 @@ class CraverRoadEnv(gym.Env):
         # Dummy observation
         observation = np.random.rand(*self.observation_space.shape).astype(np.float32)
         # Normalize the observation to be between 0 and 1
-        observation = (observation - observation.min()) / (observation.max() - observation.min())
+        #observation = (observation - observation.min()) / (observation.max() - observation.min())
 
         return observation
 
