@@ -1,6 +1,6 @@
 <configuration>
     <input>
         <net-file value="craver_road.net.xml"/>
-	<route-files value="pdtrips_adj.xml,vehtrips.xml"/>
+	<route-files value="pdtrips_adj.xml, scaled_vehtrips.xml"/>
     </input>
 </configuration>
