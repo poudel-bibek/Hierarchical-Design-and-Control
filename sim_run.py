@@ -1,5 +1,6 @@
 import math
 import traci
+import random
 import gymnasium as gym
 import numpy as np
 import argparse
@@ -10,7 +11,7 @@ def scale_demand(input_file, output_file, scale_factor):
     """
     
     """
-    
+
     # Parse the XML file
     tree = ET.parse(input_file)
     root = tree.getroot()
@@ -59,12 +60,12 @@ class CraverRoadEnv(gym.Env):
     def __init__(self, args):
         super().__init__()
         
-        if args.scale_demand:
-            scale_demand(args.input_trips, args.output_trips, args.scale_factor)
+        if args.manual_scale_demand:
+            scale_demand(args.input_trips, args.output_trips, args.manual_scale_factor)
 
         self.use_gui = args.gui
         self.step_length = args.step_length
-        self.max_steps = args.max_steps
+        self.max_timesteps = args.max_timesteps
         self.sumo_running = False
         self.step_count = 0
         self.auto_start = args.auto_start
@@ -84,6 +85,11 @@ class CraverRoadEnv(gym.Env):
         ]
         self.current_phase = 0
         self.tl_lane_dict = {}
+
+        self.input_trips = args.input_trips
+        self.output_trips = args.output_trips
+        self.demand_scale_min = args.demand_scale_min
+        self.demand_scale_max = args.demand_scale_max
         
 
     def _initialize_lanes(self,):
@@ -301,7 +307,7 @@ class CraverRoadEnv(gym.Env):
                                     #print(f"Straight lane: {straight_lane}, Existing ids: {existing_ids}")
 
                                     if len(existing_ids)>0:
-                                        print(f"Vehicle exists")
+                                        #print(f"Vehicle exists")
                                         new_ids = []
                                         for veh_id in existing_ids:
                                             signal_state = traci.vehicle.getSignals(veh_id)
@@ -355,11 +361,11 @@ class CraverRoadEnv(gym.Env):
         self._apply_action(action)
         traci.simulationStep()
 
-        for tl in self.tl_ids:
-            phase = traci.trafficlight.getPhase(tl)
-            print(f"\n\tTraffic light {tl} is in phase {phase}")
+        # for tl in self.tl_ids:
+        #     phase = traci.trafficlight.getPhase(tl)
+        #     print(f"\n\tTraffic light {tl} is in phase {phase}")
 
-        observation = self._get_observation(print_map=True)
+        observation = self._get_observation(print_map=False)
         reward = self._get_reward()
         done = self._check_done()
         info = {}
@@ -369,12 +375,18 @@ class CraverRoadEnv(gym.Env):
         return observation, reward, done, False, info
 
     def _get_observation(self, print_map=False):
-
+        """
+        Generate an observation based on the current state of the environment.
+        """
         # Get the occupancy map and print it
         occupancy_map = self._get_occupancy_map()
         corrected_occupancy_map = self._step_operations(occupancy_map, print_map=print_map, cutoff_distance=100)
 
-        observation = np.zeros(self.observation_space.shape)
+        # Dummy observation
+        observation = np.random.rand(*self.observation_space.shape).astype(np.float32)
+        # Normalize the observation to be between 0 and 1
+        observation = (observation - observation.min()) / (observation.max() - observation.min())
+
         return observation
 
     def _apply_action(self, action):
@@ -387,15 +399,22 @@ class CraverRoadEnv(gym.Env):
         return reward
 
     def _check_done(self):
-        return self.step_count >= self.max_steps
+        return self.step_count >= self.max_timesteps
 
     def reset(self, seed=None, options=None):
+        """
+        
+        """
+
         super().reset(seed=seed)
         
-
         if self.sumo_running:
             traci.close()
         
+        # Automatically scale demand
+        scale_factor = random.uniform(self.demand_scale_min, self.demand_scale_max)
+        scale_demand(self.input_trips, self.output_trips, scale_factor)
+
         if self.auto_start:
             sumo_cmd = ["sumo-gui" if self.use_gui else "sumo", 
                         "--start" , 
@@ -424,12 +443,13 @@ class CraverRoadEnv(gym.Env):
             traci.close()
             self.sumo_running = False
 
+# For basic envorinment sanity tests
 # def main(args):
 
 #     env = CraverRoadEnv(args)
 #     observation, info = env.reset()
 
-#     for _ in range(args.max_steps):
+#     for _ in range(args.max_timesteps):
 #         action = env.action_space.sample()
 #         print(f"\nStep {env.step_count}: Taking action {action}")
 #         observation, reward, terminated, truncated, info = env.step(action)
@@ -443,13 +463,13 @@ class CraverRoadEnv(gym.Env):
 #     parser = argparse.ArgumentParser(description='Run SUMO traffic simulation with demand scaling.')
 #     parser.add_argument('--gui', action='store_true', help='Use SUMO GUI (default: False)')
 #     parser.add_argument('--step-length', type=float, default=1.0, help='Simulation step length (default: 1.0)')
-#     parser.add_argument('--max_steps', type=int, default=2500, help='Maximum number of steps in one episode (default: 2000)')
+#     parser.add_argument('--max_timesteps', type=int, default=2500, help='Maximum number of steps in one episode (default: 2000)')
 #     parser.add_argument('--auto_start', action='store_true', help='Automatically start the simulation (default: False)')
 
 #     parser.add_argument('--input_trips', type=str, default='./original_vehtrips.xml', help='Original Input trips file')
 #     parser.add_argument('--output_trips', type=str, default='./scaled_vehtrips.xml', help='Output trips file')
-#     parser.add_argument('--scale_demand', type=bool , default=True, help='Scale demand before starting the simulation')
-#     parser.add_argument('--scale_factor', type=float, default=3.0, help='Demand scaling factor (default: 1.0)')
+#     parser.add_argument('--manual_scale_demand', type=bool , default=True, help='Scale demand before starting the simulation')
+#     parser.add_argument('--manual_scale_factor', type=float, default=3.0, help='Demand scaling factor (default: 1.0)')
 #     args = parser.parse_args()
 
 #     main(args)
