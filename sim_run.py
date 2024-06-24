@@ -92,7 +92,31 @@ def scale_demand(input_file, output_file, scale_factor, demand_type):
 class CraverRoadEnv(gym.Env):
     def __init__(self, args):
         super().__init__()
-        
+        """
+        Phase information (22 characters). Incoming vehicle lanes, or pedestrian crossings
+        1: east-right
+        2: east-straight
+        3: east-left
+        4: east-uturn
+        5: south-right
+        6: south-straight
+        7: south-left
+        8: south-uturn
+        9: west-right
+        10: west-straight
+        11: west-left
+        12: west-uturn
+        13: north-right
+        14: north-straight
+        15: north-left
+        16: north-uturn
+        17: pedestrian crossing north
+        18: unused
+        19: pedestrian crossing east
+        20: pedestrian crossing south
+        21: unused
+        22: pedestrian crossing west
+        """
         if args.manual_scale_demand:
             scale_demand(args.vehicle_input_trips, args.vehicle_output_trips, args.manual_scale_factor, demand_type="vehicle")
             scale_demand(args.pedestrian_input_trips, args.pedestrian_output_trips, args.manual_scale_factor, demand_type="pedestrian")
@@ -105,6 +129,7 @@ class CraverRoadEnv(gym.Env):
         self.auto_start = args.auto_start
         self.tl_ids = ['cluster_172228464_482708521_9687148201_9687148202_#5more'] # Only control this one for now
         
+        # Original 10 phases defaulted by SUMO with 93 seconds cycle time
         self.phases = [
             {"duration": 32, "state": "rrrrgGggrrrrgGggrrGrrG"},
             {"duration": 5, "state": "rrrrgGggrrrrgGggrrrrrr"},
@@ -117,6 +142,29 @@ class CraverRoadEnv(gym.Env):
             {"duration": 4, "state": "yyyyrrrryyyyrrrrrrrrrr"},
             {"duration": 1, "state": "rrrrrrrrrrrrrrrrrrrrrr"}
         ]
+
+        # For a simplified action space, we can use 2 phase groups
+        # Each group will consist of non-conflicting directions, with 35 seconds of green at the start, then 4 seconds of yellow, then 1 second of red. 
+        # During the whole time that one group goes through its cycle, the other group will be in red.
+        # Priority lefts are not treated with any priority in this setup.
+        # The pedestrian crossing will be green during the green phase of the vehicle lanes in that group.
+        self.phase_groups = {
+
+            # Group 0
+            # incoming vehicle lanes: north-straight, north-right, north-left, south-straight, south-right, south-left
+            # pedestrian crossings: west, east
+            0: [{"duration": 35, "state": " "},
+                {"duration": 4, "state": " "},
+                { "duration": 1, "state": " "}],
+
+            # Group 1
+            # incoming vehicle lanes: west-straight, west-right, east-straight, east-right, east-left
+            # pedestrian crossings: south, north
+            1: [{ "duration": 35, "state": " "},
+                { "duration": 4, "state": " "},
+                { "duration": 1, "state": " "}]
+            }
+
         self.current_phase = 0
         self.tl_lane_dict = {}
 
