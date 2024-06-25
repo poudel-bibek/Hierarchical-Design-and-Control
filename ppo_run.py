@@ -178,8 +178,15 @@ def main(args):
     print(f"Using device: {device}")
 
     env = CraverRoadEnv(args)
+
+    print(f"\nDefined observation space: {env.observation_space}")
+    print(f"Observation space shape: {env.observation_space.shape}")
+    print(f"\nDefined action space: {env.action_space}")
+    print(f"Action space shape: {env.action_space.n}\n")
+
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.n
+    print(f"State dimension: {state_dim}, Action dimension: {action_dim}\n")
 
     ppo = PPO(state_dim, action_dim, args.lr, args.gamma, args.K_epochs, args.eps_clip, args.ent_coef, args.vf_coef, device)
     memory = Memory(device)
@@ -196,6 +203,9 @@ def main(args):
     best_reward = float('-inf')
 
     state, _ = env.reset()
+    state = state.flatten()
+    print(f"Initial observation shape (flattened): {state.shape}\n")
+
     total_timesteps = 0
     episode_reward = 0
     episode_length = 0
@@ -207,14 +217,15 @@ def main(args):
             episode_length += 1
             
             state_tensor = torch.FloatTensor(state).to(device)
-            action, log_prob = ppo.policy_old.act(state_tensor)
+            action, log_prob = ppo.policy_old.act(state_tensor) # Policy old is used to act and collect experiences
             
             next_state, reward, done, truncated, info = env.step(action)
             
             # Saving experience in memory
             memory.append(state, action, log_prob, reward, done)
             
-            state = next_state
+            #print(f"\nNext state: type: {type(next_state)}, shape:{next_state.shape}\n")
+            state = next_state.flatten()
             episode_reward += reward
 
             # Update PPO every n timesteps

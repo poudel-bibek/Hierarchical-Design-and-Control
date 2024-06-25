@@ -112,11 +112,13 @@ class CraverRoadEnv(gym.Env):
         16: north-uturn
         17: pedestrian crossing north
         18: unused
-        19: pedestrian crossing east
+        19: pedestrian crossing east (new)
         20: pedestrian crossing south
         21: unused
         22: pedestrian crossing west
         """
+        # Phase 0 green: rrrrGGGGrrrrGGGGrrGrrG 
+        # Phase 1 green: GGGGrrrrGGGGrrrrGrrGrr
         if args.manual_scale_demand:
             scale_demand(args.vehicle_input_trips, args.vehicle_output_trips, args.manual_scale_factor, demand_type="vehicle")
             scale_demand(args.pedestrian_input_trips, args.pedestrian_output_trips, args.manual_scale_factor, demand_type="pedestrian")
@@ -130,6 +132,7 @@ class CraverRoadEnv(gym.Env):
         self.tl_ids = ['cluster_172228464_482708521_9687148201_9687148202_#5more'] # Only control this one for now
         
         # Original 10 phases defaulted by SUMO with 93 seconds cycle time
+        # TODO: Correct this with the new link info. Done
         self.phases = [
             {"duration": 32, "state": "rrrrgGggrrrrgGggrrGrrG"},
             {"duration": 5, "state": "rrrrgGggrrrrgGggrrrrrr"},
@@ -137,32 +140,34 @@ class CraverRoadEnv(gym.Env):
             {"duration": 6, "state": "rrrrrrGGrrrrrrGGrrrrrr"},
             {"duration": 4, "state": "rrrrrryyrrrrrryyrrrrrr"},
             {"duration": 1, "state": "rrrrrrrrrrrrrrrrrrrrrr"},
-            {"duration": 31, "state": "gGggrrrrgGggrrrrGGrGGr"},
+            {"duration": 31, "state": "gGggrrrrgGggrrrrGrrGrr"},
             {"duration": 5, "state": "gGggrrrrgGggrrrrrrrrrr"},
             {"duration": 4, "state": "yyyyrrrryyyyrrrrrrrrrr"},
             {"duration": 1, "state": "rrrrrrrrrrrrrrrrrrrrrr"}
         ]
 
         # For a simplified action space, we can use 2 phase groups
-        # Each group will consist of non-conflicting directions, with 35 seconds of green at the start, then 4 seconds of yellow, then 1 second of red. 
+        # Each group will consist of non-conflicting directions, with 4 seconds of yellow, then 1 second of red and 5 seconds of green at the end  
         # During the whole time that one group goes through its cycle, the other group will be in red.
         # Priority lefts are not treated with any priority in this setup.
         # The pedestrian crossing will be green during the green phase of the vehicle lanes in that group.
+        # All right turns are always turned green. (This not implemented yet. Since the pedestrian frequency is relatively high)
+        # If there is a switch, then the 4 seconds yellow and 1 second red will be applied to lanes (corresponding to other phase group). Hence thats the first thing that will occur in each phase group.
         self.phase_groups = {
 
             # Group 0
             # incoming vehicle lanes: north-straight, north-right, north-left, south-straight, south-right, south-left
             # pedestrian crossings: west, east
-            0: [{"duration": 35, "state": " "},
-                {"duration": 4, "state": " "},
-                { "duration": 1, "state": " "}],
+            0: [{"duration": 4, "state": "yyyyrrrryyyyrrrrrrrrrr"}, # These are to buffer the transition from the other one. Only necessary if there is a switch from another group.
+                {"duration": 1, "state": "rrrrrrrrrrrrrrrrrrrrrr"},
+                { "duration": 5, "state": "rrrrGGGGrrrrGGGGrrGrrG"}], # This is the actual green phase for this group
 
             # Group 1
             # incoming vehicle lanes: west-straight, west-right, east-straight, east-right, east-left
             # pedestrian crossings: south, north
-            1: [{ "duration": 35, "state": " "},
-                { "duration": 4, "state": " "},
-                { "duration": 1, "state": " "}]
+            1: [{ "duration": 4, "state": "rrrryyyyrrrryyyyrrrrrr"}, # These are to buffer the transition from the other one. Only necessary if there is a switch from another group.
+                { "duration": 1, "state": "rrrrrrrrrrrrrrrrrrrrrr"},
+                { "duration": 5, "state": "GGGGrrrrGGGGrrrrGrrGrr"}] # This is the actual green phase for this group
             }
 
         self.current_phase = 0
@@ -174,7 +179,13 @@ class CraverRoadEnv(gym.Env):
         self.pedestrian_output_trips = args.pedestrian_output_trips
         self.demand_scale_min = args.demand_scale_min
         self.demand_scale_max = args.demand_scale_max
-        
+
+        self.previous_action = None
+        self.action_duration = 10  # Duration of each action in seconds
+        # Number of simulation steps that should occur for each action. trying to ajuust for any given step length
+        self.steps_per_action = int(self.action_duration / self.step_length) # This is also the size of the observation buffer
+        self.observation_buffer_size = self.steps_per_action
+        self.current_action_step = 0 # To track where we are within the curret action's duration
 
     def _initialize_lanes(self,):
         """
@@ -346,7 +357,7 @@ class CraverRoadEnv(gym.Env):
             print(f"Error calculating distance: {e}")
             return None
         
-    def _get_occupancy_map(self, distance=100):
+    def _get_occupancy_map(self, ):
         """
         Features: 
             - If the same lane is used for multiple directions, the indicator light of vehicle is used to determine the direction. (The indicator light turns on about 100m far from the junction.)
@@ -427,34 +438,73 @@ class CraverRoadEnv(gym.Env):
     @property
     def action_space(self):
         """
-
+        In the simplified action space with phase groups, the agents decision is binary.
         """
-        return gym.spaces.Discrete(10) 
+        return gym.spaces.Discrete(2)
+        # return gym.spaces.Discrete(10) 
 
     @property
     def observation_space(self):
         """
 
         """
-        return gym.spaces.Box(low=0, high=1, shape=(1,))
+        # For the phase groups
+        single_obs_shape = (1,)  # Adjust this 
+
+        # The observation is the entire observation buffer
+        return gym.spaces.Box(
+            low=0, 
+            high=1, 
+            shape=(self.observation_buffer_size, *single_obs_shape),
+            dtype=np.float32
+        )
+    
+        # Previous dummy version
+        # return gym.spaces.Box(low=0, high=1, shape=(1,))
 
     def step(self, action):
+        """
+        
+        """
+
         if not self.sumo_running:
             raise Exception("Environment is not running. Call reset() to start the environment.")
         
-        self._apply_action(action)
-        traci.simulationStep()
+        reward = 0
+        done = False
+        observation_buffer = []
+
+        # Run simulation steps for the duration of the action
+        for _ in range(self.steps_per_action):
+            
+            # Apply action needs to happen every timestep
+            self._apply_action(action, self.current_action_step, self.previous_action)
+
+            traci.simulationStep() # Step length is the simulation time that elapses when each time this is called.
+            self.step_count += 1
+            # Increment the current action step
+            self.current_action_step = (self.current_action_step + 1) % self.steps_per_action # Wrapped around some modulo arithmetic
+
+            # Collect observation at each substep
+            obs = self._get_observation(print_map=False)
+            observation_buffer.append(obs)
+
+            # Accumulate reward
+            reward += self._get_reward()
+            
+            # Check if episode is done
+            if self._check_done():
+                done = True
+                break
+
+        self.previous_action = action
 
         # for tl in self.tl_ids:
         #     phase = traci.trafficlight.getPhase(tl)
         #     print(f"\n\tTraffic light {tl} is in phase {phase}")
 
-        observation = self._get_observation(print_map=False)
-        reward = self._get_reward()
-        done = self._check_done()
+        observation = np.asarray(observation_buffer, dtype=np.float32)
         info = {}
-
-        self.step_count += 1
 
         return observation, reward, done, False, info
 
@@ -467,22 +517,65 @@ class CraverRoadEnv(gym.Env):
         corrected_occupancy_map = self._step_operations(occupancy_map, print_map=print_map, cutoff_distance=100)
 
         # Dummy observation
-        observation = np.random.rand(*self.observation_space.shape).astype(np.float32)
+        observation = np.random.rand(1,).astype(np.float32)
         # Normalize the observation to be between 0 and 1
         #observation = (observation - observation.min()) / (observation.max() - observation.min())
 
         return observation
 
-    def _apply_action(self, action):
-        for tl_id in self.tl_ids:
-            traci.trafficlight.setPhase(tl_id, action)
-        self.current_phase = action
+    def _apply_action(self, action, current_action_step, previous_action=None):
+        """
+        In the simplified action space with phase groups, previous action is used to determine if there was a switch.
+        Duration is not set, a phase is set for the required duration.
+        """
+        print(f"Current Action: {action}, Previous Action: {previous_action}")
+
+        # For action space with phase groups
+        if previous_action == None: # First action
+            previous_action = action # Assume that there was no switch
+
+        if action != previous_action:
+            print("Switching phase group")
+            # Switch the phase group
+            for tl_id in self.tl_ids:
+                
+                # All these shenanigans is to determine the index. TODO: Is there an efficient way to do this?
+                durations = [phase["duration"] for phase in self.phase_groups[action]]
+                cumulative_durations = [sum(durations[:i+1]) for i in range(len(durations))] # [4, 5, 10]
+                for i, duration in enumerate(cumulative_durations):
+                    if current_action_step < duration:
+                        index = i
+                        break
+                
+                state = self.phase_groups[action][index]["state"]
+                print(f"Setting phase: state")
+                traci.trafficlight.setRedYellowGreenState(tl_id, state)
+                    
+        else: # No switch. Just continue with the green in this phase group.
+            print("Continuing with the same phase group")
+
+            for tl_id in self.tl_ids:
+                    state = self.phase_groups[action][2]["state"] # Index is always 2
+                    print(f"Setting phase: {state}")
+                    # Skip the first two phases, they are for buffering the transition.
+                    traci.trafficlight.setRedYellowGreenState(tl_id, state)
+                    
+        
+        # Previous version with 10 phases
+        # for tl_id in self.tl_ids:
+        #     traci.trafficlight.setPhase(tl_id, action)
+        # self.current_phase = action
 
     def _get_reward(self):
         reward = 0
         return reward
 
     def _check_done(self):
+        """
+        TODO: What more conditions can be added here?
+        - Gridlock?
+        - Crashes?
+        """
         return self.step_count >= self.max_timesteps
 
     def reset(self, seed=None, options=None):
@@ -518,10 +611,20 @@ class CraverRoadEnv(gym.Env):
 
         traci.start(sumo_cmd)
         self.sumo_running = True
-        self.step_count = 0
+        self.step_count = 0 # This counts the timesteps in an episode. Needs reset.
+
+        self.current_action_step = 0
         self._initialize_lanes()
 
-        observation = self._get_observation()
+        # Initialize the observation buffer
+        observation_buffer = []
+        for _ in range(self.observation_buffer_size):
+            traci.simulationStep()
+            obs = self._get_observation()
+            observation_buffer.append(obs)
+
+        observation = np.array(observation_buffer, dtype=np.float32)
+        print(f"\nInitial observation inside: {observation.shape}\n")
         info = {}
         return observation, info
 
