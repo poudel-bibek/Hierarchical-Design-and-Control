@@ -199,6 +199,7 @@ class CraverRoadEnv(gym.Env):
             Incoming lanes by direction
             Outgoing lanes by direction
 
+        Need to follow a protocol to represent the edge with edge. in front
         """
 
         # Manual insertion. If the same lane is used for multiple turn directions (straight, left) mark them with -1.
@@ -220,6 +221,22 @@ class CraverRoadEnv(gym.Env):
                     "north-right": ['773672648#0_0'],
                     "north-left": ['773672648#0_2'],
                 },
+                # Based on incoming from direction
+                "inside": {
+                    "south-straight": ['edge.:cluster_172228464_482708521_9687148201_9687148202_#5more_5'],
+                    "south-right": ['edge.:cluster_172228464_482708521_9687148201_9687148202_#5more_4'],
+                    "south-left": ['edge.:cluster_172228464_482708521_9687148201_9687148202_#5more_6'],
+                    "west-straight": ['edge.:cluster_172228464_482708521_9687148201_9687148202_#5more_9'],
+                    "west-right": ['edge.:cluster_172228464_482708521_9687148201_9687148202_#5more_8'],
+                    "west-left": ['edge.:cluster_172228464_482708521_9687148201_9687148202_#5more_10'],
+                    "east-straight": ['edge.:cluster_172228464_482708521_9687148201_9687148202_#5more_1'],
+                    "east-right": ['edge.:cluster_172228464_482708521_9687148201_9687148202_#5more_0'],
+                    "east-left": ['edge.:cluster_172228464_482708521_9687148201_9687148202_#5more_2'],
+                    "north-straight": ['edge.:cluster_172228464_482708521_9687148201_9687148202_#5more_13'],
+                    "north-right": ['edge.:cluster_172228464_482708521_9687148201_9687148202_#5more_12'],
+                    "north-left": ['edge.:cluster_172228464_482708521_9687148201_9687148202_#5more_14'],
+                },
+
                 "outgoing": {
                     "west": ['-1060131306#0_0'] , # A negative sign 2
                     "south": ['773672649#1_0'],
@@ -318,7 +335,7 @@ class CraverRoadEnv(gym.Env):
                 print(f"\nTraffic Light: {tl_id}")
                 for agent_type in ["vehicle", "pedestrian"]:
                     print(f"  {agent_type.capitalize()}s:")
-                    for direction in ["incoming", "outgoing"]:
+                    for direction in occupancy_map[tl_id][agent_type].keys():
                         print(f"    {direction.capitalize()}:")
                         for lane_group, ids in tl_data[agent_type][direction].items():
                             print(f"      {lane_group}: {len(ids)} [{', '.join(ids)}]")
@@ -368,6 +385,7 @@ class CraverRoadEnv(gym.Env):
             occupancy_map[tl_id] = {
                 "vehicle": {
                     "incoming": {},
+                    "inside": {}, # Inside the junction
                     "outgoing": {}
                 },
                 "pedestrian": {
@@ -377,7 +395,7 @@ class CraverRoadEnv(gym.Env):
             }
             
             for agent_type in ["vehicle", "pedestrian"]:
-                for direction in ["incoming", "outgoing"]:
+                for direction in  occupancy_map[tl_id][agent_type].keys():
                     for lane_group, lane_list in lanes[agent_type][direction].items():
                         occupancy_map[tl_id][agent_type][direction][lane_group] = []
                         for lane in lane_list:
@@ -486,7 +504,7 @@ class CraverRoadEnv(gym.Env):
             self.current_action_step = (self.current_action_step + 1) % self.steps_per_action # Wrapped around some modulo arithmetic
 
             # Collect observation at each substep
-            obs = self._get_observation(print_map=False)
+            obs = self._get_observation(print_map=True)
             observation_buffer.append(obs)
 
             # Accumulate reward
@@ -497,7 +515,14 @@ class CraverRoadEnv(gym.Env):
                 done = True
                 break
 
+
+
         self.previous_action = action
+        # Show all edges in this junction: cluster_172228464_482708521_9687148201_9687148202_#5more
+        # incoming_edges = traci.junction.getIncomingEdges('cluster_172228464_482708521_9687148201_9687148202_#5more')
+        # outgoing_edges = traci.junction.getOutgoingEdges('cluster_172228464_482708521_9687148201_9687148202_#5more')
+
+        # print(f"\nEdges: \tIncoming: {incoming_edges}\n\tOutgoing: {outgoing_edges}")
 
         # for tl in self.tl_ids:
         #     phase = traci.trafficlight.getPhase(tl)
@@ -528,7 +553,7 @@ class CraverRoadEnv(gym.Env):
         In the simplified action space with phase groups, previous action is used to determine if there was a switch.
         Duration is not set, a phase is set for the required duration.
         """
-        print(f"Current Action: {action}, Previous Action: {previous_action}")
+        print(f"\nCurrent Action: {action}, Previous Action: {previous_action}")
 
         # For action space with phase groups
         if previous_action == None: # First action
@@ -548,7 +573,7 @@ class CraverRoadEnv(gym.Env):
                         break
                 
                 state = self.phase_groups[action][index]["state"]
-                print(f"Setting phase: state")
+                print(f"Setting phase: {state}")
                 traci.trafficlight.setRedYellowGreenState(tl_id, state)
                     
         else: # No switch. Just continue with the green in this phase group.
