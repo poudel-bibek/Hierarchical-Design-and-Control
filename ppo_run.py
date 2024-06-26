@@ -184,7 +184,7 @@ def main(args):
     print(f"\nDefined action space: {env.action_space}")
     print(f"Action space shape: {env.action_space.n}\n")
 
-    state_dim = env.observation_space.shape[0]
+    state_dim = env.observation_space.shape[0] * env.observation_space.shape[1]
     action_dim = env.action_space.n
     print(f"State dimension: {state_dim}, Action dimension: {action_dim}\n")
 
@@ -204,7 +204,8 @@ def main(args):
 
     state, _ = env.reset()
     state = state.flatten()
-    print(f"Initial observation shape (flattened): {state.shape}\n")
+    print(f"Initial observation (flattened): {state}")
+    print(f"Initial observation (flattened) shape: {state.shape}\n")
 
     total_timesteps = 0
     episode_reward = 0
@@ -221,6 +222,9 @@ def main(args):
             
             next_state, reward, done, truncated, info = env.step(action)
             
+            # This cannot be how its done, initially even before the agent takes action. There will be a phase group.
+            #env.current_phase_group = action
+
             # Saving experience in memory
             memory.append(state, action, log_prob, reward, done)
             

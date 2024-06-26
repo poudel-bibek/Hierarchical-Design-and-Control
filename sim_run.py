@@ -170,7 +170,7 @@ class CraverRoadEnv(gym.Env):
                 { "duration": 5, "state": "GGGGrrrrGGGGrrrrGrrGrr"}] # This is the actual green phase for this group
             }
 
-        self.current_phase = 0
+        self.current_phase_group = None
         self.tl_lane_dict = {}
 
         self.vehicle_input_trips = args.vehicle_input_trips
@@ -186,6 +186,8 @@ class CraverRoadEnv(gym.Env):
         self.steps_per_action = int(self.action_duration / self.step_length) # This is also the size of the observation buffer
         self.observation_buffer_size = self.steps_per_action
         self.current_action_step = 0 # To track where we are within the curret action's duration
+
+        self.directions = ['north', 'east', 'south', 'west']
 
     def _initialize_lanes(self,):
         """
@@ -464,10 +466,13 @@ class CraverRoadEnv(gym.Env):
     @property
     def observation_space(self):
         """
+        Each timestep (not action step) observation is the pressure in all outgoing directions.
+        TODO: We do not have lane level granularity yet (in both action and observation).
 
+        Observation space also needs to include the current traffic phase (or phase group in this case)
         """
-        # For the phase groups
-        single_obs_shape = (1,)  # Adjust this 
+        # For each traffic light, 4 total outgoing directions for vehicles, 4 for pedestrians, and one phase group.
+        single_obs_shape = (len(self.tl_ids) * (2 * len(self.directions) + 1),)
 
         # The observation is the entire observation buffer
         return gym.spaces.Box(
@@ -505,6 +510,7 @@ class CraverRoadEnv(gym.Env):
 
             # Collect observation at each substep
             obs = self._get_observation(print_map=True)
+            print(f"\nObservation: {obs}")
             observation_buffer.append(obs)
 
             # Accumulate reward
@@ -514,8 +520,6 @@ class CraverRoadEnv(gym.Env):
             if self._check_done():
                 done = True
                 break
-
-
 
         self.previous_action = action
         # Show all edges in this junction: cluster_172228464_482708521_9687148201_9687148202_#5more
@@ -532,21 +536,99 @@ class CraverRoadEnv(gym.Env):
         info = {}
 
         return observation, reward, done, False, info
-
+    
     def _get_observation(self, print_map=False):
         """
         Generate an observation based on the current state of the environment.
+        Pressure(outgoing direction) = (Incoming traffic towards this direction including inside directions) - (Actual outgoing traffic in this direction)
         """
+        
         # Get the occupancy map and print it
         occupancy_map = self._get_occupancy_map()
         corrected_occupancy_map = self._step_operations(occupancy_map, print_map=print_map, cutoff_distance=100)
+        
+        observation = []
 
-        # Dummy observation
-        observation = np.random.rand(1,).astype(np.float32)
-        # Normalize the observation to be between 0 and 1
-        #observation = (observation - observation.min()) / (observation.max() - observation.min())
+        for tl_id in self.tl_ids:
+            #### VEHICLES ####
+            # current_phase = traci.trafficlight.getPhase(tl_id)
+            # traci.trafficlight.getPhase(tl_id) gives the entire phase string.
+            # So instead added the phase group below 
+
+            # Initialize pressure and calculate for each direction
+            vehicle_pressure = {d: 0 for d in self.directions}
+
+            for outgoing_direction in self.directions:
+                # Calculate incoming traffic towards this direction
+                incoming = 0
+                if outgoing_direction == 'north':
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['south-straight'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['east-right'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['west-left'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['south-straight'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['east-right'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['west-left'])
+
+                elif outgoing_direction == 'south':
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['north-straight'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['east-left'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['west-right'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['north-straight'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['east-left'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['west-right'])
+
+                elif outgoing_direction == 'east':
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['west-straight'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['north-left'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['south-right'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['west-straight'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['north-left'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['south-right'])
+
+                elif outgoing_direction == 'west':
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['east-straight'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['north-right'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['south-left'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['east-straight'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['north-right'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['south-left'])
+                
+                # Calculate actual outgoing traffic
+                outgoing = len(corrected_occupancy_map[tl_id]['vehicle']['outgoing'][outgoing_direction])
+                
+                # Calculate pressure
+                vehicle_pressure[outgoing_direction] = incoming - outgoing
+            
+            #### PEDESTRIANS ####
+            pedestrian_pressure = {d: 0 for d in self.directions}
+
+            for outgoing_direction in self.directions:
+                # Calculate incoming pedestrians towards this direction
+                incoming = len(corrected_occupancy_map[tl_id]['pedestrian']['incoming'][outgoing_direction])
+                
+                # Calculate actual outgoing pedestrians
+                outgoing = len(corrected_occupancy_map[tl_id]['pedestrian']['outgoing'][outgoing_direction])
+                
+                # Calculate pressure
+                pedestrian_pressure[outgoing_direction] = incoming - outgoing
+
+            # Combine observations
+            tl_observation = [self.current_phase_group] + \
+                             [vehicle_pressure[d] for d in self.directions] + \
+                             [pedestrian_pressure[d] for d in self.directions]
+            observation.extend(tl_observation)
+
+        observation = np.asarray(observation, dtype=np.float32)
+
+        # Create a mask for non-phase elements
+        mask = np.arange(len(observation)) % (2 * len(self.directions) + 1) != 0
+        
+        # Normalize
+        normalizer = 10.0
+        observation[mask] /= normalizer
 
         return observation
+    
 
     def _apply_action(self, action, current_action_step, previous_action=None):
         """
@@ -592,6 +674,10 @@ class CraverRoadEnv(gym.Env):
         # self.current_phase = action
 
     def _get_reward(self):
+        """
+        Vehicles + Pedestrians
+        """
+
         reward = 0
         return reward
 
@@ -641,15 +727,23 @@ class CraverRoadEnv(gym.Env):
         self.current_action_step = 0
         self._initialize_lanes()
 
+        # Randomly initialize current phase group 
+        self.current_phase_group = random.choice(list(self.phase_groups.keys()))
+
         # Initialize the observation buffer
         observation_buffer = []
-        for _ in range(self.observation_buffer_size):
+        for step in range(self.observation_buffer_size):
+
+            # Apply the current phase group using _apply_action
+            self._apply_action(self.current_phase_group, step, None)
+
             traci.simulationStep()
             obs = self._get_observation()
             observation_buffer.append(obs)
 
         observation = np.array(observation_buffer, dtype=np.float32)
-        print(f"\nInitial observation inside: {observation.shape}\n")
+        print(f"\nInitial observation inside: {observation}\n")
+        print(f"\nInitial observation inside shape: {observation.shape}\n")
         info = {}
         return observation, info
 
