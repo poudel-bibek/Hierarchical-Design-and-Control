@@ -188,6 +188,7 @@ class CraverRoadEnv(gym.Env):
         self.current_action_step = 0 # To track where we are within the curret action's duration
 
         self.directions = ['north', 'east', 'south', 'west']
+        self.pressure_dict = {tl_id: {'vehicle': {}, 'pedestrian': {}} for tl_id in self.tl_ids}
 
     def _initialize_lanes(self,):
         """
@@ -460,7 +461,8 @@ class CraverRoadEnv(gym.Env):
         """
         In the simplified action space with phase groups, the agents decision is binary.
         """
-        return gym.spaces.Discrete(2)
+        num_actions = len(self.tl_ids) * len(self.phase_groups) # Number of traffic lights * Number of phase groups
+        return gym.spaces.Discrete(num_actions)
         # return gym.spaces.Discrete(10) 
 
     @property
@@ -509,18 +511,18 @@ class CraverRoadEnv(gym.Env):
             self.current_action_step = (self.current_action_step + 1) % self.steps_per_action # Wrapped around some modulo arithmetic
 
             # Collect observation at each substep
-            obs = self._get_observation(print_map=True)
+            obs = self._get_observation(print_map=False)
             print(f"\nObservation: {obs}")
             observation_buffer.append(obs)
 
             # Accumulate reward
-            reward += self._get_reward()
+            reward += self._get_reward(action)
             
             # Check if episode is done
             if self._check_done():
                 done = True
                 break
-
+        print(f"\nAccumulated Reward: {reward}")
         self.previous_action = action
         # Show all edges in this junction: cluster_172228464_482708521_9687148201_9687148202_#5more
         # incoming_edges = traci.junction.getIncomingEdges('cluster_172228464_482708521_9687148201_9687148202_#5more')
@@ -598,7 +600,8 @@ class CraverRoadEnv(gym.Env):
                 
                 # Calculate pressure
                 vehicle_pressure[outgoing_direction] = incoming - outgoing
-            
+                self.pressure_dict[tl_id]['vehicle'][outgoing_direction] = vehicle_pressure[outgoing_direction]
+
             #### PEDESTRIANS ####
             pedestrian_pressure = {d: 0 for d in self.directions}
 
@@ -611,6 +614,7 @@ class CraverRoadEnv(gym.Env):
                 
                 # Calculate pressure
                 pedestrian_pressure[outgoing_direction] = incoming - outgoing
+                self.pressure_dict[tl_id]['pedestrian'][outgoing_direction] = pedestrian_pressure[outgoing_direction]
 
             # Combine observations
             tl_observation = [self.current_phase_group] + \
@@ -673,12 +677,39 @@ class CraverRoadEnv(gym.Env):
         #     traci.trafficlight.setPhase(tl_id, action)
         # self.current_phase = action
 
-    def _get_reward(self):
+    def _get_reward(self, current_action):
         """
-        Vehicles + Pedestrians
+        - Consider both Vehicles and Pedestrians
+        - Penalize frequent changes of action
+        
+        - Since pressure is calculated as incoming - outgoing. Pressure being high is not good.
+        - To penalize high pressure, we make pressure negative.
         """
 
         reward = 0
+
+        vehicle_pressure = 0
+        pedestrian_pressure = 0
+
+        for tl_id in self.tl_ids:
+            
+            # Use stored pressures for reward calculation
+            for agent_type in ['vehicle', 'pedestrian']:
+                for direction in self.directions:
+                    pressure = self.pressure_dict[tl_id][agent_type][direction]
+
+                    if agent_type == 'vehicle':
+                        vehicle_pressure += pressure
+                    else:
+                        pedestrian_pressure += pressure
+
+        reward = -0.5*vehicle_pressure - 0.5*pedestrian_pressure  
+
+        # Frequency penalty
+        if self.previous_action is not None and current_action != self.previous_action:
+            reward -= 0.5  # Penalty for changing actions. Since this is per step reward. Action change is reflected multiplied by action steps.
+            
+        print(f"\nStep Reward: {reward}")
         return reward
 
     def _check_done(self):
