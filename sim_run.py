@@ -181,7 +181,7 @@ class CraverRoadEnv(gym.Env):
         self.demand_scale_max = args.demand_scale_max
 
         self.previous_action = None
-        self.action_duration = 10  # Duration of each action in seconds
+        self.action_duration = args.action_duration  # Duration of each action in seconds
         # Number of simulation steps that should occur for each action. trying to ajuust for any given step length
         self.steps_per_action = int(self.action_duration / self.step_length) # This is also the size of the observation buffer
         self.observation_buffer_size = self.steps_per_action
@@ -512,7 +512,7 @@ class CraverRoadEnv(gym.Env):
 
             # Collect observation at each substep
             obs = self._get_observation(print_map=False)
-            print(f"\nObservation: {obs}")
+            #print(f"\nObservation: {obs}")
             observation_buffer.append(obs)
 
             # Accumulate reward
@@ -522,7 +522,12 @@ class CraverRoadEnv(gym.Env):
             if self._check_done():
                 done = True
                 break
+
+        formatted_buffer = "\n".join(f"{arr})" for arr in observation_buffer)
+        print(f"\nAccumulated Observation:\n{formatted_buffer}")
+        print(f"\nCurrent Action: {action}")
         print(f"\nAccumulated Reward: {reward}")
+
         self.previous_action = action
         # Show all edges in this junction: cluster_172228464_482708521_9687148201_9687148202_#5more
         # incoming_edges = traci.junction.getIncomingEdges('cluster_172228464_482708521_9687148201_9687148202_#5more')
@@ -534,7 +539,7 @@ class CraverRoadEnv(gym.Env):
         #     phase = traci.trafficlight.getPhase(tl)
         #     print(f"\n\tTraffic light {tl} is in phase {phase}")
 
-        observation = np.asarray(observation_buffer, dtype=np.float32)
+        observation = np.asarray(observation_buffer)
         info = {}
 
         return observation, reward, done, False, info
@@ -639,14 +644,14 @@ class CraverRoadEnv(gym.Env):
         In the simplified action space with phase groups, previous action is used to determine if there was a switch.
         Duration is not set, a phase is set for the required duration.
         """
-        print(f"\nCurrent Action: {action}, Previous Action: {previous_action}")
+        # print(f"\nCurrent Action: {action}, Previous Action: {previous_action}")
 
         # For action space with phase groups
         if previous_action == None: # First action
             previous_action = action # Assume that there was no switch
 
         if action != previous_action:
-            print("Switching phase group")
+            # print("Switching phase group")
             # Switch the phase group
             for tl_id in self.tl_ids:
                 
@@ -659,15 +664,15 @@ class CraverRoadEnv(gym.Env):
                         break
                 
                 state = self.phase_groups[action][index]["state"]
-                print(f"Setting phase: {state}")
+                # print(f"Setting phase: {state}")
                 traci.trafficlight.setRedYellowGreenState(tl_id, state)
                     
         else: # No switch. Just continue with the green in this phase group.
-            print("Continuing with the same phase group")
+            # print("Continuing with the same phase group")
 
             for tl_id in self.tl_ids:
                     state = self.phase_groups[action][2]["state"] # Index is always 2
-                    print(f"Setting phase: {state}")
+                    # print(f"Setting phase: {state}")
                     # Skip the first two phases, they are for buffering the transition.
                     traci.trafficlight.setRedYellowGreenState(tl_id, state)
                     
@@ -709,7 +714,7 @@ class CraverRoadEnv(gym.Env):
         if self.previous_action is not None and current_action != self.previous_action:
             reward -= 0.5  # Penalty for changing actions. Since this is per step reward. Action change is reflected multiplied by action steps.
             
-        print(f"\nStep Reward: {reward}")
+        #print(f"\nStep Reward: {reward}")
         return reward
 
     def _check_done(self):
@@ -772,7 +777,7 @@ class CraverRoadEnv(gym.Env):
             obs = self._get_observation()
             observation_buffer.append(obs)
 
-        observation = np.array(observation_buffer, dtype=np.float32)
+        observation = np.asarray(observation_buffer, dtype=np.float32)
         print(f"\nInitial observation inside: {observation}\n")
         print(f"\nInitial observation inside shape: {observation.shape}\n")
         info = {}
