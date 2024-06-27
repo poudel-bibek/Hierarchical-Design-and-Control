@@ -1,4 +1,5 @@
 import os
+import json
 import argparse
 import numpy as np
 import torch
@@ -16,6 +17,8 @@ class ActorCritic(nn.Module):
     def __init__(self, state_dim, action_dim, device):
         """
         Define the neural networks for both actor and critic
+        What activation to use. And how will it affect the output.
+
         """
         super(ActorCritic, self).__init__()
         self.device = device
@@ -197,6 +200,21 @@ class Memory:
         del self.rewards[:]
         del self.is_terminals[:]
 
+def save_config(args, model, save_path):
+    """
+    Save hyperparameters and model architecture to a JSON file.
+    """
+    config = {
+        "hyperparameters": vars(args),
+        "model_architecture": {
+            "actor": str(model.policy.actor),
+            "critic": str(model.policy.critic)
+        }
+    }
+    
+    with open(save_path, 'w') as f:
+        json.dump(config, f, indent=4)
+
 def main(args):
     device = torch.device("cuda:0" if torch.cuda.is_available() and args.gpu else "cpu")
     print(f"Using device: {device}")
@@ -221,6 +239,11 @@ def main(args):
     os.makedirs('runs', exist_ok=True)
     writer = SummaryWriter(log_dir=log_dir)
 
+    # Save hyperparameters and model architecture
+    config_path = os.path.join(log_dir, 'config.json')
+    save_config(args, ppo, config_path)
+    print(f"Configuration saved to {config_path}")
+    
     # Model saving setup
     save_dir = os.path.join('saved_models', current_time)
     os.makedirs(save_dir, exist_ok=True)
@@ -267,18 +290,22 @@ def main(args):
                 print(f"Episode: {ep}/{total_episodes} (total timesteps: {total_timesteps}) \t Total Loss: {loss['total_loss']:.2f}")
                 # Loss is logged every time the model is updated.
                 if loss is not None: # TODO: Make this to check any
-                    writer.add_scalar('Policy Loss/Update', loss['policy_loss'], total_timesteps) 
-                    writer.add_scalar('Value Loss/Update', loss['value_loss'], total_timesteps)
-                    writer.add_scalar('Entropy Loss/Update', loss['entropy_loss'], total_timesteps) 
-                    writer.add_scalar('Total Loss/Update', loss['total_loss'], total_timesteps) 
+                    writer.add_scalars('Losses/Update', {
+                    'Policy': loss['policy_loss'],
+                    'Value': loss['value_loss'],
+                    'Entropy': loss['entropy_loss'],
+                    'Total': loss['total_loss']
+                        }, total_timesteps)
                 else:
                     print("Warning: loss is None")
 
             if done or truncated: # Support for episode truncation based on crash or other unwanted events.
                 average_reward_per_episode = total_reward/action_timesteps
 
-                writer.add_scalar('Average Reward/Episode', average_reward_per_episode, ep) # Reward is logged at the end of each episode.
-                writer.add_scalar('Episode Length', action_timesteps, ep)
+                writer.add_scalars('Episode Metrics', {
+                'Average Reward': average_reward_per_episode, # Reward is logged at the end of each episode.
+                'Episode Length': action_timesteps
+                    }, ep)
                 
                 # Logging
                 print(f'Episode: {ep}/{total_episodes} (total timesteps: {total_timesteps}) \t Average reward per episode: {average_reward_per_episode:.2f} ')
@@ -332,6 +359,6 @@ if __name__ == "__main__":
     parser.add_argument('--ent_coef', type=float, default=0.01, help='Entropy coefficient (default: 0.01)')
     parser.add_argument('--vf_coef', type=float, default=0.5, help='Value function coefficient (default: 0.5)')
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size (default: 32)')
-    
+
     args = parser.parse_args()
     main(args)
