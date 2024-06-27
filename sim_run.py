@@ -171,6 +171,9 @@ class CraverRoadEnv(gym.Env):
             }
 
         self.current_phase_group = None
+        self.current_state_index = None 
+        self.corrected_occupancy_map = None
+
         self.tl_lane_dict = {}
 
         self.vehicle_input_trips = args.vehicle_input_trips
@@ -188,6 +191,7 @@ class CraverRoadEnv(gym.Env):
         self.current_action_step = 0 # To track where we are within the curret action's duration
 
         self.directions = ['north', 'east', 'south', 'west']
+        self.turns = ['straight', 'right', 'left']
         self.pressure_dict = {tl_id: {'vehicle': {}, 'pedestrian': {}} for tl_id in self.tl_ids}
 
     def _initialize_lanes(self,):
@@ -376,7 +380,76 @@ class CraverRoadEnv(gym.Env):
         except traci.TraCIException as e:
             print(f"Error calculating distance: {e}")
             return None
-        
+    
+    def _update_outgoing_pressure_dict(self, corrected_occupancy_map):
+        """
+        Update the data str that holds info about pressure in outgoing directions.
+        For both vehicles and pedestrians.
+        """
+
+        for tl_id in self.tl_ids:
+            #### VEHICLES ####
+
+            # Initialize pressure and calculate for each direction
+            vehicle_pressure = {d: 0 for d in self.directions}
+
+            for outgoing_direction in self.directions:
+                # Calculate incoming traffic towards this direction
+                incoming = 0
+                if outgoing_direction == 'north':
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['south-straight'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['east-right'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['west-left'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['south-straight'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['east-right'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['west-left'])
+
+                elif outgoing_direction == 'south':
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['north-straight'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['east-left'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['west-right'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['north-straight'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['east-left'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['west-right'])
+
+                elif outgoing_direction == 'east':
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['west-straight'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['north-left'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['south-right'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['west-straight'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['north-left'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['south-right'])
+
+                elif outgoing_direction == 'west':
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['east-straight'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['north-right'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['south-left'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['east-straight'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['north-right'])
+                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['south-left'])
+                
+                # Calculate actual outgoing traffic
+                outgoing = len(corrected_occupancy_map[tl_id]['vehicle']['outgoing'][outgoing_direction])
+                
+                # Calculate pressure
+                vehicle_pressure[outgoing_direction] = incoming - outgoing
+                self.pressure_dict[tl_id]['vehicle'][outgoing_direction] = vehicle_pressure[outgoing_direction]
+
+            #### PEDESTRIANS ####
+            pedestrian_pressure = {d: 0 for d in self.directions}
+
+            for outgoing_direction in self.directions:
+                # Calculate incoming pedestrians towards this direction
+                incoming = len(corrected_occupancy_map[tl_id]['pedestrian']['incoming'][outgoing_direction])
+                
+                # Calculate actual outgoing pedestrians
+                outgoing = len(corrected_occupancy_map[tl_id]['pedestrian']['outgoing'][outgoing_direction])
+                
+                # Calculate pressure
+                pedestrian_pressure[outgoing_direction] = incoming - outgoing
+                self.pressure_dict[tl_id]['pedestrian'][outgoing_direction] = pedestrian_pressure[outgoing_direction]
+
+
     def _get_occupancy_map(self, ):
         """
         Features: 
@@ -473,8 +546,8 @@ class CraverRoadEnv(gym.Env):
 
         Observation space also needs to include the current traffic phase (or phase group in this case)
         """
-        # For each traffic light, 4 total outgoing directions for vehicles, 4 for pedestrians, and one phase group.
-        single_obs_shape = (len(self.tl_ids) * (2 * len(self.directions) + 1),)
+        # 
+        single_obs_shape = (len(self.tl_ids)*38, )
 
         # The observation is the entire observation buffer
         return gym.spaces.Box(
@@ -515,6 +588,8 @@ class CraverRoadEnv(gym.Env):
             #print(f"\nObservation: {obs}")
             observation_buffer.append(obs)
 
+            self._update_outgoing_pressure_dict(self.corrected_occupancy_map)
+
             # Accumulate reward
             reward += self._get_reward(action)
             
@@ -543,102 +618,67 @@ class CraverRoadEnv(gym.Env):
         info = {}
 
         return observation, reward, done, False, info
-    
+        
     def _get_observation(self, print_map=False):
         """
         Generate an observation based on the current state of the environment.
-        Pressure(outgoing direction) = (Incoming traffic towards this direction including inside directions) - (Actual outgoing traffic in this direction)
+        Previous Approach: Pressure(outgoing direction) = (Incoming traffic towards this direction including inside directions) - (Actual outgoing traffic in this direction)
+        
+        Not only phase group but also the subgroup.
         """
         
         # Get the occupancy map and print it
         occupancy_map = self._get_occupancy_map()
-        corrected_occupancy_map = self._step_operations(occupancy_map, print_map=print_map, cutoff_distance=100)
+        self.corrected_occupancy_map = self._step_operations(occupancy_map, print_map=print_map, cutoff_distance=100)
         
         observation = []
 
         for tl_id in self.tl_ids:
-            #### VEHICLES ####
-            # current_phase = traci.trafficlight.getPhase(tl_id)
-            # traci.trafficlight.getPhase(tl_id) gives the entire phase string.
-            # So instead added the phase group below 
 
-            # Initialize pressure and calculate for each direction
-            vehicle_pressure = {d: 0 for d in self.directions}
+            #### PHASE GROUP INFO ####
+            observation.append(self.current_phase_group)
+            observation.append(self.current_state_index/1) # To prevent a value of 2 [0, 1, 2] -> [0, 0.5, 1]
 
+            #### VEHICLES INFO ####
+            # Incoming
             for outgoing_direction in self.directions:
-                # Calculate incoming traffic towards this direction
-                incoming = 0
-                if outgoing_direction == 'north':
-                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['south-straight'])
-                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['east-right'])
-                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['west-left'])
-                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['south-straight'])
-                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['east-right'])
-                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['west-left'])
+                for turn in self.turns:
+                    incoming = len(self.corrected_occupancy_map[tl_id]['vehicle']['incoming'][f"{outgoing_direction}-{turn}"])
+                    observation.append(incoming)
 
-                elif outgoing_direction == 'south':
-                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['north-straight'])
-                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['east-left'])
-                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['west-right'])
-                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['north-straight'])
-                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['east-left'])
-                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['west-right'])
-
-                elif outgoing_direction == 'east':
-                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['west-straight'])
-                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['north-left'])
-                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['south-right'])
-                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['west-straight'])
-                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['north-left'])
-                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['south-right'])
-
-                elif outgoing_direction == 'west':
-                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['east-straight'])
-                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['north-right'])
-                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['south-left'])
-                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['east-straight'])
-                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['north-right'])
-                    incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['south-left'])
-                
-                # Calculate actual outgoing traffic
-                outgoing = len(corrected_occupancy_map[tl_id]['vehicle']['outgoing'][outgoing_direction])
-                
-                # Calculate pressure
-                vehicle_pressure[outgoing_direction] = incoming - outgoing
-                self.pressure_dict[tl_id]['vehicle'][outgoing_direction] = vehicle_pressure[outgoing_direction]
-
-            #### PEDESTRIANS ####
-            pedestrian_pressure = {d: 0 for d in self.directions}
-
+            # Inside
             for outgoing_direction in self.directions:
-                # Calculate incoming pedestrians towards this direction
-                incoming = len(corrected_occupancy_map[tl_id]['pedestrian']['incoming'][outgoing_direction])
-                
-                # Calculate actual outgoing pedestrians
-                outgoing = len(corrected_occupancy_map[tl_id]['pedestrian']['outgoing'][outgoing_direction])
-                
-                # Calculate pressure
-                pedestrian_pressure[outgoing_direction] = incoming - outgoing
-                self.pressure_dict[tl_id]['pedestrian'][outgoing_direction] = pedestrian_pressure[outgoing_direction]
+                for turn in self.turns:
+                    inside = len(self.corrected_occupancy_map[tl_id]['vehicle']['inside'][f"{outgoing_direction}-{turn}"])
+                    observation.append(inside)
 
-            # Combine observations
-            tl_observation = [self.current_phase_group] + \
-                             [vehicle_pressure[d] for d in self.directions] + \
-                             [pedestrian_pressure[d] for d in self.directions]
-            observation.extend(tl_observation)
+            # Outgoing
+            for outgoing_direction in self.directions:
+                outgoing = len(self.corrected_occupancy_map[tl_id]['vehicle']['outgoing'][outgoing_direction])
+                observation.append(outgoing)
+                
+            #### PEDESTRIANS INFO ####
+            # Incoming
+            for outgoing_direction in self.directions:
+                incoming = len(self.corrected_occupancy_map[tl_id]['pedestrian']['incoming'][outgoing_direction])
+                observation.append(incoming)
+
+            # Outgoing
+            for outgoing_direction in self.directions:
+                outgoing = len(self.corrected_occupancy_map[tl_id]['pedestrian']['outgoing'][outgoing_direction])
+                observation.append(outgoing)
 
         observation = np.asarray(observation, dtype=np.float32)
 
         # Create a mask for non-phase elements
-        mask = np.arange(len(observation)) % (2 * len(self.directions) + 1) != 0
+        num_elements_per_tl = 2 + 12 + 12 + 4 + 4 + 4 # Total: 38
+        mask = np.tile([False, False] + [True] * (num_elements_per_tl - 2), len(self.tl_ids))
         
         # Normalize
         normalizer = 10.0
         observation[mask] /= normalizer
-
         return observation
     
-
     def _apply_action(self, action, current_action_step, previous_action=None):
         """
         In the simplified action space with phase groups, previous action is used to determine if there was a switch.
@@ -646,6 +686,7 @@ class CraverRoadEnv(gym.Env):
         """
         # print(f"\nCurrent Action: {action}, Previous Action: {previous_action}")
 
+        self.current_phase_group = action
         # For action space with phase groups
         if previous_action == None: # First action
             previous_action = action # Assume that there was no switch
@@ -662,13 +703,14 @@ class CraverRoadEnv(gym.Env):
                     if current_action_step < duration:
                         index = i
                         break
-                
+                self.current_state_index = index
                 state = self.phase_groups[action][index]["state"]
                 # print(f"Setting phase: {state}")
                 traci.trafficlight.setRedYellowGreenState(tl_id, state)
                     
         else: # No switch. Just continue with the green in this phase group.
             # print("Continuing with the same phase group")
+            self.current_state_index = 2
 
             for tl_id in self.tl_ids:
                     state = self.phase_groups[action][2]["state"] # Index is always 2
@@ -788,33 +830,3 @@ class CraverRoadEnv(gym.Env):
             traci.close()
             self.sumo_running = False
 
-# For basic envorinment sanity tests
-# def main(args):
-
-#     env = CraverRoadEnv(args)
-#     observation, info = env.reset()
-
-#     for _ in range(args.max_timesteps):
-#         action = env.action_space.sample()
-#         print(f"\nStep {env.step_count}: Taking action {action}")
-#         observation, reward, terminated, truncated, info = env.step(action)
-
-#         if terminated or truncated:
-#             observation, info = env.reset()
-
-#     env.close()
-
-# if __name__ == "__main__":
-#     parser = argparse.ArgumentParser(description='Run SUMO traffic simulation with demand scaling.')
-#     parser.add_argument('--gui', action='store_true', help='Use SUMO GUI (default: False)')
-#     parser.add_argument('--step-length', type=float, default=1.0, help='Simulation step length (default: 1.0)')
-#     parser.add_argument('--max_timesteps', type=int, default=2500, help='Maximum number of steps in one episode (default: 2000)')
-#     parser.add_argument('--auto_start', action='store_true', help='Automatically start the simulation (default: False)')
-
-#     parser.add_argument('--input_trips', type=str, default='./original_vehtrips.xml', help='Original Input trips file')
-#     parser.add_argument('--output_trips', type=str, default='./scaled_vehtrips.xml', help='Output trips file')
-#     parser.add_argument('--manual_scale_demand', type=bool , default=True, help='Scale demand before starting the simulation')
-#     parser.add_argument('--manual_scale_factor', type=float, default=3.0, help='Demand scaling factor (default: 1.0)')
-#     args = parser.parse_args()
-
-#     main(args)

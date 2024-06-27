@@ -1,67 +1,18 @@
 import os
 import json
 import argparse
-import numpy as np
+
 import torch
-import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-from torch.distributions import Categorical
+
 from torch.utils.tensorboard import SummaryWriter
 import os
 from datetime import datetime
 
 from sim_run import CraverRoadEnv
+from models import MLPActorCritic
 
-class ActorCritic(nn.Module):
-    def __init__(self, state_dim, action_dim, device):
-        """
-        Define the neural networks for both actor and critic
-        What activation to use. And how will it affect the output.
-
-        """
-        super(ActorCritic, self).__init__()
-        self.device = device
-        
-        # Actor network
-        self.actor = nn.Sequential(
-            nn.Linear(state_dim, 64),
-            nn.Tanh(),
-            nn.Linear(64, 32),
-            nn.Tanh(),
-            nn.Linear(32, action_dim)
-        ).to(device)
-
-        # Critic network
-        self.critic = nn.Sequential(
-            nn.Linear(state_dim, 64),
-            nn.Tanh(),
-            nn.Linear(64, 32),
-            nn.Tanh(),
-            nn.Linear(32, 1)
-        ).to(device)
-        
-    def act(self, state):
-        """
-        Select an action based on the current state
-        """
-        action_probs = self.actor(state)
-        dist = Categorical(logits=action_probs)
-        action = dist.sample()
-        return action.item(), dist.log_prob(action)
-    
-    def evaluate(self, states, actions):
-        """
-        Evaluate the actions given the states
-        """
-        action_probs = self.actor(states)
-        dist = Categorical(logits=action_probs)
-        
-        action_logprobs = dist.log_prob(actions)
-        dist_entropy = dist.entropy()
-        state_values = self.critic(states)
-        
-        return action_logprobs, state_values, dist_entropy
     
 class PPO:
     """
@@ -78,12 +29,12 @@ class PPO:
         self.batch_size = batch_size
 
         # Initialize the current policy network
-        self.policy = ActorCritic(state_dim, action_dim, device).to(device)
+        self.policy = MLPActorCritic(state_dim, action_dim, device).to(device)
         # Set up the optimizer
         self.optimizer = optim.Adam(self.policy.parameters(), lr=lr)
         
         # Initialize the old policy network (used for importance sampling)
-        self.policy_old = ActorCritic(state_dim, action_dim, device).to(device)
+        self.policy_old = MLPActorCritic(state_dim, action_dim, device).to(device)
         # Copy the parameters from the current policy to the old policy
         self.policy_old.load_state_dict(self.policy.state_dict())
         
@@ -243,7 +194,7 @@ def main(args):
     config_path = os.path.join(log_dir, 'config.json')
     save_config(args, ppo, config_path)
     print(f"Configuration saved to {config_path}")
-    
+
     # Model saving setup
     save_dir = os.path.join('saved_models', current_time)
     os.makedirs(save_dir, exist_ok=True)
