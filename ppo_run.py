@@ -1,7 +1,6 @@
 import os
 import json
 import argparse
-
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
@@ -9,11 +8,9 @@ import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 import os
 from datetime import datetime
-
 from sim_run import CraverRoadEnv
 from models import MLPActorCritic
 
-    
 class PPO:
     """
 
