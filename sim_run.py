@@ -34,14 +34,14 @@ class CraverRoadEnv(gym.Env):
         22: pedestrian crossing west
         """
 
-        if args.manual_demand_vehicles is not None :
+        if args.manual_demand_veh is not None :
             # Convert the demand to scaling factor first
-            scaling = convert_demand_to_scale_factor(args.manual_demand_vehicles, type="vehicle")
+            scaling = convert_demand_to_scale_factor(args.manual_demand_veh, "vehicle", args.vehicle_input_trips)
             scale_demand(args.vehicle_input_trips, args.vehicle_output_trips, scaling, demand_type="vehicle")
 
-        if args.manual_demand_pedestrians is not None:
+        if args.manual_demand_ped is not None:
             # Convert the demand to scaling factor first
-            scaling = convert_demand_to_scale_factor(args.manual_demand_pedestrians, type="pedestrian")
+            scaling = convert_demand_to_scale_factor(args.manual_demand_ped, "pedestrian", args.pedestrian_input_trips)
             scale_demand(args.pedestrian_input_trips, args.pedestrian_output_trips, scaling, demand_type="pedestrian")
 
         self.use_gui = args.gui

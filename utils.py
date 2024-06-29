@@ -1,12 +1,53 @@
 import xml.dom.minidom
 import xml.etree.ElementTree as ET
 
-def convert_demand_to_scale_factor(demand, type):
+def convert_demand_to_scale_factor(demand, demand_type, input_file):
     """
-    Convert the demand to a scaling factor. 
+    Convert the demand to a scaling factor number.
+    For vehicles: (veh/hr) that want to enter the network
+    For pedestrians: (ped/hr) that want to enter the network
     """
 
-    return 1
+    if demand <= 0:
+        raise ValueError("Demand must be a positive number")
+    
+    if demand_type not in ['vehicle', 'pedestrian']:
+        raise ValueError("Demand type must be either 'vehicle' or 'pedestrian'")
+    
+    # Calculate the original demand from the input file
+    tree = ET.parse(input_file)
+    root = tree.getroot()
+    
+    if demand_type == 'vehicle':
+        original_demand = len(root.findall("trip"))
+    else:  # pedestrian
+        original_demand = len(root.findall(".//person"))
+    
+    if original_demand == 0:
+        raise ValueError(f"No {demand_type} demand found in the input file")
+    
+    # Calculate the time span of the original demand
+    if demand_type == 'vehicle':
+        elements = root.findall("trip")
+    else:
+        elements = root.findall(".//person")
+    
+    # Find the start and end time of the demand
+    start_time = min(float(elem.get('depart')) for elem in elements)
+    end_time = max(float(elem.get('depart')) for elem in elements)
+    time_span = (end_time - start_time) / 3600  # Convert to hours
+    
+    # Calculate the original demand per hour
+    original_demand_per_hour = original_demand / time_span if time_span > 0 else 0
+    print(f"\nOriginal {demand_type} demand per hour: {original_demand_per_hour:.2f}")
+
+    if original_demand_per_hour == 0:
+        raise ValueError(f"Cannot calculate original {demand_type} demand per hour")
+    
+    # Calculate the scale factor
+    scale_factor = demand / original_demand_per_hour
+    
+    return scale_factor
 
 def scale_demand(input_file, output_file, scale_factor, demand_type):
     """
