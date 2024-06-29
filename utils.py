@@ -1,3 +1,5 @@
+import traci
+import torch
 import xml.dom.minidom
 import xml.etree.ElementTree as ET
 
@@ -129,3 +131,4 @@ def scale_demand(input_file, output_file, scale_factor, demand_type):
         f.write(pretty_xml_str)
     
     print(f"{demand_type.capitalize()} demand scaled by factor {scale_factor}.") # Output written to {output_file}")
+

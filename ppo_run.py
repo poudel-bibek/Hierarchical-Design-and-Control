@@ -12,6 +12,7 @@ from datetime import datetime
 from sim_run import CraverRoadEnv
 from models import MLPActorCritic
 
+
 class PPO:
     """
 
@@ -164,78 +165,140 @@ def save_config(args, model, save_path):
     with open(save_path, 'w') as f:
         json.dump(config, f, indent=4)
 
-def evaluate_traffic_light(args, env):
+def evaluate_controller(args, env):
     """
-    No algorithm is used here. For Benchmark
-    For a given demand, evaluate the normal traffic light only scenario.
-    We have to get somet things from the environment.
+    Evaluate either the traffic light or PPO as the controller.
+    TODO: Make the evaluation N number of times each with different seeds. Report average results.
     """
 
-    tl_ids = env.tl_ids
-    phases = env.phases
+    # Collect step data separated at each landmarks such as TL lights
+    step_data = []
+    if args.evaluate == 'tl':
+        tl_ids = env.tl_ids
+        phases = env.phases
 
-    # Figure out the cycle lengths for each tl 
-    cycle_lengths = {}
-    for tl_id in tl_ids:
-        phase = phases[tl_id]
-        cycle_lengths[tl_id]  = sum([state['duration'] for state in phase])
-       
-    # Start the simulation
-    # Things to add to call
-    # "--no-step-log", "--no-warnings", "--time-to-teleport", "-1", "--waiting-time-memory", "10000", "--no-internal-links", "--no-duration-log", "--no-verbose"
-
-    if args.auto_start:
-        sumo_cmd = ["sumo-gui" if args.gui else "sumo", 
-                    "--start" , 
-                    "--quit-on-end", 
-                    "-c", "./craver.sumocfg", 
-                    '--step-length', str(args.step_length)]
-                        
-    else:
-        sumo_cmd = ["sumo-gui" if args.gui else "sumo", 
-                    "--quit-on-end", 
-                    "-c", "./craver.sumocfg", 
-                    '--step-length', str(args.step_length)]
-    
-    traci.start(sumo_cmd)
-
-    # Now run the sim till the horizon
-    for t in range(args.max_timesteps):
+        # Figure out the cycle lengths for each tl 
+        cycle_lengths = {}
         for tl_id in tl_ids:
+            phase = phases[tl_id]
+            cycle_lengths[tl_id]  = sum([state['duration'] for state in phase])
+        
+        if args.auto_start:
+            sumo_cmd = ["sumo-gui" if args.gui else "sumo", 
+                        "--start" , 
+                        "--quit-on-end", 
+                        "-c", "./craver.sumocfg", 
+                        '--step-length', str(args.step_length)]
+                            
+        else:
+            sumo_cmd = ["sumo-gui" if args.gui else "sumo", 
+                        "--quit-on-end", 
+                        "-c", "./craver.sumocfg", 
+                        '--step-length', str(args.step_length)]
+        
+        traci.start(sumo_cmd)
+        env.sumo_running = True
+        env._initialize_lanes()
 
-            # using t, determine where in the cycle we are
-            current_pos_in_cycle = t % cycle_lengths[tl_id]
+        # Now run the sim till the horizon
+        for t in range(args.max_timesteps):
+            for tl_id in tl_ids:
 
-            # Find the index/ state
-            state_index = 0
-            for state in phases[tl_id]:
-                current_pos_in_cycle -= state['duration']
-                if current_pos_in_cycle < 0:
+                # using t, determine where in the cycle we are
+                current_pos_in_cycle = t % cycle_lengths[tl_id]
+
+                # Find the index/ state
+                state_index = 0
+                for state in phases[tl_id]:
+                    current_pos_in_cycle -= state['duration']
+                    if current_pos_in_cycle < 0:
+                        break
+                    state_index += 1
+
+                # Set the state
+                state_string = phases[tl_id][state_index]['state']
+                traci.trafficlight.setRedYellowGreenState(tl_id, state_string)
+
+            # This is outside the loop
+            traci.simulationStep()
+
+            # After the simulation step 
+            occupancy_map = env._get_occupancy_map()
+            corrected_occupancy_map = env._step_operations(occupancy_map, print_map=True, cutoff_distance=100)
+            step_info = collect_step_data(t, corrected_occupancy_map, env)
+            step_data.append(step_info)
+
+    elif args.evaluate == 'ppo':
+        if args.model_path:
+
+            device = torch.device("cuda:0" if torch.cuda.is_available() and args.gpu else "cpu")
+            state_dim = env.observation_space.shape[0] * env.observation_space.shape[1]
+            action_dim = env.action_space.n
+            ppo_model = MLPActorCritic(state_dim, action_dim, device).to(device)
+            ppo_model.load_state_dict(torch.load(args.model_path, map_location=device)) 
+
+            state, _ = env.reset()
+            for t in range(args.max_timesteps):
+                state_tensor = torch.FloatTensor(state.flatten()).to(device)
+                action, _ = ppo_model.act(state_tensor)
+                state, reward, done, truncated, info = env.step(action)
+                
+                occupancy_map = env._get_occupancy_map()
+                corrected_occupancy_map = env._step_operations(occupancy_map, print_map=False, cutoff_distance=100)
+                step_info = collect_step_data(t, corrected_occupancy_map, env)
+                step_data.append(step_info)
+
+                if done or truncated:
                     break
-                state_index += 1
 
-            # Set the state
-            state_string = phases[tl_id][state_index]['state']
-            traci.trafficlight.setRedYellowGreenState(tl_id, state_string)
+        else:
+            print("Model path not provided. Cannot evaluate PPO.")
+            return None
 
-        # This is outside the loop
-        traci.simulationStep()
+    else: 
+        print("Invalid evaluation mode. Please choose either 'tl' or 'ppo'.")
+        return None
 
+def collect_step_data(step, occupancy_map, env):
+    """
+    Collect detailed data for a single step using the occupancy map.
+    Waiting time and queue length direction wise?
+    """
+    step_info = {
+        'step': step,
+        'occupancy': occupancy_map,
+        'waiting_time': {},
+        'queue_length': {}
+    }
+
+    #step_info['waiting_time'] = sum(traci.vehicle.getWaitingTime(veh) for veh in traci.vehicle.getIDList())
+    #step_info['queue_length'] =  sum(traci.lane.getLastStepHaltingNumber(lane) for lane in traci.lane.getIDList())
+
+    return step_info
+
+def calculate_performance(run_data):
+    """
+    Calculate the performance metrics from the run data.
+    1. Average Waiting time
+    2. Average Queue Length
+    3. Throughput
+    """
+    pass
 
 def main(args):
     
     env = CraverRoadEnv(args)
-    
-    if args.only_tl:
 
+    if args.evaluate: # Eval TL or PPO
         if args.manual_demand_veh is None or args.manual_demand_ped is None:
             print("Manual demand is None. Please specify a demand for both vehicles and pedestrians.")
-            return
-
-        evaluate_traffic_light(args, env)
+            return None
+        else: 
+            run_data = evaluate_controller(args, env)
+            calculate_performance(run_data)
         env.close()
     
-    else: # PPO
+    else: # Train PPO
         
         device = torch.device("cuda:0" if torch.cuda.is_available() and args.gpu else "cpu")
         print(f"Using device: {device}")
@@ -380,7 +443,7 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size (default: 32)')
 
     # Evaluations
-    parser.add_argument('--only_tl', action='store_true', help='Only use traffic lights for evaluation')
-
+    parser.add_argument('--evaluate', choices=['tl', 'ppo'], help='Evaluation mode: traffic light (tl), PPO (ppo), or both')
+    parser.add_argument('--model_path', type=str, help='Path to the saved PPO model for evaluation')
     args = parser.parse_args()
     main(args)
