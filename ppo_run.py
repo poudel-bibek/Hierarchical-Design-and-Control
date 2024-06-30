@@ -225,7 +225,9 @@ def evaluate_controller(args, env):
             # After the simulation step 
             occupancy_map = env._get_occupancy_map()
             corrected_occupancy_map = env._step_operations(occupancy_map, print_map=True, cutoff_distance=100)
-            step_info = collect_step_data(t, corrected_occupancy_map, env)
+            step_info, all_directions = collect_step_data(t, corrected_occupancy_map, env)
+
+            print(f"Step: {t}, step info: {step_info}")
             step_data.append(step_info)
 
     elif args.evaluate == 'ppo':
@@ -245,7 +247,8 @@ def evaluate_controller(args, env):
                 
                 occupancy_map = env._get_occupancy_map()
                 corrected_occupancy_map = env._step_operations(occupancy_map, print_map=False, cutoff_distance=100)
-                step_info = collect_step_data(t, corrected_occupancy_map, env)
+
+                step_info, all_directions = collect_step_data(t, corrected_occupancy_map, env)
                 step_data.append(step_info)
 
                 if done or truncated:
@@ -258,32 +261,102 @@ def evaluate_controller(args, env):
     else: 
         print("Invalid evaluation mode. Please choose either 'tl' or 'ppo'.")
         return None
+    
+    return step_data, all_directions
 
 def collect_step_data(step, occupancy_map, env):
     """
     Collect detailed data for a single step using the occupancy map.
-    Waiting time and queue length direction wise?
+    A vehicle is considered to be waiting (in a queue) if the velocity is less than 0.5 m/s.
+
+    Avreage waiting time: On average, how long does a vehicle wait while crossing the intersection? 
     """
-    step_info = {
-        'step': step,
-        'occupancy': occupancy_map,
-        'waiting_time': {},
-        'queue_length': {}
-    }
 
-    #step_info['waiting_time'] = sum(traci.vehicle.getWaitingTime(veh) for veh in traci.vehicle.getIDList())
-    #step_info['queue_length'] =  sum(traci.lane.getLastStepHaltingNumber(lane) for lane in traci.lane.getIDList())
+    step_info = {'step': step}
+    all_directions = [f"{direction}-{turn}" for direction in env.directions for turn in env.turns]
+    
+    for tl_id, tl_data in occupancy_map.items():
+        step_info[tl_id] = {
+            'vehicle': {
+                'queue_length': {direction: 0 for direction in all_directions},
+                'total_outgoing': [] , # Total vehicles that crossed the intersection. Per step. From one step to the next, there might be repitition. Needs to be filtered later.
+            },
+            'pedestrian': {}
+        }
 
-    return step_info
+    # Collect vehicle IDs and data for each traffic light
+    for tl_id, tl_data in occupancy_map.items():
 
-def calculate_performance(run_data):
+        # For queue, process both incoming and inside vehicles
+        for movement_direction in tl_data['vehicle'].keys():  
+
+            if movement_direction in ['incoming', 'inside']:
+                for lane_group, ids in tl_data['vehicle'][movement_direction].items():
+                    
+                    for veh_id in ids:
+                        veh_velocity = traci.vehicle.getSpeed(veh_id)
+
+                        # Increment queue length if vehicle is waiting
+                        if veh_velocity < 1.0:
+                            # Ensure the lane_group exists in our queue_length dictionary
+                            if lane_group in step_info[tl_id]['vehicle']['queue_length']:
+
+                                step_info[tl_id]['vehicle']['queue_length'][lane_group] += 1
+                            else:
+                                print(f"Warning: Unexpected lane group '{lane_group}' encountered.")
+
+            # For total outgoing vehicles
+            else: 
+                for _, vehicles in tl_data['vehicle']['outgoing'].items():
+                    step_info[tl_id]['vehicle']['total_outgoing'].extend(vehicles)
+
+    return step_info, all_directions
+
+def calculate_performance(run_data, all_directions, step_length):
     """
     Calculate the performance metrics from the run data.
-    1. Average Waiting time
-    2. Average Queue Length
-    3. Throughput
+    1. Average Waiting Time: For every outgoing vehicle, on average what is the waiting time?
+    2. Average Queue Length: For every direction (12 total), on average what is the queue length? Counted whenever there is a queue.
+    3. Overall Average Queue Length: Average queue length across all directions.
     """
-    pass
+
+    unique_outgoing_vehicles = set()
+    queue_lengths = {direction: [] for direction in all_directions}
+    
+    # Process each step's data
+    for step_info in run_data:
+        for tl_id, tl_data in step_info.items():
+            if tl_id != 'step':  # Skip the 'step' key
+                # Collect unique outgoing vehicle IDs
+                unique_outgoing_vehicles.update(tl_data['vehicle']['total_outgoing'])
+                
+                # Sum queue lengths
+                for direction, length in tl_data['vehicle']['queue_length'].items():
+                    if length > 0:
+                        queue_lengths[direction].append(length)
+    
+    total_outgoing_vehicles = len(unique_outgoing_vehicles)
+    
+    # Calculate average waiting time using the actual step length
+    total_simulation_time = len(run_data) * step_length # In seconds
+    avg_waiting_time = total_simulation_time / total_outgoing_vehicles if total_outgoing_vehicles > 0 else 0
+    
+    # Calculate average queue lengths for each direction
+    avg_queue_lengths = {direction: sum(lengths) / len(lengths) if lengths else 0 
+                         for direction, lengths in queue_lengths.items()}
+    
+    # Calculate overall average queue length
+    all_queue_lengths = [length for lengths in queue_lengths.values() for length in lengths]
+    overall_avg_queue_length = sum(all_queue_lengths) / len(all_queue_lengths) if all_queue_lengths else 0
+    
+    # Print results
+    print("\nPerformance Metrics:")
+    print(f"Total Unique Outgoing Vehicles: {total_outgoing_vehicles}")
+    print(f"Average Waiting Time: {avg_waiting_time:.2f} seconds")
+    print(f"Overall Average Queue Length: {overall_avg_queue_length:.2f}")
+    print("\nAverage Queue Lengths by Direction:")
+    for direction, avg_length in avg_queue_lengths.items():
+        print(f"  {direction}: {avg_length:.2f}")
 
 def main(args):
     
@@ -294,8 +367,8 @@ def main(args):
             print("Manual demand is None. Please specify a demand for both vehicles and pedestrians.")
             return None
         else: 
-            run_data = evaluate_controller(args, env)
-            calculate_performance(run_data)
+            run_data, all_directions = evaluate_controller(args, env)
+            calculate_performance(run_data, all_directions, args.step_length)
         env.close()
     
     else: # Train PPO
