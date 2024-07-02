@@ -233,7 +233,10 @@ def evaluate_controller(args, env):
     elif args.evaluate == 'ppo':
         if args.model_path:
 
-            device = torch.device("cuda:0" if torch.cuda.is_available() and args.gpu else "cpu")
+            # device = torch.device("cuda:0" if torch.cuda.is_available() and args.gpu else "cpu")
+            # Maybe we should use only CPU during evaluation
+            device = torch.device("cpu")
+
             state_dim = env.observation_space.shape[0] * env.observation_space.shape[1]
             action_dim = env.action_space.n
             ppo_model = MLPActorCritic(state_dim, action_dim, device).to(device)
@@ -292,7 +295,7 @@ def collect_step_data(step, occupancy_map, env):
 
             if movement_direction in ['incoming', 'inside']:
                 for lane_group, ids in tl_data['vehicle'][movement_direction].items():
-                    
+
                     for veh_id in ids:
                         veh_velocity = traci.vehicle.getSpeed(veh_id)
 
@@ -318,8 +321,10 @@ def calculate_performance(run_data, all_directions, step_length):
     1. Average Waiting Time: For every outgoing vehicle, on average what is the waiting time?
     2. Average Queue Length: For every direction (12 total), on average what is the queue length? Counted whenever there is a queue.
     3. Overall Average Queue Length: Average queue length across all directions.
+    4. Throughput: Number of vehicles per hour that crossed the intersection.
     """
 
+    total_waiting_time = 0
     unique_outgoing_vehicles = set()
     queue_lengths = {direction: [] for direction in all_directions}
     
@@ -334,25 +339,28 @@ def calculate_performance(run_data, all_directions, step_length):
                 for direction, length in tl_data['vehicle']['queue_length'].items():
                     if length > 0:
                         queue_lengths[direction].append(length)
-    
+                        total_waiting_time += length # Each waiting vehicle contributes 1 timestep of waiting time
+
     total_outgoing_vehicles = len(unique_outgoing_vehicles)
     
     # Calculate average waiting time using the actual step length
-    total_simulation_time = len(run_data) * step_length # In seconds
-    avg_waiting_time = total_simulation_time / total_outgoing_vehicles if total_outgoing_vehicles > 0 else 0
+    total_simulation_waiting_time = total_waiting_time * step_length # In seconds
+    avg_waiting_time = total_simulation_waiting_time / total_outgoing_vehicles 
     
-    # Calculate average queue lengths for each direction
-    avg_queue_lengths = {direction: sum(lengths) / len(lengths) if lengths else 0 
+    avg_queue_lengths = {direction: sum(lengths) / len(lengths) if lengths else 0
                          for direction, lengths in queue_lengths.items()}
     
-    # Calculate overall average queue length
     all_queue_lengths = [length for lengths in queue_lengths.values() for length in lengths]
     overall_avg_queue_length = sum(all_queue_lengths) / len(all_queue_lengths) if all_queue_lengths else 0
+
+    total_simulation_time = (run_data[-1]['step'] * step_length)/ 3600  # Convert to hours
+    throughput = total_outgoing_vehicles / total_simulation_time # Vehicles per hour
     
     # Print results
     print("\nPerformance Metrics:")
     print(f"Total Unique Outgoing Vehicles: {total_outgoing_vehicles}")
     print(f"Average Waiting Time: {avg_waiting_time:.2f} seconds")
+    print(f"Throughput: {throughput:.2f} vehicles/hour")
     print(f"Overall Average Queue Length: {overall_avg_queue_length:.2f}")
     print("\nAverage Queue Lengths by Direction:")
     for direction, avg_length in avg_queue_lengths.items():
