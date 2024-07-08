@@ -2522,10 +2522,10 @@
     </edge>
 
     <tlLogic id="9727816623" type="static" programID="0" offset="0">
-        <phase duration="77" state="GGr"/>
-        <phase duration="3"  state="yyr"/>
-        <phase duration="5"  state="rrG"/>
-        <phase duration="5"  state="rrr"/>
+        <phase duration="77" state="GGG"/>
+        <phase duration="3"  state="GGG"/>
+        <phase duration="5"  state="GGG"/>
+        <phase duration="5"  state="GGG"/>
     </tlLogic>
     
     <tlLogic id="cluster_172228464_482708521_9687148201_9687148202_#5more" type="static" programID="0" offset="0">

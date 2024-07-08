@@ -5,6 +5,7 @@ import argparse
 import gymnasium as gym
 import numpy as np
 import xml.etree.ElementTree as ET
+
 from utils import convert_demand_to_scale_factor, scale_demand
 
 class CraverRoadEnv(gym.Env):
@@ -34,6 +35,8 @@ class CraverRoadEnv(gym.Env):
         20: pedestrian crossing south
         21: unused
         22: pedestrian crossing west
+
+        TODO: Get network related stuff from a config file. To make the code more general purpose.
         """
 
         if args.manual_demand_veh is not None :
@@ -118,8 +121,23 @@ class CraverRoadEnv(gym.Env):
         self.turns = ['straight', 'right', 'left']
         self.pressure_dict = {tl_id: {'vehicle': {}, 'pedestrian': {}} for tl_id in self.tl_ids}
 
-        # Extraction of pedestrian crosswalks
-        _, self.original_crosswalks = self._extract_pedestrian_crosswalks('./original_craver_road.net.xml')
+        self.original_net_file = './original_craver_road.net.xml'
+
+        # Switched to dict because we need to group one of them
+        # self.controlled_crosswalks = [':9687187500_c0', ':9687187501_c0', ':9727816623_c0', ':9727816850_c0',
+        #                                  ':9740157155_c0', ':9740157194_c0', ':9740157209_c0', ':9740484527_c0',
+        #                                  ':cluster_9740157181_9740483933_c0', ':cluster_172228408_9739966907_9739966910_c2'] 
+        
+        # dict with 1, 2, 3, as key and id as value. Ordered from left to right.
+        self.controlled_crosswalks_dict = {1: [':9687187500_c0', ':9687187501_c0'], 
+                                           2: [':9727816850_c0'],  
+                                           3: [':9727816623_c0'],
+                                            4: [':9740157155_c0'], 
+                                            5: [':cluster_9740157181_9740483933_c0'], 
+                                            6: [':9740157194_c0'],  
+                                            7: [':9740157209_c0'], 
+                                            8: [':9740484527_c0'],
+                                            9: [':cluster_172228408_9739966907_9739966910_c2']}
 
     def _initialize_lanes(self,):
         """
@@ -194,49 +212,6 @@ class CraverRoadEnv(gym.Env):
             }
         }
 
-    def _extract_pedestrian_crosswalks(self, sumo_network_xml, connections=False):
-        tree = ET.parse(sumo_network_xml)
-        root = tree.getroot()
-
-        crosswalks = []
-        connections = []
-
-        # Look for edges with function="crossing"
-        for edge in root.findall('.//edge[@function="crossing"]'):
-            crosswalk = {
-                'id': edge.get('id'),
-                'function': 'crossing',
-                'crossingEdges': edge.get('crossingEdges'),
-            }
-            
-            # Get lane information
-            lane = edge.find('lane')
-            if lane is not None:
-                crosswalk.update({
-                    'allow': lane.get('allow'),
-                    'speed': lane.get('speed'),
-                    'length': lane.get('length'),
-                    'width': lane.get('width'),
-                    'shape': lane.get('shape')
-                })
-            
-            crosswalks.append(crosswalk)
-
-        # Look for connections with 'via' attribute containing 'c'
-        if connections:
-            for connection in root.findall('.//connection[@via]'):
-                if 'c' in connection.get('via'):
-                    crosswalk = {
-                        'id': connection.get('via'),
-                        'from': connection.get('from'),
-                        'to': connection.get('to'),
-                        'fromLane': connection.get('fromLane'),
-                        'toLane': connection.get('toLane')
-                    }
-
-                connections.append(crosswalk)
-        
-        return connections, crosswalks
 
     def _get_vehicle_direction(self, signal_state):
         """
@@ -654,6 +629,8 @@ class CraverRoadEnv(gym.Env):
         """
         In the simplified action space with phase groups, previous action is used to determine if there was a switch.
         Duration is not set, a phase is set for the required duration.
+
+        Later the actions were added to whether or not enable the 9 crosswalks.
         """
         # print(f"\nCurrent Action: {action}, Previous Action: {previous_action}")
 
@@ -738,13 +715,54 @@ class CraverRoadEnv(gym.Env):
         """
         return self.step_count >= self.max_timesteps
 
+    def _modify_net_file(self, crosswalks_to_disable):
+        """
+        Just for changing the appearence of disallowed crosswalks.
+        """
+        tree = ET.parse(self.original_net_file)
+        root = tree.getroot()
+
+        for crosswalk_id in crosswalks_to_disable:
+
+            # Find the edge element corresponding to this crosswalk
+            edge = root.find(f".//edge[@id='{crosswalk_id}']")
+            if edge is not None:
+                # Find the lane within the crosswalk
+                lane = edge.find('lane')
+                if lane is not None:
+                    lane.set('width', '0.1')
+
+        tree.write('./modified_craver_road.net.xml')
+
+
+    def _disallow_pedestrians(self, crosswalks_to_disable):
+        """
+        Operations before the sim or traci is started.
+            Explicitly setting disallow does not work.
+            Change the width (is good for appearance) and speed does not work either.
+            Removing the crosswalk entirely also does not work.
+
+        Operations after sim start/traci.
+        """
+        # Using traci.setDisallowed
+        disabled_crosswalks = []
+        for crosswalk_id in crosswalks_to_disable:
+
+            try:
+                # Disallow pedestrians on this crosswalk
+                traci.lane.setDisallowed(f"{crosswalk_id}_0", ["pedestrian"])
+
+            except traci.exceptions.TraCIException as e:
+                print(f"Error disabling crosswalk {crosswalk_id}: {e}")
+        
+        return disabled_crosswalks
+        
     def reset(self, seed=None, options=None):
         """
         
         """
 
         super().reset(seed=seed)
-        
         if self.sumo_running:
             traci.close()
         
@@ -755,8 +773,15 @@ class CraverRoadEnv(gym.Env):
         scale_demand(self.vehicle_input_trips, self.vehicle_output_trips, scale_factor_vehicle, demand_type="vehicle")
         scale_demand(self.pedestrian_input_trips, self.pedestrian_output_trips, scale_factor_pedestrian, demand_type="pedestrian")
 
+        # TODO 1: If going the route of higher-level agent disabling a set of crosswalks, then this should be done here before the SUMO call.
+        # Randomly select crosswalks to disable
+        # to_disable = random.sample(self.controlled_crosswalks, min(5, len(self.controlled_crosswalks)))
+        # Before sumo call 
+        # self._modify_net_file(to_disable)
+
         if self.auto_start:
             sumo_cmd = ["sumo-gui" if self.use_gui else "sumo", 
+                        "--verbose",
                         "--start" , 
                         "--quit-on-end", 
                         "-c", "./craver.sumocfg", 
@@ -764,12 +789,19 @@ class CraverRoadEnv(gym.Env):
                         
         else:
             sumo_cmd = ["sumo-gui" if self.use_gui else "sumo", 
+                        "--verbose",
                         "--quit-on-end", 
                         "-c", "./craver.sumocfg", 
                         '--step-length', str(self.step_length)]
                         
 
         traci.start(sumo_cmd)
+
+        # TODO 2: And this should be done here after the SUMO call. 
+        # Disallow pedestrians in some crosswalks. After sumo call beacuse we need traci.
+        # disabled_crosswalks = self._disallow_pedestrians(to_disable)
+        # print(f"\nDisabled crosswalks: {disabled_crosswalks}\n")
+
         self.sumo_running = True
         self.step_count = 0 # This counts the timesteps in an episode. Needs reset.
 
@@ -801,62 +833,62 @@ class CraverRoadEnv(gym.Env):
             traci.close()
             self.sumo_running = False
 
-def main():
-    # Create an instance of the environment
-    parser = argparse.ArgumentParser(description='Run SUMO traffic simulation')
-    # Simulation
-    parser.add_argument('--gui', action='store_true', help='Use SUMO GUI (default: False)')
-    parser.add_argument('--step_length', type=float, default=1.0, help='Simulation step length (default: 1.0)') # What is one unit of increment in the simulation?
-    parser.add_argument('--action_duration', type=float, default=10, help='Duration of each action (default: 10.0)') # How many simulation steps does each action occur for. 
-    parser.add_argument('--auto_start', action='store_true', default=True, help='Automatically start the simulation')
-    parser.add_argument('--vehicle_input_trips', type=str, default='./original_vehtrips.xml', help='Original Input trips file')
-    parser.add_argument('--vehicle_output_trips', type=str, default='./scaled_vehtrips.xml', help='Output trips file')
-    parser.add_argument('--pedestrian_input_trips', type=str, default='./original_pedtrips.xml', help='Original Input pedestrian trips file')
-    parser.add_argument('--pedestrian_output_trips', type=str, default='./scaled_pedtrips.xml', help='Output pedestrian trips file')
+# def main():
+#     # Create an instance of the environment
+#     parser = argparse.ArgumentParser(description='Run SUMO traffic simulation')
+#     # Simulation
+#     parser.add_argument('--gui', action='store_true', help='Use SUMO GUI (default: False)')
+#     parser.add_argument('--step_length', type=float, default=1.0, help='Simulation step length (default: 1.0)') # What is one unit of increment in the simulation?
+#     parser.add_argument('--action_duration', type=float, default=10, help='Duration of each action (default: 10.0)') # How many simulation steps does each action occur for. 
+#     parser.add_argument('--auto_start', action='store_true', default=True, help='Automatically start the simulation')
+#     parser.add_argument('--vehicle_input_trips', type=str, default='./original_vehtrips.xml', help='Original Input trips file')
+#     parser.add_argument('--vehicle_output_trips', type=str, default='./scaled_vehtrips.xml', help='Output trips file')
+#     parser.add_argument('--pedestrian_input_trips', type=str, default='./original_pedtrips.xml', help='Original Input pedestrian trips file')
+#     parser.add_argument('--pedestrian_output_trips', type=str, default='./scaled_pedtrips.xml', help='Output pedestrian trips file')
 
-    # If required to manually scale the demand (this happens automatically every episode as part of reset).
-    parser.add_argument('--manual_demand_veh', type=float, default=None, help='Manually scale vehicle demand before starting the simulation')
-    parser.add_argument('--manual_demand_ped', type=float, default=None, help='Manually scale pedestrian demand before starting the simulation')
-    parser.add_argument('--demand_scale_min', type=float, default=0.5, help='Minimum demand scaling factor for automatic scaling (default: 0.5)')
-    parser.add_argument('--demand_scale_max', type=float, default=5.0, help='Maximum demand scaling factor for automatic scaling (default: 5.0)')
+#     # If required to manually scale the demand (this happens automatically every episode as part of reset).
+#     parser.add_argument('--manual_demand_veh', type=float, default=None, help='Manually scale vehicle demand before starting the simulation')
+#     parser.add_argument('--manual_demand_ped', type=float, default=None, help='Manually scale pedestrian demand before starting the simulation')
+#     parser.add_argument('--demand_scale_min', type=float, default=0.5, help='Minimum demand scaling factor for automatic scaling (default: 0.5)')
+#     parser.add_argument('--demand_scale_max', type=float, default=5.0, help='Maximum demand scaling factor for automatic scaling (default: 5.0)')
 
-    # PPO
-    #parser.add_argument('--seed', type=int, default=42, help='Random seed (default: 42)')
-    parser.add_argument('--gpu', action='store_true', default=True, help='Use GPU if available (default: use CPU)')
-    parser.add_argument('--total_timesteps', type=int, default=300000, help='Total number of timesteps the simulation will run (default: 300000)')
-    parser.add_argument('--max_timesteps', type=int, default=1500, help='Maximum number of steps in one episode (default: 500)')
-    parser.add_argument('--update_freq', type=int, default=128, help='Number of action timesteps between each policy update (default: 128)')
-    parser.add_argument('--lr', type=float, default=0.002, help='Learning rate (default: 0.002)')
-    parser.add_argument('--gamma', type=float, default=0.99, help='Discount factor (default: 0.99)')
-    parser.add_argument('--K_epochs', type=int, default=4, help='Number of epochs to update policy (default: 4)')
-    parser.add_argument('--eps_clip', type=float, default=0.2, help='Clip parameter for PPO (default: 0.2)')
-    parser.add_argument('--save_freq', type=int, default=10, help='Save model every n episodes (default: 10, 0 to disable)')
-    parser.add_argument('--ent_coef', type=float, default=0.01, help='Entropy coefficient (default: 0.01)')
-    parser.add_argument('--vf_coef', type=float, default=0.5, help='Value function coefficient (default: 0.5)')
-    parser.add_argument('--batch_size', type=int, default=32, help='Batch size (default: 32)')
+#     # PPO
+#     #parser.add_argument('--seed', type=int, default=42, help='Random seed (default: 42)')
+#     parser.add_argument('--gpu', action='store_true', default=True, help='Use GPU if available (default: use CPU)')
+#     parser.add_argument('--total_timesteps', type=int, default=300000, help='Total number of timesteps the simulation will run (default: 300000)')
+#     parser.add_argument('--max_timesteps', type=int, default=1500, help='Maximum number of steps in one episode (default: 500)')
+#     parser.add_argument('--update_freq', type=int, default=128, help='Number of action timesteps between each policy update (default: 128)')
+#     parser.add_argument('--lr', type=float, default=0.002, help='Learning rate (default: 0.002)')
+#     parser.add_argument('--gamma', type=float, default=0.99, help='Discount factor (default: 0.99)')
+#     parser.add_argument('--K_epochs', type=int, default=4, help='Number of epochs to update policy (default: 4)')
+#     parser.add_argument('--eps_clip', type=float, default=0.2, help='Clip parameter for PPO (default: 0.2)')
+#     parser.add_argument('--save_freq', type=int, default=10, help='Save model every n episodes (default: 10, 0 to disable)')
+#     parser.add_argument('--ent_coef', type=float, default=0.01, help='Entropy coefficient (default: 0.01)')
+#     parser.add_argument('--vf_coef', type=float, default=0.5, help='Value function coefficient (default: 0.5)')
+#     parser.add_argument('--batch_size', type=int, default=32, help='Batch size (default: 32)')
 
-    # Evaluations
-    parser.add_argument('--evaluate', choices=['tl', 'ppo'], help='Evaluation mode: traffic light (tl), PPO (ppo), or both')
-    parser.add_argument('--model_path', type=str, help='Path to the saved PPO model for evaluation')
+#     # Evaluations
+#     parser.add_argument('--evaluate', choices=['tl', 'ppo'], help='Evaluation mode: traffic light (tl), PPO (ppo), or both')
+#     parser.add_argument('--model_path', type=str, help='Path to the saved PPO model for evaluation')
 
-    args = parser.parse_args()
-    env = CraverRoadEnv(args)
+#     args = parser.parse_args()
+#     env = CraverRoadEnv(args)
 
-    # Reset the environment
-    initial_observation, info = env.reset()
+#     # Reset the environment
+#     initial_observation, info = env.reset()
 
-    # Print the crosswalks
-    crosswalks = env.original_crosswalks
-    print(f"Crosswalks: (Total: {len(crosswalks)})")
-    for crosswalk in crosswalks:
-        print(f"ID: {crosswalk['id']}")
-        for key, value in crosswalk.items():
-            if key != 'id':
-                print(f"{key.capitalize()}: {value}")
-        print("---")
+#     # Print the crosswalks
+#     crosswalks = env.controlled_crosswalks
+#     print(f"Crosswalks: (Total: {len(crosswalks)})")
+#     for crosswalk in crosswalks:
+#         print(f"ID: {crosswalk['id']}")
+#         for key, value in crosswalk.items():
+#             if key != 'id':
+#                 print(f"{key.capitalize()}: {value}")
+#         print("---")
 
-    # Close the environment
-    env.close()
+#     # Close the environment
+#     env.close()
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()

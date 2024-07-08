@@ -2,6 +2,7 @@ import traci
 import torch
 import xml.dom.minidom
 import xml.etree.ElementTree as ET
+from typing import Dict, List, Tuple
 
 def convert_demand_to_scale_factor(demand, demand_type, input_file):
     """
@@ -132,3 +133,45 @@ def scale_demand(input_file, output_file, scale_factor, demand_type):
     
     print(f"{demand_type.capitalize()} demand scaled by factor {scale_factor}.") # Output written to {output_file}")
 
+
+def extract_pedestrian_crosswalks(sumo_network_xml: str, include_connections: bool = False) -> Tuple[List[Dict], Dict[int, Dict]]:
+        tree = ET.parse(sumo_network_xml)
+        root = tree.getroot()
+        connections = []
+        crosswalks = []
+
+        # Look for edges with function="crossing"
+        for edge in root.findall('.//edge[@function="crossing"]'):
+            crosswalk = {
+                'id': edge.get('id'),
+                'function': 'crossing',
+                'crossingEdges': edge.get('crossingEdges'),
+            }
+            
+            # Get lane information
+            lane = edge.find('lane')
+            if lane is not None:
+                crosswalk.update({
+                    'allow': lane.get('allow'),
+                    'speed': lane.get('speed'),
+                    'length': lane.get('length'),
+                    'width': lane.get('width'),
+                    'shape': lane.get('shape')
+                })
+            
+            crosswalks.append(crosswalk)
+
+        # Look for connections with 'via' attribute containing 'c'
+        if include_connections:
+            for connection in root.findall('.//connection[@via]'):
+                if 'c' in connection.get('via'):
+                    conn = {
+                        'id': connection.get('via'),
+                        'from': connection.get('from'),
+                        'to': connection.get('to'),
+                        'fromLane': connection.get('fromLane'),
+                        'toLane': connection.get('toLane')
+                    }
+                    connections.append(conn)
+        
+        return connections, crosswalks
