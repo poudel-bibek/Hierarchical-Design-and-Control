@@ -608,3 +608,12 @@ self.direction_and_edges = {
                         
                         ]
             }
+
+
+# To perform a n-step lookup, find a route from current edge to the destination edge. This will automatically find the nearest actual edge and discard the internal edge. 
+            # fake_new_route = traci.simulation.findIntermodalRoute(current_edge, destination_edge, modes='') 
+            # fake_new_route_edges = fake_new_route[0].edges # This will never contain an internal edge. The internal-free current edge is required later (below as well to get the direction)
+            # current_and_next_edge = fake_new_route_edges[0:1] # IMPORTANT: This value here determines how much ahead of time do we want to re-route a pedestrian, if they are about to head to a disabled crosswalk.
+            # # This value cannot be too high. Or they will constantly be re-routed.
+
+            #print(f"\nCurrent and next edge: {current_and_next_edge}\n")
