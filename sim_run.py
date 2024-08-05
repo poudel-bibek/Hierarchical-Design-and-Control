@@ -1,11 +1,11 @@
 import math
 import traci
+import torch
 import random
 import argparse
 import gymnasium as gym
 import numpy as np
 import xml.etree.ElementTree as ET
-
 from utils import convert_demand_to_scale_factor, scale_demand
 
 class CraverRoadEnv(gym.Env):
@@ -110,7 +110,7 @@ class CraverRoadEnv(gym.Env):
         self.demand_scale_min = args.demand_scale_min
         self.demand_scale_max = args.demand_scale_max
 
-        self.previous_action = None
+        self.previous_tl_action = None
         self.action_duration = args.action_duration  # Duration of each action in seconds
         # Number of simulation steps that should occur for each action. trying to ajuust for any given step length
         self.steps_per_action = int(self.action_duration / self.step_length) # This is also the size of the observation buffer
@@ -123,22 +123,154 @@ class CraverRoadEnv(gym.Env):
 
         self.original_net_file = './original_craver_road.net.xml'
 
-        # Switched to dict because we need to group one of them
-        # self.controlled_crosswalks = [':9687187500_c0', ':9687187501_c0', ':9727816623_c0', ':9727816850_c0',
-        #                                  ':9740157155_c0', ':9740157194_c0', ':9740157209_c0', ':9740484527_c0',
-        #                                  ':cluster_9740157181_9740483933_c0', ':cluster_172228408_9739966907_9739966910_c2'] 
-        
-        # dict with 1, 2, 3, as key and id as value. Ordered from left to right.
-        self.controlled_crosswalks_dict = {1: [':9687187500_c0', ':9687187501_c0'], 
-                                           2: [':9727816850_c0'],  
-                                           3: [':9727816623_c0'],
-                                            4: [':9740157155_c0'], 
-                                            5: [':cluster_9740157181_9740483933_c0'], 
-                                            6: [':9740157194_c0'],  
-                                            7: [':9740157209_c0'], 
-                                            8: [':9740484527_c0'],
-                                            9: [':cluster_172228408_9739966907_9739966910_c2']}
+        # dict. Ordered from left to right.
+        # Should contain the ID as the crosswalk itself. A pedestrian's current_edge will end with _c0 if they are inside the crosswalk.  (Not present in the route)
+        # If the pedestrian is already in the corsswalk, they dont need to be re-routed.
 
+        # The vicinity walking edges from where pedestrians have to be re-routed. (Not present in the route)
+
+        # The connected edges (Present in the route, are connected to the junctions) from which a couple step lookup ahead can be used to determine if the pedestrian is about to cross the crosswalk. 
+        # Actually, the best place to do a one step lookup is from the walking area on top of the related junction itself. So connected_edges may not be used.
+        # This cannot be done when the pedestrian is too far away. This is already where we are looking into something that cannot be determined observationally. 
+
+        # Re-route edges (Present in the route) which acts as a focal point to ensure that pedestrians are infact crossing the crosswalk.
+
+        # What is excluded is the walking areas in the junctions near the crosswalks. Pedestrians present here could be going anywhere.
+        # _w0 or _w1 attached to junction names will be the walking areas over that junction. Pedestrians over these junctions will not be re-routed. 
+        # However, pedestrians here might be important for observations later.
+        self.controlled_crosswalks_dict = {
+            0: { # This one is special case of a crosswalk (because of the double structure), the ones in the  middle should be excluded
+                'ids': [':9687187500_c0', ':9687187501_c0'],
+                'vicinity_walking_edges': [':9687187501_w1', '1054121747#2', ':9687187495_w0', '1058666192',':9687187500_w0', ':9687187501_w0'], 
+                'related_junction_edges': [':9727816658_w0', ':9687187526_w0'], 
+                'connected_edges': ['1054121752#1', '1054121752#0', '1058666191#4', '1058666191#5'],
+                'reroute_edges': {'upside': '1054121747#2' , 'downside': '1058666192' },
+            },
+
+            # Add crosswalks that are not controlled but are necessary to be present for re-route
+            # 9: {
+            # }, 
+
+            1: {
+                'ids': [':9727816850_c0'],
+                'vicinity_walking_edges': [':9727816850_w1', '1058666207#1', ':9727816844_w0', '1058666207#0',':9727816850_w0'],
+                'related_junction_edges': [':9727816846_w0', ':9727816851_w0'],
+                'connected_edges': ['1050677005#7','1050677005#6','1058666191#1','1058666191#2'],
+                'reroute_edges': {'upside': '1058666207#1' , 'downside': '1058666207#0' },
+            },
+            2: {
+                'ids': [':9727816623_c0'],
+                'vicinity_walking_edges': ['1058666188#1', '1051865729#3',':9727816623_w0', ':9727816623_w1'],
+                'related_junction_edges': [':9727816625_w0', ':9666274798_w0'], # All edges with _w0 in the end begin with : in front
+                'connected_edges': ['1058666187#2','1058666187#3', '1050677005#10','1050677005#9' ], 
+                'reroute_edges': {'upside': '1051865729#3' , 'downside': '1058666188#1' },
+            },
+
+            3: {
+                'ids': [':9740157155_c0'],
+                'vicinity_walking_edges': ['1060131391#1', '1060131391#0', ':9740157155_w0',':9740157155_w1',':9740157153_w0', '1060131390' ],
+                'related_junction_edges': [':9666274886_w0', ':9740157154_w0'],
+                'connected_edges': ['1060131388#2','1060131388#3', '1050677005#13', '1050677005#12'],
+                'reroute_edges': {'upside': '1060131391#1' , 'downside': ':1060131391#0'},   
+            },
+
+            4: {
+                'ids': [':cluster_9740157181_9740483933_c0'],
+                'vicinity_walking_edges': ['1060131402_0', ':cluster_9740157181_9740483933_w0', ':cluster_9740157181_9740483933_w1', '1060131401#2', '1060131401#3'],
+                'related_junction_edges': [':9740157180_w0', ':9655154530_w0'],
+                'connected_edges': ['1060131402_0', ':9740483934_w0', ':9740157180_w0', '1060131401#1', '1050677005#14', '1050677005#13', '1050677007#1'],
+                'reroute_edges': {'upside': '1060131401#3' , 'downside': '1060131401#2'},
+            },
+
+            5: {
+                'ids': [':9740157194_c0'],
+                'vicinity_walking_edges': ['1060131405#1', ':9740157194_w1', ':9740157194_w0', ':9740157192_w0', '1060131406', '1060131405#0'], # Have to be re-routed
+                'related_junction_edges': [':9740157204_w0', ':9740157195_w0', ':10054309033_w0', ], # One step lookup
+                'connected_edges': ['1050677005#16', '1098062395', '1050677005#18', '1060131403#1', '1060112727#1', '1060131404#1'],
+                'reroute_edges': {'upside': '1060131406'  , 'downside': '1060131405#1'},
+            },
+
+            6: {
+                'ids': [':9740157209_c0'],
+                'vicinity_walking_edges': ['1060131408#1', ':9740157209_w0', ':9740157209_w1', '1060131408#0', '1060131410' ],
+                'related_junction_edges': [':9740157207_w0', ':9740157211_w0', ':9740157210_w0', '1060131404#2' ], # For lookup
+                'connected_edges': [':9740484420_w0', '1060131404#3', '1050677005#19', '1050677005#18', '1060131409#1' ],
+                'reroute_edges': {'upside': '1060131408#1'  , 'downside': '1060131408#0' },
+            },
+
+            7: {
+                'ids': [':9740484527_c0'],
+                'vicinity_walking_edges': ['1060166260#1', ':9740484527_w0', ':9740484527_w1', '1050677005#21'],
+                'related_junction_edges': [':9740484528_w0', ':9740484524_w0'],
+                'connected_edges': ['1060166262#2', '1050677005#20', '1060112787#2', '1060112787#1'],
+                'reroute_edges': {'upside': '1050677005#21' , 'downside': '1060166260#1' },
+            },
+
+            # Potential (if causes problems): Discard this crosswalk. The vicinity walking edges are a junction that connects two different crosswalks. 
+            8: {
+                'ids': [':cluster_172228408_9739966907_9739966910_c2'],
+                'vicinity_walking_edges': [':cluster_172228408_9739966907_9739966910_w2', ':cluster_172228408_9739966907_9739966910_w3', '1060112789#1'], # Reroute. w3 covers both to the right and down from up
+                'related_junction_edges': [':9739966908_w0', ':9739966904_w0', '1060112789#0', '1060112789#2'], # Lookup. 89#0 is the right one (downside)
+                'connected_edges': [':9739966895_w0', ':9740484531_w0', '1060112790', ':cluster_172228408_9739966907_9739966910_w1'], # _w1 is the one on the right (downside)
+                'reroute_edges': {'upside': '1060112789#2' , 'downside': '1060112789#1'},
+            },
+        }
+
+        # Lookup the direction of the current edge.. based on current_edge (which contains internal edges.)
+        # Since this can be used in the forward lookup as well. Including the internal edges in junctions.
+        # Does not contain connected_edges
+        self.direction_and_edges = {
+            'upside': [ 
+                '1054121747#2', ':9687187501_w1', ':9687187526_w0', ':9687187501_w1',
+                ':9727816851_w0', '1058666207#1', ':9727816850_w1',
+                ':9666274798_w0', '1051865729#3', ':9727816623_w0',
+                ':9666274886_w0', '1060131391#1', ':9740157155_w0',
+                ':cluster_9740157181_9740483933_w1', ':9655154530_w0', '1060131401#3',
+                ':9740157194_w0', ':9740157195_w0', ':10054309033_w0', ':9740157192_w0', '1060131406', '1060131405#0',
+                '1060131408#1', ':9740157209_w1', ':9740157210_w0',
+                ':9740484527_w1', '1050677005#21', ':9740484524_w0',
+                ':cluster_172228408_9739966907_9739966910_w3', '1060112789#2',
+
+                ],
+
+            'downside': [ 
+                ':9727816658_w0', '1058666192', ':9687187495_w0', ':9687187500_w0',
+                ':9727816846_w0', ':9727816850_w0', ':9727816844_w0', '1058666207#0',
+                ':9727816625_w0', '1058666188#1', ':9727816623_w1',
+                ':9740157154_w0', '1060131391#0', ':9740157155_w1', ':9740157153_w0', '1060131390',
+                '1060131402_0', ':9740157180_w0', ':cluster_9740157181_9740483933_w0', '1060131401#2',
+                '1060131405#1', ':9740157194_w1', ':9740157204_w0',
+                ':9740157209_w0', ':9740157207_w0', ':9740157211_w0', '1060131408#0', '1060131410','1060131404#2',
+                ':9740484528_w0', '1060166260#1', ':9740484527_w0',
+                ':9739966908_w0', ':9739966904_w0', '1060112789#0', ':cluster_172228408_9739966907_9739966910_w2', '1060112789#1',
+                ],
+            }
+        
+        self.current_crosswalk_selection = None 
+
+        # Create a bunch of reverse lookup dictionaries
+        self.crosswalk_to_disabled_vicinity_walking_edges = {
+            crosswalk_id: data['vicinity_walking_edges'] + data['connected_edges'] # + data['ids'] If the pedestrian in already in the crosswalk itself, they dont need to be re-routed
+            for _, data in self.controlled_crosswalks_dict.items()
+            for crosswalk_id in data['ids']
+        }
+
+        # Given any edge among all edges, return the re-route edge
+        self.crosswalk_to_reroute_edges = {}
+        for _, data in self.controlled_crosswalks_dict.items():
+            reroute_edges = data['reroute_edges']
+            all_edges = data['vicinity_walking_edges'] + data['connected_edges'] + data['ids']
+            
+            for edge in all_edges:
+                self.crosswalk_to_reroute_edges[edge] = reroute_edges
+
+        # Get the direction of the any edge around the crosswalk
+        self.edge_to_direction = {}
+        for direction, edges in self.direction_and_edges.items():
+            for edge in edges:
+                self.edge_to_direction[edge] = direction
+
+        
     def _initialize_lanes(self,):
         """
         The outgoing lanes consist of 4 traffic outgoing lanes and three pedestrian lanes (after pedestrians have entered).
@@ -211,6 +343,34 @@ class CraverRoadEnv(gym.Env):
                 },
             }
         }
+
+    def find_connecting_edges(self, start_edge_id, end_edge_id):
+
+        start_edge = self.net.getEdge(start_edge_id)
+        end_edge = self.net.getEdge(end_edge_id)
+        
+        # Use a breadth-first search to find paths
+        queue = [(start_edge, [start_edge])]
+        visited = set()
+        
+        while queue:
+            current_edge, path = queue.pop(0)
+            
+            if current_edge == end_edge:
+                return path
+            
+            if current_edge in visited:
+                continue
+            
+            visited.add(current_edge)
+            
+            for next_edge in current_edge.getOutgoing():
+                if next_edge not in visited:
+                    new_path = path + [next_edge]
+                    queue.append((next_edge, new_path))
+        
+        return None  # No path found
+
 
 
     def _get_vehicle_direction(self, signal_state):
@@ -479,18 +639,20 @@ class CraverRoadEnv(gym.Env):
     def action_space(self):
         """
         In the simplified action space with phase groups, the agents decision is binary.
+        Changed this to use MultiDiscrete 
         """
-        num_actions = len(self.tl_ids) * len(self.phase_groups) # Number of traffic lights * Number of phase groups
-        return gym.spaces.Discrete(num_actions)
-        # return gym.spaces.Discrete(10) 
-
+        num_actions = len(self.tl_ids) # Number of traffic lights where the choice is between the number of phase groups (in this case just two).
+        num_actions += len(self.controlled_crosswalks_dict) # Plus the size of the controlled_crosswalks_dict (enable/ disable)
+        return gym.spaces.MultiDiscrete([2] * num_actions) # 2 indicates the binary choice
+        
+       
     @property
     def observation_space(self):
         """
         Each timestep (not action step) observation is the pressure in all outgoing directions.
         TODO: We do not have lane level granularity yet (in both action and observation).
 
-        Observation space also needs to include the current traffic phase (or phase group in this case)
+        
         """
         # 
         single_obs_shape = (len(self.tl_ids)*38, )
@@ -517,12 +679,13 @@ class CraverRoadEnv(gym.Env):
         reward = 0
         done = False
         observation_buffer = []
+        current_tl_action = action[0].item() # Convert tensor to int
 
         # Run simulation steps for the duration of the action
         for _ in range(self.steps_per_action):
             
             # Apply action needs to happen every timestep
-            self._apply_action(action, self.current_action_step, self.previous_action)
+            self._apply_action(action, self.current_action_step, self.previous_tl_action)
 
             traci.simulationStep() # Step length is the simulation time that elapses when each time this is called.
             self.step_count += 1
@@ -537,7 +700,7 @@ class CraverRoadEnv(gym.Env):
             self._update_outgoing_pressure_dict(self.corrected_occupancy_map)
 
             # Accumulate reward
-            reward += self._get_reward(action)
+            reward += self._get_reward(current_tl_action)
             
             # Check if episode is done
             if self._check_done():
@@ -549,17 +712,7 @@ class CraverRoadEnv(gym.Env):
         print(f"\nCurrent Action: {action}")
         print(f"\nAccumulated Reward: {reward}")
 
-        self.previous_action = action
-        # Show all edges in this junction: cluster_172228464_482708521_9687148201_9687148202_#5more
-        # incoming_edges = traci.junction.getIncomingEdges('cluster_172228464_482708521_9687148201_9687148202_#5more')
-        # outgoing_edges = traci.junction.getOutgoingEdges('cluster_172228464_482708521_9687148201_9687148202_#5more')
-
-        # print(f"\nEdges: \tIncoming: {incoming_edges}\n\tOutgoing: {outgoing_edges}")
-
-        # for tl in self.tl_ids:
-        #     phase = traci.trafficlight.getPhase(tl)
-        #     print(f"\n\tTraffic light {tl} is in phase {phase}")
-
+        self.previous_tl_action = current_tl_action
         observation = np.asarray(observation_buffer)
         info = {}
 
@@ -571,6 +724,7 @@ class CraverRoadEnv(gym.Env):
         Previous Approach: Pressure(outgoing direction) = (Incoming traffic towards this direction including inside directions) - (Actual outgoing traffic in this direction)
         
         Not only phase group but also the subgroup.
+        Recently added: observation space also needs to include the previous action.
         """
         
         # Get the occupancy map and print it
@@ -620,39 +774,45 @@ class CraverRoadEnv(gym.Env):
         num_elements_per_tl = 2 + 12 + 12 + 4 + 4 + 4 # Total: 38
         mask = np.tile([False, False] + [True] * (num_elements_per_tl - 2), len(self.tl_ids))
         
-        # Normalize
+        # Normalize the items other than the masked ones
         normalizer = 10.0
         observation[mask] /= normalizer
+
+        # Add previous action: 
+
         return observation
     
-    def _apply_action(self, action, current_action_step, previous_action=None):
+    def _apply_action(self, action, current_action_step, previous_tl_action=None):
         """
-        In the simplified action space with phase groups, previous action is used to determine if there was a switch.
-        Duration is not set, a phase is set for the required duration.
+        In the action space with phase groups, previous action is used to determine if there was a switch.
+        Later, actions were added to whether or not enable the crosswalks.
 
-        Later the actions were added to whether or not enable the 9 crosswalks.
+        previous_action will be None none in reset.
+        apply_action is called every step.
         """
-        # print(f"\nCurrent Action: {action}, Previous Action: {previous_action}")
+        #print(f"\nCurrent Action: {action}, TL action: {action[0]} Previous TL Action: {previous_tl_action}")
 
-        self.current_phase_group = action
+        # For the TL control. For the same action, what state is applied changes within the action timesptes
+        current_tl_action = action[0].item() # Convert tensor to int
+        self.current_phase_group = current_tl_action # Convert tensor to int
         # For action space with phase groups
-        if previous_action == None: # First action
-            previous_action = action # Assume that there was no switch
+        if previous_tl_action == None: # First action 
+            previous_tl_action = current_tl_action # Assume that there was no switch
 
-        if action != previous_action:
+        if current_tl_action != previous_tl_action:
             # print("Switching phase group")
             # Switch the phase group
             for tl_id in self.tl_ids:
                 
                 # All these shenanigans is to determine the index. TODO: Is there an efficient way to do this?
-                durations = [phase["duration"] for phase in self.phase_groups[action]]
+                durations = [phase["duration"] for phase in self.phase_groups[current_tl_action]]
                 cumulative_durations = [sum(durations[:i+1]) for i in range(len(durations))] # [4, 5, 10]
                 for i, duration in enumerate(cumulative_durations):
                     if current_action_step < duration:
                         index = i
                         break
                 self.current_state_index = index
-                state = self.phase_groups[action][index]["state"]
+                state = self.phase_groups[current_tl_action][index]["state"]
                 # print(f"Setting phase: {state}")
                 traci.trafficlight.setRedYellowGreenState(tl_id, state)
                     
@@ -661,18 +821,83 @@ class CraverRoadEnv(gym.Env):
             self.current_state_index = 2
 
             for tl_id in self.tl_ids:
-                    state = self.phase_groups[action][2]["state"] # Index is always 2
+                    state = self.phase_groups[current_tl_action][2]["state"] # Index is always 2
                     # print(f"Setting phase: {state}")
                     # Skip the first two phases, they are for buffering the transition.
                     traci.trafficlight.setRedYellowGreenState(tl_id, state)
-                    
-        
-        # Previous version with 10 phases
-        # for tl_id in self.tl_ids:
-        #     traci.trafficlight.setPhase(tl_id, action)
-        # self.current_phase = action
 
-    def _get_reward(self, current_action):
+        # For the crosswalk control. For the same action, what choice is performed remains same within the action timesteps
+        # Only need to do this only when current_action_step is 0 i.e., when a new action is gotten
+        walking_edges_to_reroute_from = []
+        walking_lanes_to_reroute_from = []
+        alternative_crosswalks_flat = []
+
+        if current_action_step == 0:   
+            current_crosswalk_action = action[1:]
+            crosswalks_to_disable = []
+            all_crosswalks = [] 
+
+            for i in range(len(current_crosswalk_action)): # The first element is the TL action
+                
+                # We want to get the id of individual crosswalks
+                crosswalks_list = self.controlled_crosswalks_dict[i]['ids']
+                for item in crosswalks_list:
+                    all_crosswalks.append(item)
+
+                if current_crosswalk_action[i] == 0: # 0 means disable 
+                    crosswalks_list = self.controlled_crosswalks_dict[i]['ids']
+                    for item in crosswalks_list:
+                        crosswalks_to_disable.append(item)
+
+            ######################################
+            # For testing purposes.
+            # Based on the timesteps, allow a bunch and then disallow the bunch
+            print(f"Step count: {self.step_count}") # Increments by 10 here
+
+            # Define time ranges for disabling crosswalks
+            time_ranges = [
+                (200, 1000, all_crosswalks[:5]),
+                (1000, 2000, all_crosswalks[5:]),
+                (2000, float('inf'), all_crosswalks[:5])
+            ]
+
+            # Determine which crosswalks to disable based on current step
+            crosswalks_to_disable = [] 
+            for start, end, crosswalks in time_ranges:
+                if start < self.step_count <= end:
+                    print(f"\nTime range: {start} - {end}, Disabled Crosswalks: {crosswalks}")
+                    crosswalks_to_disable = crosswalks
+                    break
+            # End of testing purposes code
+            ######################################
+
+            
+            for crosswalk_id in crosswalks_to_disable:
+                edges = self.crosswalk_to_disabled_vicinity_walking_edges[crosswalk_id] # Does not contain the crosswalk itself, just the vicinity areas
+                lanes = [edge + '_0' for edge in edges]  # The lane is always goint to be the first lane of the edge 
+                walking_edges_to_reroute_from.extend(edges)
+                walking_lanes_to_reroute_from.extend(lanes)
+            print(f"\nWalking edges to disable: {walking_edges_to_reroute_from}\n")
+
+            # Find alternative crosswalks and flatten
+            alternative_crosswalks = [
+                crosswalk_data['ids']
+                for crosswalk_data in self.controlled_crosswalks_dict.values()
+                if not any(cw in crosswalks_to_disable for cw in crosswalk_data['ids'])
+            ]
+            alternative_crosswalks_flat.extend([item for sublist in alternative_crosswalks for item in sublist])
+            print(f"\nAlternative crosswalks flattened: {alternative_crosswalks}\n")
+
+        # Although the crosswalks to disable are gotten every 10 timesteps, the enforcement of the action (i.e., re-routing pedestrians) is done every step.
+        # This is going to be severely computationally taxing on the simulation.
+        #print(f"\nAll crosswalks: {all_crosswalks}\n\nCrosswalks to disable: {crosswalks_to_disable}\n")
+        disabled_crosswalks = self._disallow_pedestrians(walking_edges_to_reroute_from,
+                                                        walking_lanes_to_reroute_from,
+                                                        alternative_crosswalks_flat,)
+        
+        #print(f"\nDisabled crosswalks: {disabled_crosswalks}\n")
+
+    def _get_reward(self, current_tl_action):
         """
         - Consider both Vehicles and Pedestrians
         - Penalize frequent changes of action
@@ -701,8 +926,8 @@ class CraverRoadEnv(gym.Env):
         reward = -0.5*vehicle_pressure - 0.5*pedestrian_pressure  
 
         # Frequency penalty
-        if self.previous_action is not None and current_action != self.previous_action:
-            reward -= 0.5  # Penalty for changing actions. Since this is per step reward. Action change is reflected multiplied by action steps.
+        if self.previous_tl_action is not None and current_tl_action != self.previous_tl_action:
+            reward -= 0.5  # Penalty for changing tl actions. Since this is per step reward. Action change is reflected multiplied by action steps.
             
         #print(f"\nStep Reward: {reward}")
         return reward
@@ -734,29 +959,141 @@ class CraverRoadEnv(gym.Env):
 
         tree.write('./modified_craver_road.net.xml')
 
+    def _disallow_pedestrians(self, walking_edges_to_reroute_from, walking_lanes_to_reroute_from, alternative_crosswalks):
+        """ 
+        Disallow pedestrians means reroute pedestrians from the nearest possible crosswalk.
+        This is called once per action i.e., after 10 actual simulation steps. 
+        This means some pedestrians which have spawned and reached the crosswalks in the last 10 steps will not be rerouted. Which is unlikely.
 
-    def _disallow_pedestrians(self, crosswalks_to_disable):
-        """
-        Operations before the sim or traci is started.
-            Explicitly setting disallow does not work.
-            Change the width (is good for appearance) and speed does not work either.
-            Removing the crosswalk entirely also does not work.
+        One important consideration is: 
+        1. When to check if pedestrians need a re-route: whereever they may be at the action time step (because we go through all pedestrians) 
+        2. When to actually perform the re-route: If they are present in the vicinity of the crosswalk. i.e., only if they are nearby, they will be able to see that a crosswalk is disabled. (closer to real-world scenario) 
 
-        Operations after sim start/traci.
+        # We cannot check if a pedestrian far away has a crosswalk in their route (which they reach sometime in the future) and then re-route them immediately.
+        # If the pedestrian in already in the crosswalk itself at the time of action, they dont need to be re-routed.
         """
-        # Using traci.setDisallowed
+
+        """
+        Pedestrian current edge can be the crosswalk id itself.. or the walking areas associated. Both begin with :, Both will be invisible in the route but can be obtained by current edge.  
+        Pedestrian can be in the internal edge (related to the junction) which will be _w0 or _w1 attached to the junction name. This can also be obtained using current edge.
+
+        1. After assigning the new route, move the pedestrian to the first edge/ lane of the new route.
+        2. Pedestrians who are just passing by, not too close, should not be re-routed. 
+        3. Why are the re-routed pedestrians actually not going to the other side of crosswalk?
+        4. Measure the efficacy of the re-routing.
+        5. Convert to shortest path method.
+
+        # Done.
+         3. Since the re-routing happens every 10 timesteps, that can be too late. Because pedestrians keep moving beween the two decision times. Switched to enforecement of disabling crosswalks every step.
+        """
+
         disabled_crosswalks = []
-        for crosswalk_id in crosswalks_to_disable:
-
-            try:
-                # Disallow pedestrians on this crosswalk
-                traci.lane.setDisallowed(f"{crosswalk_id}_0", ["pedestrian"])
-
-            except traci.exceptions.TraCIException as e:
-                print(f"Error disabling crosswalk {crosswalk_id}: {e}")
+        for ped_id in traci.person.getIDList():
         
+            current_edge = traci.person.getRoadID(ped_id) # This may contain an internal edge.
+            
+            # Get the remaining edges in the person's route
+            remaining_stages_count = traci.person.getRemainingStages(ped_id)
+            remaining_edges = []
+            for i in range(remaining_stages_count):  
+                stage = traci.person.getStage(ped_id, i)
+                remaining_edges.extend(stage.edges)
+            
+            # For all pedestrians, print their route
+            print(f"\nPedestrian {ped_id} remaining route: {remaining_edges}\n current edge: {current_edge}\n")
+
+            # Get the destination (end) edge
+            destination_edge = remaining_edges[-1] # Last edge of the last stage is the destination.
+
+            # To perform a n-step lookup, find a route from current edge to the destination edge. This will automatically find the nearest actual edge and discard the internal edge. 
+            fake_new_route = traci.simulation.findIntermodalRoute(current_edge, destination_edge, modes='') 
+            fake_new_route_edges = fake_new_route[0].edges # This will never contain an internal edge. The internal-free current edge is required later (below as well to get the direction)
+            current_and_next_edge = fake_new_route_edges[0:1] # IMPORTANT: This value here determines how much ahead of time do we want to re-route a pedestrian, if they are about to head to a disabled crosswalk.
+            # This value cannot be too high. Or they will constantly be re-routed.
+
+            #print(f"\nCurrent and next edge: {current_and_next_edge}\n")
+
+            # If the person is in the vicinity of the crosswalk we want to disable or the look forward in the current edge by 1.
+            # If the person is directly on the edge that we want to disable, then they are continued to walk
+            if self._check_vicinity(current_edge, current_and_next_edge, walking_lanes_to_reroute_from, walking_edges_to_reroute_from):# If the route includes the ones we want to disable.
+
+                print(f"\nRerouting pedestrian {ped_id}\t with remaining edges: {remaining_edges}\n")
+
+                # TODO: We want the direction to prevent the next-reroute edge to be in the other side of the road 
+                # i.e., potentially making the pedestrians cross twice. Or not enforce the disable condition of the current crosswalk.
+                # Based on whether current edge is upside or downside, select the new crosswalk's downside or upside.
+                current_direction = self.edge_to_direction.get(current_and_next_edge[0], None) # This is the direction of the current edge.
+
+                if current_direction is not None: 
+                    # TODO: Right now, a new crosswalk is chosen randomly. Make this choice based on shortest path. 
+                    new_crosswalk = ':cluster_9740157181_9740483933_c0' #random.choice(alternative_crosswalks)
+
+                    # Get the re-route point related to this new crosswalk
+                    next_reroute_edge = self.crosswalk_to_reroute_edges[new_crosswalk].get(current_direction)
+                    print(f"\nCurrent edge: {current_edge}\t Next reoute edge: {next_reroute_edge}\t Destination edge: {destination_edge}\n")
+
+                    # There may still be a missing connection from the current edge to the current reroute edge
+                    # Move the person there, using coordinates
+
+                    # # Fourth, append two new walking stages:
+                    # Althrough the routing can find a route from current edge directly to the destination edge, this is a problem because it can repeat the same route. 
+                    # Moreoever, we want to ensure that we pass through an enabled crosswalk. Hence, we do routing in two stages.
+                    # #    - One from the current edge to the new crosswalk 
+                    found_route = traci.simulation.findIntermodalRoute(current_edge, next_reroute_edge, modes='') # Walking is the default mode. This returns a Stage object.
+                    print(f"\nFound route: {found_route}\n")
+
+                    #   - Other from the new crosswalk to the destination edge
+                    found_route_2 = traci.simulation.findIntermodalRoute(next_reroute_edge, destination_edge, modes='') # Walking is the default mode. This returns a Stage object.
+                    print(f"\nFound route 2: {found_route_2}\n")
+
+                    # Clear all the remaining stages of the pedestrian
+                    # If a new stage is not immediately appended, this automatically removes the person in the next timestep.
+                    traci.person.removeStages(ped_id)
+
+                    # Since we are finding intermodal route, this route could potentially have had many stages. Just append the first one. which is walking to the destination.
+                    traci.person.appendStage(ped_id, found_route[0]) 
+                    traci.person.appendStage(ped_id, found_route_2[0]) 
+
+                else: 
+        
+                    # Walking areas already too close to re-route
+                    print(f"\nCurrent edge: {current_edge} is a central edge. Skipping re-routing\n")
+
+        #disabled_crosswalks.append(crosswalk_id)
         return disabled_crosswalks
+
+
+    def _check_vicinity(self, current_edge, current_and_next_edge, walking_lanes_to_reroute_from, walking_edges_to_reroute_from):
+        """
+        If the current edge is already in the vicinity of the crosswalk to disable
+
+        Or the next edge in the 1 step forward lookup in the route is in the vicinity
+        For the 1 step lookup, we need to know next edge. However, if cant even determine the current edge if they are internal.
+
+        TODO: There may be a slight optimization possible here. Saved for later.
+        """
+
+        # Basic conditon.
+        if current_edge in walking_edges_to_reroute_from:
+            print(f"\nCurrent edge: {current_edge} is in the vicinity\n")
+            return True
         
+        else: # Forward lookup
+            
+            to_lanes = []
+            for edge in current_and_next_edge:
+                # Returns descriptions of the links outgoing from this lane [m]
+                # A list containing id of successor lane together with priority
+                connecting_lane = traci.lane.getLinks(edge + "_0")  # Assume first lane of the edge
+                for to_lane, _, _, _, _, _, _, _ in connecting_lane:
+                    to_lanes.append(to_lane) #This will contain internal edges.
+
+            if any(to_lane in walking_lanes_to_reroute_from for to_lane in to_lanes):
+                print(f"\nCurrent or Next edge in the vicinity\n")
+                return True
+
+            return False
+
     def reset(self, seed=None, options=None):
         """
         
@@ -808,15 +1145,17 @@ class CraverRoadEnv(gym.Env):
         self.current_action_step = 0
         self._initialize_lanes()
 
-        # Randomly initialize current phase group 
+        # Randomly initialize the actions (current phase group and the current choice of crosswalks to activate) 
         self.current_phase_group = random.choice(list(self.phase_groups.keys()))
+        self.current_crosswalk_selection = np.random.randint(2, size=len(self.controlled_crosswalks_dict)).tolist() # 2 because of binary choice
+        initial_action = torch.tensor([self.current_phase_group] + self.current_crosswalk_selection) # Make it a tensor so that its compatible with other outputs
 
         # Initialize the observation buffer
         observation_buffer = []
         for step in range(self.observation_buffer_size):
 
             # Apply the current phase group using _apply_action
-            self._apply_action(self.current_phase_group, step, None)
+            self._apply_action(initial_action, step, None)
 
             traci.simulationStep()
             obs = self._get_observation()

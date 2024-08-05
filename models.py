@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from torch.distributions import Categorical
+from torch.distributions import Categorical, Bernoulli
 import math
 
 ######## MLP model ########
@@ -10,7 +10,10 @@ class MLPActorCritic(nn.Module):
         A simple MLP Actor-Critic network 
         State_dim = 380 (10x38)
         We have no negative values, so we can use ReLU activations.
-        # Param count: ~around 138,000
+        # MLP network Param count: ~around 138,000
+
+        Since I expect the output to be binary, I need to apply the sigmoid somewhere. 
+        The network needs to understand that the 10 choices are binary. (Done in the act function)
         """
         super(MLPActorCritic, self).__init__()
         self.device = device
@@ -27,7 +30,7 @@ class MLPActorCritic(nn.Module):
         self.actor_layers = nn.Sequential(
             nn.Linear(128, 64),
             nn.ReLU(),
-            nn.Linear(64, action_dim),
+            nn.Linear(64, action_dim), # Decided not to use sigmoid here but instead later in the act function.
         ).to(device)
         
         # Critic-specific layers
@@ -51,24 +54,23 @@ class MLPActorCritic(nn.Module):
         """
         Select an action based on the current state
         """
-        action_probs = self.actor(state)
-        dist = Categorical(logits=action_probs)
-        action = dist.sample()
-        return action.item(), dist.log_prob(action)
-    
+        action_logits = self.actor(state)  # outputs logits for each binary decision
+        action_probs = torch.sigmoid(action_logits) # convert these logits to probabilities
+        dist = Bernoulli(action_probs) # create a Bernoulli distribution using these probabilities
+        action = dist.sample() # sample from this distribution to get our binary actions.
+        return action.long(), dist.log_prob(action).sum(-1) #  return the actions and the sum of their log probabilities (sum along the last dimension)
+        # TODO: check the validity of the sum operation. 
+
     def evaluate(self, states, actions):
-        """
-        Evaluate the actions given the states
-        """
-        action_probs = self.actor(states)
-        dist = Categorical(logits=action_probs)
+        action_logits = self.actor(states)
+        action_probs = torch.sigmoid(action_logits)
+        dist = Bernoulli(action_probs)
         
-        action_logprobs = dist.log_prob(actions)
+        action_logprobs = dist.log_prob(actions.float())
         dist_entropy = dist.entropy()
         state_values = self.critic(states)
         
-        return action_logprobs, state_values, dist_entropy
-    
+        return action_logprobs.sum(-1), state_values, dist_entropy
 
 ######## Transformer model ########
 class SharedTransformerActorCritic(nn.Module):

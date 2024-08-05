@@ -387,10 +387,10 @@ def main(args):
         print(f"\nDefined observation space: {env.observation_space}")
         print(f"Observation space shape: {env.observation_space.shape}")
         print(f"\nDefined action space: {env.action_space}")
-        print(f"Action space shape: {env.action_space.n}\n")
+        print(f"Options per action dimension: {env.action_space.nvec}")
 
         state_dim = env.observation_space.shape[0] * env.observation_space.shape[1]
-        action_dim = env.action_space.n
+        action_dim = len(env.action_space.nvec)
         print(f"State dimension: {state_dim}, Action dimension: {action_dim}\n")
 
         ppo = PPO(state_dim, action_dim, args.lr, args.gamma, args.K_epochs, args.eps_clip, args.ent_coef, args.vf_coef, device, args.batch_size)
@@ -505,8 +505,8 @@ if __name__ == "__main__":
     # If required to manually scale the demand (this happens automatically every episode as part of reset).
     parser.add_argument('--manual_demand_veh', type=float, default=None, help='Manually scale vehicle demand before starting the simulation')
     parser.add_argument('--manual_demand_ped', type=float, default=None, help='Manually scale pedestrian demand before starting the simulation')
-    parser.add_argument('--demand_scale_min', type=float, default=0.5, help='Minimum demand scaling factor for automatic scaling (default: 0.5)')
-    parser.add_argument('--demand_scale_max', type=float, default=3.0, help='Maximum demand scaling factor for automatic scaling (default: 5.0)')
+    parser.add_argument('--demand_scale_min', type=float, default=1.0, help='Minimum demand scaling factor for automatic scaling (default: 0.5)')
+    parser.add_argument('--demand_scale_max', type=float, default=2.0, help='Maximum demand scaling factor for automatic scaling (default: 5.0)')
 
     # PPO
     #parser.add_argument('--seed', type=int, default=42, help='Random seed (default: 42)')
