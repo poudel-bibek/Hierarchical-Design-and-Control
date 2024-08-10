@@ -1068,8 +1068,9 @@ class CraverRoadEnv(gym.Env):
                 traci.person.appendStage(ped_id, found_route_2[0]) 
                 traci.person.appendStage(ped_id, found_route_3[0])
 
-                # If they got re-routed, change color to green
-                traci.person.setColor(ped_id, (0, 255, 0, 255))
+                # If they got re-routed, change color to red
+                traci.person.setColor(ped_id, (255, 0, 0, 255)
+)
                 
 
         #disabled_crosswalks.append(crosswalk_id)

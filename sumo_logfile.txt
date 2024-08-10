@@ -1,103 +1,28 @@
-***Starting server on port 57255 ***
-Loading net-file from './original_craver_road.net.xml' ... done (30ms).
+***Starting server on port 58639 ***
+Loading net-file from './original_craver_road.net.xml' ... done (37ms).
 Loading done.
 Simulation started with time: 0.00.
-Warning: Invalid departPos 2.27 given for person '86' walking from edge '1054121747#0'. Using edge end instead.
-Warning: Invalid departPos 0.69 given for person '862' walking from edge '1058666206#0'. Using edge end instead.
-Warning: Invalid departPos 4.15 given for stopping at :9666274798_w0. Using edge end instead.
-Warning: Invalid departPos 2.63 given for person '67' walking from edge '1054121747#0'. Using edge end instead.
-Warning: Invalid departPos 1.64 given for stopping at :9740157155_w0. Using edge end instead.
-Warning: Invalid departPos 4.47 given for stopping at :9727816625_w0. Using edge end instead.
-Warning: Invalid departPos 2.09 given for person '1780' walking from edge '1060131388#3'. Using edge end instead.
-Warning: Invalid departPos 2.54 given for person '64' walking from edge '1054121747#0'. Using edge end instead.
-Warning: Invalid departPos 4.34 given for stopping at :9666274798_w0. Using edge end instead.
-Warning: Invalid departPos 4.63 given for stopping at :9727816625_w0. Using edge end instead.
-Warning: Invalid departPos 2.19 given for person '382' walking from edge '1060131388#3'. Using edge end instead.
-Warning: Invalid departPos 0.80 given for person '56' walking from edge '1054121747#0'. Using edge end instead.
-Warning: Invalid departPos 2.66 given for person '89' walking from edge '1054121747#0'. Using edge end instead.
-Warning: Invalid departPos 4.72 given for stopping at :9727816625_w0. Using edge end instead.
-Warning: Invalid departPos 1.89 given for person '1948' walking from edge '1054121747#0'. Using edge end instead.
-Warning: Invalid departPos 1.02 given for person '800' walking from edge '1060131391#0'. Using edge end instead.
-Warning: Invalid departPos 4.99 given for stopping at :9740157154_w0. Using edge end instead.
-Warning: Invalid departPos 3.53 given for person '1023' walking from edge '1060131388#3'. Using edge end instead.
-Warning: Invalid departPos 0.76 given for person '1934' walking from edge '1058666206#0'. Using edge end instead.
-Warning: Invalid departPos 4.55 given for stopping at :9727816625_w0. Using edge end instead.
-Warning: Invalid departPos 1.69 given for stopping at :9727816850_w1. Using edge end instead.
-Warning: Invalid departPos 4.28 given for stopping at :9666274798_w0. Using edge end instead.
-Warning: Invalid departPos 1.26 given for person '400' walking from edge '1060131391#0'. Using edge end instead.
-Warning: Invalid departPos 2.80 given for person '2068' walking from edge '1054121747#0'. Using edge end instead.
-Warning: Invalid departPos 1.21 given for person '579' walking from edge '1060131391#0'. Using edge end instead.
-Warning: Invalid departPos 2.06 given for person '1097' walking from edge '1060131388#3'. Using edge end instead.
-Warning: Invalid departPos 4.78 given for stopping at :9666274886_w0. Using edge end instead.
-Warning: Invalid departPos 4.86 given for stopping at :9666274798_w0. Using edge end instead.
-Warning: Invalid departPos 1.03 given for person '369' walking from edge '1060131391#0'. Using edge end instead.
-Warning: Invalid departPos 4.85 given for stopping at :9727816625_w0. Using edge end instead.
-Warning: Invalid departPos 1.28 given for person '334' walking from edge '1060131391#0'. Using edge end instead.
-Warning: Invalid departPos 2.00 given for person '1590' walking from edge '1060131388#3'. Using edge end instead.
-Warning: Invalid departPos 0.94 given for person '2191' walking from edge '1058666207#0'. Using edge end instead.
-Warning: Invalid departPos 2.76 given for person '71' walking from edge '1054121747#0'. Using edge end instead.
-Warning: Invalid departPos 0.89 given for person '1036' walking from edge '1058666207#0'. Using edge end instead.
-Warning: Invalid departPos 0.24 given for person '384' walking from edge '1060131390'. Using edge end instead.
-Warning: Invalid departPos 0.84 given for person '1909' walking from edge '1058666206#0'. Using edge end instead.
-Warning: Invalid departPos 4.77 given for stopping at :9666274886_w0. Using edge end instead.
-Warning: Invalid departPos 1.29 given for person '395' walking from edge '1060131391#0'. Using edge end instead.
-Warning: Invalid departPos 4.77 given for stopping at :9740157154_w0. Using edge end instead.
-Warning: Invalid departPos 3.53 given for person '64' walking from edge '1060131388#3'. Using edge end instead.
-Warning: Invalid departPos 2.38 given for person '1586' walking from edge '1060131388#3'. Using edge end instead.
-Warning: Invalid departPos 0.92 given for person '852' walking from edge '1058666207#0'. Using edge end instead.
-Warning: Invalid departPos 2.60 given for person '92' walking from edge '1060131388#3'. Using edge end instead.
-Warning: Invalid departPos 4.33 given for stopping at :9666274798_w0. Using edge end instead.
-Warning: Invalid departPos 2.49 given for person '1308' walking from edge '1060131388#3'. Using edge end instead.
-Warning: Invalid departPos 2.07 given for stopping at :9727816623_w1. Using edge end instead.
-Warning: Invalid departPos 0.79 given for person '2220' walking from edge '1058666207#0'. Using edge end instead.
-Warning: Invalid departPos 1.04 given for person '1051' walking from edge '1058666206#0'. Using edge end instead.
-Warning: Invalid departPos 1.60 given for stopping at :9687187501_w0. Using edge end instead.
-Warning: Invalid departPos 1.60 given for person '1488' walking from edge '1054121747#1'. Using edge end instead.
-Warning: Invalid departPos 2.81 given for person '1488' walking from edge '1054121747#0'. Using edge end instead.
-Warning: Invalid departPos 4.46 given for stopping at :9727816625_w0. Using edge end instead.
-Warning: Invalid departPos 1.96 given for person '420' walking from edge '1060131388#3'. Using edge end instead.
-Warning: Invalid departPos 2.75 given for person '824' walking from edge '1060131388#3'. Using edge end instead.
-Warning: Invalid departPos 2.75 given for person '95' walking from edge '1054121747#0'. Using edge end instead.
-Warning: Invalid departPos 3.94 given for stopping at :9687187500_w0. Using edge end instead.
-Warning: Invalid departPos 3.21 given for person '1491' walking from edge '1054121747#0'. Using edge end instead.
-Warning: Invalid departPos 2.79 given for person '54' walking from edge '1054121747#0'. Using edge end instead.
-Warning: Invalid departPos 4.86 given for stopping at :9740157154_w0. Using edge end instead.
-Warning: Invalid departPos 3.53 given for person '1368' walking from edge '1060131388#3'. Using edge end instead.
-Warning: Invalid departPos 3.16 given for person '1948' walking from edge '1060131388#3'. Using edge end instead.
-Warning: Invalid departPos 4.79 given for stopping at :9666274798_w0. Using edge end instead.
-Warning: Invalid departPos 2.16 given for person '385' walking from edge '1060131388#3'. Using edge end instead.
-Warning: Invalid departPos 0.24 given for person '585' walking from edge '1060131390'. Using edge end instead.
-Warning: Invalid departPos 5.74 given for stopping at :9727816846_w0. Using edge end instead.
-Warning: Invalid departPos 4.33 given for stopping at :9727816625_w0. Using edge end instead.
-Warning: Invalid departPos 4.99 given for stopping at :9727816625_w0. Using edge end instead.
-Warning: Invalid departPos 4.59 given for stopping at :9740157154_w0. Using edge end instead.
-Warning: Invalid departPos 3.53 given for person '588' walking from edge '1060131388#3'. Using edge end instead.
-Warning: Invalid departPos 5.11 given for stopping at :9727816625_w0. Using edge end instead.
-Warning: Invalid departPos 4.95 given for stopping at :9666274798_w0. Using edge end instead.
-Warning: Invalid departPos 2.92 given for person '576' walking from edge '1060131388#3'. Using edge end instead.
-Warning: Invalid departPos 2.04 given for person '37' walking from edge '1054121747#0'. Using edge end instead.
-Warning: Invalid departPos 4.93 given for stopping at :9727816625_w0. Using edge end instead.
-Warning: Invalid departPos 2.74 given for person '1953' walking from edge '1054121747#0'. Using edge end instead.
-Warning: Invalid departPos 4.58 given for stopping at :9740157154_w0. Using edge end instead.
-Warning: Invalid departPos 3.53 given for person '2220' walking from edge '1060131388#3'. Using edge end instead.
-Simulation ended at time: 1005.00
+Warning: Invalid departPos 0.80 given for person '1544' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 4.91 given for stopping at :9727816846_w0. Using edge end instead.
+Warning: Invalid departPos 5.24 given for stopping at :9727816625_w0. Using edge end instead.
+Simulation ended at time: 250.00
 Performance: 
- Duration: 236.80s
- TraCI-Duration: 214.72s
- Real time factor: 4.24412
- UPS: 40.295948
- UPS-Persons: 852.528315
+ Duration: 2532.69s
+ TraCI-Duration: 28.33s
+ Real time factor: 0.0987092
+ UPS: 1.170691
+ UPS-Persons: 9.896190
 Vehicles: 
- Inserted: 72 (Loaded: 73)
- Running: 10
+ Inserted: 30 (Loaded: 42)
+ Running: 23
  Waiting: 0
 Persons: 
- Inserted: 666
- Running: 327
+ Inserted: 375
+ Running: 181
 
-DijkstraRouter answered 10667 queries and explored 4.66 edges on average.
-DijkstraRouter spent 0.01s answering queries (0.00ms on average).
-DijkstraRouter answered 1412 queries and explored 477.28 edges on average.
-DijkstraRouter spent 0.07s answering queries (0.05ms on average).
-DijkstraRouter answered 72 queries and explored 58.53 edges on average.
-DijkstraRouter spent 0.00s answering queries (0.06ms on average).
+DijkstraRouter answered 1568 queries and explored 4.73 edges on average.
+DijkstraRouter spent 0.00s answering queries (0.00ms on average).
+DijkstraRouter answered 265 queries and explored 488.29 edges on average.
+DijkstraRouter spent 0.01s answering queries (0.05ms on average).
+DijkstraRouter answered 30 queries and explored 58.47 edges on average.
+DijkstraRouter spent 0.00s answering queries (0.00ms on average).

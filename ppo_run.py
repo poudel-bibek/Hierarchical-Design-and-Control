@@ -5,6 +5,7 @@ import argparse
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
+import torch.multiprocessing as mp # wow we get this from torch itself
 
 from torch.utils.tensorboard import SummaryWriter
 import os
@@ -15,9 +16,17 @@ from models import MLPActorCritic
 
 class PPO:
     """
-
+    This implementation is parallelized using Multiprocessing i.e. multiple CPU cores each running a separate process.
+    Multiprocessing vs Multithreading:
+    - In the CPython implementation, the Global Interpreter Lock (GIL) is a mechanism used to prevent multiple threads from executing Python bytecodes at once. 
+    - This lock is necessary because CPython is not thread-safe, i.e., if multiple threads were allowed to execute Python code simultaneously, they could potentially interfere with each other, leading to data corruption or crashes. 
+    - The GIL prevents this by ensuring that only one thread can execute Python code at any given time.
+    - Since only one thread can execute Python code at a time, programs that rely heavily on threading for parallel execution may not see the expected performance gains.
+    - In contrast, multiprocessing allows multiple processes to execute Python code in parallel, bypassing the GIL and taking full advantage of multiple CPU cores.
+    - However, multiprocessing has higher overhead than multithreading due to the need to create separate processes and manage inter-process communication.
+    - In Multiprocessing, we create separate processes, each with its own Python interpreter and memory space
     """
-    def __init__(self, state_dim, action_dim, lr, gamma, K_epochs, eps_clip, ent_coef, vf_coef, device, batch_size):
+    def __init__(self, state_dim, action_dim, lr, gamma, K_epochs, eps_clip, ent_coef, vf_coef, device, batch_size, num_processes):
         
         self.device = device
         self.gamma = gamma
@@ -26,9 +35,12 @@ class PPO:
         self.ent_coef = ent_coef
         self.vf_coef = vf_coef
         self.batch_size = batch_size
+        self.num_processes = num_processes
 
         # Initialize the current policy network
         self.policy = MLPActorCritic(state_dim, action_dim, device).to(device)
+        self.policy.share_memory() # Share the policy network across all processes. Any tensor can be shared across processes by calling this.
+
         # Set up the optimizer
         self.optimizer = optim.Adam(self.policy.parameters(), lr=lr)
         
@@ -36,19 +48,29 @@ class PPO:
         self.policy_old = MLPActorCritic(state_dim, action_dim, device).to(device)
         # Copy the parameters from the current policy to the old policy
         self.policy_old.load_state_dict(self.policy.state_dict())
-        
-    def update(self, memory):
+        self.policy_old.share_memory() # Share the old policy network across all processes.  
+
+    def update(self, memories):
         """
+        memories = combined memories from all processes.
         Update the policy and value networks using the collected experiences.
         
         TODO: Add support for GAE
         TODO: Use KL divergence instead of clipping
 
         """
+        combined_memory = Memory(self.device)
+        for memory in memories:
+            combined_memory.actions.extend(memory.actions)
+            combined_memory.states.extend(memory.states)
+            combined_memory.logprobs.extend(memory.logprobs)
+            combined_memory.rewards.extend(memory.rewards)
+            combined_memory.is_terminals.extend(memory.is_terminals)
+
         # Monte Carlo estimate of rewards
         rewards = []
         discounted_reward = 0
-        for reward, is_terminal in zip(reversed(memory.rewards), reversed(memory.is_terminals)): # Reverse the order
+        for reward, is_terminal in zip(reversed(combined_memory.rewards), reversed(combined_memory.is_terminals)): # Reverse the order
             if is_terminal: # Terminal timesteps have no future.
                 discounted_reward = 0
             discounted_reward = reward + (self.gamma * discounted_reward)
@@ -59,10 +81,11 @@ class PPO:
         rewards = (rewards - rewards.mean()) / (rewards.std() + 1e-5) # The 1e-5 prevents division by zero and prevents large values (stabilizes) 
         
         # Convert collected experiences to tensors
-        old_states = torch.stack(memory.states).detach().to(self.device)
-        old_actions = torch.stack(memory.actions).detach().to(self.device)
-        old_logprobs = torch.stack(memory.logprobs).detach().to(self.device)
+        old_states = torch.stack(combined_memory.states).detach().to(self.device)
+        old_actions = torch.stack(combined_memory.actions).detach().to(self.device)
+        old_logprobs = torch.stack(combined_memory.logprobs).detach().to(self.device)
         
+        # Create a dataloader first, not everyone does this way.
         dataset = torch.utils.data.TensorDataset(old_states, old_actions, old_logprobs, rewards)
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
 
@@ -89,8 +112,9 @@ class PPO:
                 surr2 = torch.clamp(ratios, 1-self.eps_clip, 1+self.eps_clip) * advantages
                 
                 # Calculate policy and value losses
+                # TODO: Is the mean necessary here? In policy loss and entropy loss.
                 policy_loss = -torch.min(surr1, surr2).mean() # Equation 7 in the paper
-                value_loss = ((state_values - rewards) ** 2).mean()
+                value_loss = ((state_values - rewards) ** 2).mean() # MSE 
                 entropy_loss = dist_entropy.mean()
                 
                 # Total loss
@@ -522,7 +546,8 @@ if __name__ == "__main__":
     parser.add_argument('--ent_coef', type=float, default=0.01, help='Entropy coefficient (default: 0.01)')
     parser.add_argument('--vf_coef', type=float, default=0.5, help='Value function coefficient (default: 0.5)')
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size (default: 32)')
-
+    parser.add_argument('--num_processes', type=int, default=4, help='Number of parallel processes to use')
+    
     # Evaluations
     parser.add_argument('--evaluate', choices=['tl', 'ppo'], help='Evaluation mode: traffic light (tl), PPO (ppo), or both')
     parser.add_argument('--model_path', type=str, help='Path to the saved PPO model for evaluation')

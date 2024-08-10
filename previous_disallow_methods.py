@@ -617,3 +617,24 @@ self.direction_and_edges = {
             # # This value cannot be too high. Or they will constantly be re-routed.
 
             #print(f"\nCurrent and next edge: {current_and_next_edge}\n")
+
+
+            if current_direction is not None:  
+                    
+                else: 
+        
+                    # Walking areas already too close to re-route
+                    print(f"\nCurrent edge: {current_edge} is a central edge. Skipping re-routing\n")
+                
+
+# to_lanes = []
+            # for edge in current_and_next_edge:
+            #     # Returns descriptions of the links outgoing from this lane [m]
+            #     # A list containing id of successor lane together with priority
+            #     connecting_lane = traci.lane.getLinks(edge + "_0")  # Assume first lane of the edge
+            #     for to_lane, _, _, _, _, _, _, _ in connecting_lane:
+            #         to_lanes.append(to_lane) #This will contain internal edges.
+
+            # if any(to_lane in walking_lanes_to_reroute_from for to_lane in to_lanes):
+            #     print(f"\nCurrent or Next edge in the vicinity\n")
+            #     return True
