@@ -2,9 +2,12 @@
 __pycache__/
 *.py[cod]
 *$py.class
+./.ipynb_checkpoints/
+.ipynb_checkpoints/
 
 # TensorBoard runs
 runs/
 
 # Saved models
 saved_models/
+
