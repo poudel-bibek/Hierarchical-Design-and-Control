@@ -13,6 +13,31 @@ from datetime import datetime
 from sim_run import CraverRoadEnv
 from models import MLPActorCritic
 
+class Memory:
+    """
+    Storage class for saving experience from interactions with the environment.
+    """
+    def __init__(self, device):
+        self.device = device
+        self.actions = []
+        self.states = []
+        self.logprobs = []
+        self.rewards = []
+        self.is_terminals = []
+    
+    def append(self, state, action, logprob, reward, done):
+        self.states.append(torch.FloatTensor(state).to(self.device))
+        self.actions.append(torch.tensor(action).to(self.device))
+        self.logprobs.append(logprob)
+        self.rewards.append(reward)
+        self.is_terminals.append(done)
+    
+    def clear_memory(self):
+        del self.actions[:]
+        del self.states[:]
+        del self.logprobs[:]
+        del self.rewards[:]
+        del self.is_terminals[:]
 
 class PPO:
     """
@@ -148,32 +173,6 @@ class PPO:
             'total_loss': avg_policy_loss + self.vf_coef * avg_value_loss - self.ent_coef * avg_entropy_loss
         }
     
-class Memory:
-    """
-    Storage class for saving experience from interactions with the environment.
-    """
-    def __init__(self, device):
-        self.device = device
-        self.actions = []
-        self.states = []
-        self.logprobs = []
-        self.rewards = []
-        self.is_terminals = []
-    
-    def append(self, state, action, logprob, reward, done):
-        self.states.append(torch.FloatTensor(state).to(self.device))
-        self.actions.append(torch.tensor(action).to(self.device))
-        self.logprobs.append(logprob)
-        self.rewards.append(reward)
-        self.is_terminals.append(done)
-    
-    def clear_memory(self):
-        del self.actions[:]
-        del self.states[:]
-        del self.logprobs[:]
-        del self.rewards[:]
-        del self.is_terminals[:]
-
 def save_config(args, model, save_path):
     """
     Save hyperparameters and model architecture to a JSON file.
@@ -191,6 +190,7 @@ def save_config(args, model, save_path):
 
 def evaluate_controller(args, env):
     """
+    For benchmarking.
     Evaluate either the traffic light or PPO as the controller.
     TODO: Make the evaluation N number of times each with different seeds. Report average results.
     """
@@ -211,13 +211,13 @@ def evaluate_controller(args, env):
             sumo_cmd = ["sumo-gui" if args.gui else "sumo", 
                         "--start" , 
                         "--quit-on-end", 
-                        "-c", "./craver.sumocfg", 
+                        "-c", "./SUMO_files/craver.sumocfg", 
                         '--step-length', str(args.step_length)]
                             
         else:
             sumo_cmd = ["sumo-gui" if args.gui else "sumo", 
                         "--quit-on-end", 
-                        "-c", "./craver.sumocfg", 
+                        "-c", "./SUMO_files/craver.sumocfg", 
                         '--step-length', str(args.step_length)]
         
         traci.start(sumo_cmd)
@@ -521,10 +521,10 @@ if __name__ == "__main__":
     parser.add_argument('--step_length', type=float, default=1.0, help='Simulation step length (default: 1.0)') # What is one unit of increment in the simulation?
     parser.add_argument('--action_duration', type=float, default=10, help='Duration of each action (default: 10.0)') # How many simulation steps does each action occur for. 
     parser.add_argument('--auto_start', action='store_true', default=True, help='Automatically start the simulation')
-    parser.add_argument('--vehicle_input_trips', type=str, default='./original_vehtrips.xml', help='Original Input trips file')
-    parser.add_argument('--vehicle_output_trips', type=str, default='./scaled_vehtrips.xml', help='Output trips file')
-    parser.add_argument('--pedestrian_input_trips', type=str, default='./original_pedtrips.xml', help='Original Input pedestrian trips file')
-    parser.add_argument('--pedestrian_output_trips', type=str, default='./scaled_pedtrips.xml', help='Output pedestrian trips file')
+    parser.add_argument('--vehicle_input_trips', type=str, default='./SUMO_files/original_vehtrips.xml', help='Original Input trips file')
+    parser.add_argument('--vehicle_output_trips', type=str, default='./SUMO_files/scaled_vehtrips.xml', help='Output trips file')
+    parser.add_argument('--pedestrian_input_trips', type=str, default='./SUMO_files/original_pedtrips.xml', help='Original Input pedestrian trips file')
+    parser.add_argument('--pedestrian_output_trips', type=str, default='./SUMO_files/scaled_pedtrips.xml', help='Output pedestrian trips file')
 
     # If required to manually scale the demand (this happens automatically every episode as part of reset).
     parser.add_argument('--manual_demand_veh', type=float, default=None, help='Manually scale vehicle demand before starting the simulation')

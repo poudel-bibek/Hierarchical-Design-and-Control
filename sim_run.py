@@ -121,7 +121,7 @@ class CraverRoadEnv(gym.Env):
         self.turns = ['straight', 'right', 'left']
         self.pressure_dict = {tl_id: {'vehicle': {}, 'pedestrian': {}} for tl_id in self.tl_ids}
 
-        self.original_net_file = './original_craver_road.net.xml'
+        self.original_net_file = './SUMO_files/original_craver_road.net.xml'
 
         # dict. Ordered from left to right.
         # Should contain the ID as the crosswalk itself. A pedestrian's current_edge will end with _c0 if they are inside the crosswalk.  (Not present in the route)
@@ -969,7 +969,7 @@ class CraverRoadEnv(gym.Env):
                 if lane is not None:
                     lane.set('width', '0.1')
 
-        tree.write('./modified_craver_road.net.xml')
+        tree.write('./SUMO_files/modified_craver_road.net.xml')
 
     def _disallow_pedestrians(self, walking_edges_to_reroute_from, related_junction_edges_to_lookup_from, alternative_crosswalks):
         """ 
@@ -1131,7 +1131,7 @@ class CraverRoadEnv(gym.Env):
                         "--verbose",
                         "--start" , 
                         "--quit-on-end", 
-                        "-c", "./craver.sumocfg", 
+                        "-c", "./SUMO_files/craver.sumocfg", 
                         "--step-length", str(self.step_length),
                         ]
                         
@@ -1139,7 +1139,7 @@ class CraverRoadEnv(gym.Env):
             sumo_cmd = ["sumo-gui" if self.use_gui else "sumo", 
                         "--verbose",
                         "--quit-on-end", 
-                        "-c", "./craver.sumocfg", 
+                        "-c", "./SUMO_files/craver.sumocfg", 
                         "--step-length", str(self.step_length),
                         ]
                         
@@ -1184,62 +1184,3 @@ class CraverRoadEnv(gym.Env):
             traci.close()
             self.sumo_running = False
 
-# def main():
-#     # Create an instance of the environment
-#     parser = argparse.ArgumentParser(description='Run SUMO traffic simulation')
-#     # Simulation
-#     parser.add_argument('--gui', action='store_true', help='Use SUMO GUI (default: False)')
-#     parser.add_argument('--step_length', type=float, default=1.0, help='Simulation step length (default: 1.0)') # What is one unit of increment in the simulation?
-#     parser.add_argument('--action_duration', type=float, default=10, help='Duration of each action (default: 10.0)') # How many simulation steps does each action occur for. 
-#     parser.add_argument('--auto_start', action='store_true', default=True, help='Automatically start the simulation')
-#     parser.add_argument('--vehicle_input_trips', type=str, default='./original_vehtrips.xml', help='Original Input trips file')
-#     parser.add_argument('--vehicle_output_trips', type=str, default='./scaled_vehtrips.xml', help='Output trips file')
-#     parser.add_argument('--pedestrian_input_trips', type=str, default='./original_pedtrips.xml', help='Original Input pedestrian trips file')
-#     parser.add_argument('--pedestrian_output_trips', type=str, default='./scaled_pedtrips.xml', help='Output pedestrian trips file')
-
-#     # If required to manually scale the demand (this happens automatically every episode as part of reset).
-#     parser.add_argument('--manual_demand_veh', type=float, default=None, help='Manually scale vehicle demand before starting the simulation')
-#     parser.add_argument('--manual_demand_ped', type=float, default=None, help='Manually scale pedestrian demand before starting the simulation')
-#     parser.add_argument('--demand_scale_min', type=float, default=0.5, help='Minimum demand scaling factor for automatic scaling (default: 0.5)')
-#     parser.add_argument('--demand_scale_max', type=float, default=5.0, help='Maximum demand scaling factor for automatic scaling (default: 5.0)')
-
-#     # PPO
-#     #parser.add_argument('--seed', type=int, default=42, help='Random seed (default: 42)')
-#     parser.add_argument('--gpu', action='store_true', default=True, help='Use GPU if available (default: use CPU)')
-#     parser.add_argument('--total_timesteps', type=int, default=300000, help='Total number of timesteps the simulation will run (default: 300000)')
-#     parser.add_argument('--max_timesteps', type=int, default=1500, help='Maximum number of steps in one episode (default: 500)')
-#     parser.add_argument('--update_freq', type=int, default=128, help='Number of action timesteps between each policy update (default: 128)')
-#     parser.add_argument('--lr', type=float, default=0.002, help='Learning rate (default: 0.002)')
-#     parser.add_argument('--gamma', type=float, default=0.99, help='Discount factor (default: 0.99)')
-#     parser.add_argument('--K_epochs', type=int, default=4, help='Number of epochs to update policy (default: 4)')
-#     parser.add_argument('--eps_clip', type=float, default=0.2, help='Clip parameter for PPO (default: 0.2)')
-#     parser.add_argument('--save_freq', type=int, default=10, help='Save model every n episodes (default: 10, 0 to disable)')
-#     parser.add_argument('--ent_coef', type=float, default=0.01, help='Entropy coefficient (default: 0.01)')
-#     parser.add_argument('--vf_coef', type=float, default=0.5, help='Value function coefficient (default: 0.5)')
-#     parser.add_argument('--batch_size', type=int, default=32, help='Batch size (default: 32)')
-
-#     # Evaluations
-#     parser.add_argument('--evaluate', choices=['tl', 'ppo'], help='Evaluation mode: traffic light (tl), PPO (ppo), or both')
-#     parser.add_argument('--model_path', type=str, help='Path to the saved PPO model for evaluation')
-
-#     args = parser.parse_args()
-#     env = CraverRoadEnv(args)
-
-#     # Reset the environment
-#     initial_observation, info = env.reset()
-
-#     # Print the crosswalks
-#     crosswalks = env.controlled_crosswalks
-#     print(f"Crosswalks: (Total: {len(crosswalks)})")
-#     for crosswalk in crosswalks:
-#         print(f"ID: {crosswalk['id']}")
-#         for key, value in crosswalk.items():
-#             if key != 'id':
-#                 print(f"{key.capitalize()}: {value}")
-#         print("---")
-
-#     # Close the environment
-#     env.close()
-
-# if __name__ == "__main__":
-#     main()
