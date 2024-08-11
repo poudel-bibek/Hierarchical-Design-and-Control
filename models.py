@@ -72,6 +72,9 @@ class MLPActorCritic(nn.Module):
         
         return action_logprobs.sum(-1), state_values, dist_entropy
 
+######## CNN model ########
+
+
 ######## Transformer model ########
 class SharedTransformerActorCritic(nn.Module):
     """

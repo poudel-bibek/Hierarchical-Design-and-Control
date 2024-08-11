@@ -6,6 +6,7 @@ import torch
 import torch.optim as optim
 import torch.nn.functional as F
 import torch.multiprocessing as mp # wow we get this from torch itself
+from collections import deque
 
 from torch.utils.tensorboard import SummaryWriter
 import os
@@ -64,17 +65,20 @@ class PPO:
 
         # Initialize the current policy network
         self.policy = MLPActorCritic(state_dim, action_dim, device).to(device)
-        self.policy.share_memory() # Share the policy network across all processes. Any tensor can be shared across processes by calling this.
 
-        # Set up the optimizer
-        self.optimizer = optim.Adam(self.policy.parameters(), lr=lr)
-        
         # Initialize the old policy network (used for importance sampling)
         self.policy_old = MLPActorCritic(state_dim, action_dim, device).to(device)
+
         # Copy the parameters from the current policy to the old policy
         self.policy_old.load_state_dict(self.policy.state_dict())
-        self.policy_old.share_memory() # Share the old policy network across all processes.  
 
+        self.policy.share_memory() # Share the policy network across all processes. Any tensor can be shared across processes by calling this.
+        self.policy_old.share_memory() # Share the old policy network across all processes. 
+
+        # Set up the optimizer for the current policy network
+        self.optimizer = optim.Adam(self.policy.parameters(), lr=lr)
+        
+        
     def update(self, memories):
         """
         memories = combined memories from all processes.
@@ -149,7 +153,6 @@ class PPO:
                 avg_policy_loss += policy_loss.item()
                 avg_value_loss += value_loss.item()
                 avg_entropy_loss += entropy_loss.item()
-
 
                 # Take gradient step
                 self.optimizer.zero_grad()
@@ -390,9 +393,67 @@ def calculate_performance(run_data, all_directions, step_length):
     for direction, avg_length in avg_queue_lengths.items():
         print(f"  {direction}: {avg_length:.2f}")
 
-def main(args):
-    
+def worker(rank, args, shared_policy_old, memory_queue):
+    """
+    The device for each worker is always CPU.
+    At every iteration, 1 worker will carry out one episode.
+    memory_queue is used to store the memory of each worker and send it back to the main process.
+    shared_policy_old is used for importance sampling.
+    """
     env = CraverRoadEnv(args)
+    worker_device = torch.device("cpu")
+
+    # The central memory is a collection of memories from all processes.
+    # A worker instance must have their own memory 
+    local_memory = Memory(worker_device)
+    shared_policy_old = shared_policy_old.to(worker_device)
+    
+    state, _ = env.reset()
+    state = state.flatten()
+
+    print(f"Worker {rank} started.")
+    print(f"Initial observation (flattened): {state}")
+    print(f"Initial observation (flattened) shape: {state.shape}\n")
+    ep_reward = 0
+    steps_since_update = 0
+     
+    for _ in range(args.total_action_timesteps_per_episode):
+        state_tensor = torch.FloatTensor(state).to(worker_device)
+
+        # Select action
+        with torch.no_grad():
+            action, logprob = shared_policy_old.act(state_tensor)
+
+        # Perform action
+        # These reward and next_state are for the action_duration timesteps.
+        next_state, reward, done, truncated, info = env.step(action)
+        ep_reward += reward
+
+        # Store data in memory
+        local_memory.append(state, action, logprob, reward, done)
+        steps_since_update += 1
+
+        if steps_since_update >= args.update_freq or done or truncated:
+            # Put local memory in the queue for the main process to collect
+            memory_queue.put((rank, local_memory))
+            local_memory = Memory(worker_device)  # Reset local memory
+            steps_since_update = 0
+
+        if done or truncated:
+            break
+
+        state = next_state.flatten()
+
+    print(f"Worker {rank} finished. Total reward: {ep_reward}")
+    env.close()
+    memory_queue.put((rank, None))  # Signal that this worker is done
+    
+def main(args):
+    """
+    Actors are parallelized i.e., create their own instance of the envinronment and interact with it (perform policy rollout).
+    All aspects of training are centralized.
+    """
+    env = CraverRoadEnv(args) # First environment instance. Required for setup.
 
     if args.evaluate: # Eval TL or PPO
         if args.manual_demand_veh is None or args.manual_demand_ped is None:
@@ -405,6 +466,9 @@ def main(args):
     
     else: # Train PPO
         
+        # Spawn creates a new process. There is a fork method as well which will create a copy of the current process.
+        mp.set_start_method('spawn') 
+
         device = torch.device("cuda:0" if torch.cuda.is_available() and args.gpu else "cpu")
         print(f"Using device: {device}")
 
@@ -416,9 +480,19 @@ def main(args):
         state_dim = env.observation_space.shape[0] * env.observation_space.shape[1]
         action_dim = len(env.action_space.nvec)
         print(f"State dimension: {state_dim}, Action dimension: {action_dim}\n")
+        env.close() # We actually dont make use of this environment for any other stuff. Each worker will have their own environment.
 
-        ppo = PPO(state_dim, action_dim, args.lr, args.gamma, args.K_epochs, args.eps_clip, args.ent_coef, args.vf_coef, device, args.batch_size)
-        memory = Memory(device)
+        ppo = PPO(state_dim, 
+                  action_dim, 
+                  args.lr, 
+                  args.gamma, 
+                  args.K_epochs, 
+                  args.eps_clip, 
+                  args.ent_coef, 
+                  args.vf_coef, 
+                  device, 
+                  args.batch_size,
+                  args.num_processes)
 
         # TensorBoard setup
         current_time = datetime.now().strftime('%b%d_%H-%M-%S')
@@ -427,7 +501,7 @@ def main(args):
         writer = SummaryWriter(log_dir=log_dir)
 
         # Save hyperparameters and model architecture
-        config_path = os.path.join(log_dir, 'config.json')
+        config_path = os.path.join(log_dir, f'config_{current_time}.json')
         save_config(args, ppo, config_path)
         print(f"Configuration saved to {config_path}")
 
@@ -436,81 +510,84 @@ def main(args):
         os.makedirs(save_dir, exist_ok=True)
         best_reward = float('-inf')
 
-        total_episodes = args.total_timesteps // args.max_timesteps
-        total_action_timesteps_per_episode = args.max_timesteps // args.action_duration # The total number of times actions will be taken in one episode.
-        # There is an interal for loop for action_duration times.
+        # In a parallel setup, instead of using total_episodes, we will use total_iterations. 
+        # In each iteration, multiple actors interact with the environment for max_timesteps. i.e., each iteration will have num_processes episodes.
+        total_iterations = args.total_timesteps // (args.max_timesteps * args.num_processes)
+        args.total_action_timesteps_per_episode = args.max_timesteps // args.action_duration # Each actor will run for max_timesteps and each timestep will have action_duration steps.
         
-        action_timesteps = 0 # Count how many action timesteps (not total) elapsed # Also measures how long this episode was (in-case of early termination or truncation)
+        # Counter to keep track of how many times action has been taken 
+        action_timesteps = 0
+        memory_queue = mp.Queue()
 
-        for ep in range(total_episodes):
-            state, _ = env.reset()
-            state = state.flatten()
+        for iteration in range(total_iterations):
+            print(f"\nIteration: {iteration}/{total_iterations}", end = "\t")
 
-            print(f"Initial observation (flattened): {state}")
-            print(f"Initial observation (flattened) shape: {state.shape}\n")
-            total_reward = 0 # To calculate the average reward per episode
+            processes = [] # Create a list of processes
+            manager = mp.Manager() # Facilitates communication and sharing of data between processes
+            return_dict = manager.dict()
+
+            for rank in range(args.num_processes):
+                p = mp.Process(target=worker, args=(rank, args, ppo.policy_old, memory_queue)) # Create a process to execute the worker function
+                p.start()
+                processes.append(p)
+
+            # Essential for synchronization. However, we are not performing updates to the policy only after the episode is over.
+            # We are updating the policy every n times action has been taken. (See PPO paper). Hence this is disabled.
+            # The join() method is called on each process in the processes list. This ensures that the main program waits for all processes to complete before continuing.
+            # for p in processes:
+            #     p.join()
+
+            all_memories = []
+            active_workers = set(range(args.num_processes))
+
+            while active_workers:
+                rank, memory = memory_queue.get()
+                if memory is None:
+                    active_workers.remove(rank)
+
+                else:
+                    all_memories.append(memory)
+
+                    # Look at the size of the memory and update action_timesteps
+                    action_timesteps += len(memory.states)
+
+                    # Update PPO every n times action has been taken
+                    if action_timesteps % args.update_freq == 0:
+                        loss = ppo.update(all_memories)
             
-            for t in range(total_action_timesteps_per_episode):
-                print("-----------------------------------")
-                print(f"\nStep: {action_timesteps}")
-                action_timesteps += 1
-                total_timesteps = ep * total_action_timesteps_per_episode + t
-                
-                state_tensor = torch.FloatTensor(state).to(device)
-                action, log_prob = ppo.policy_old.act(state_tensor) # Policy old is used to act and collect experiences
-                
-                # These reward and next_state are for the action_duration timesteps.
-                next_state, reward, done, truncated, info = env.step(action)
-                total_reward += reward
+                    # clear memory to prevent memory growth 
+                    for memory in all_memories:
+                        memory.clear_memory()
 
-                # Saving experience in memory
-                memory.append(state, action, log_prob, reward, done)
-                
-                #print(f"\nNext state: type: {type(next_state)}, shape:{next_state.shape}\n")
-                state = next_state.flatten()
+                    # reset all_memories
+                    all_memories = []
 
-                # Update PPO every n times action has been taken
-                if action_timesteps % args.update_freq == 0:
-                    loss = ppo.update(memory)
-                    memory.clear_memory()
-
-                    print(f"Episode: {ep}/{total_episodes} (total timesteps: {total_timesteps}) \t Total Loss: {loss['total_loss']:.2f}")
-                    # Loss is logged every time the model is updated.
-                    if loss is not None: # TODO: Make this to check any
-                        writer.add_scalars('Losses/Update', {
-                        'Policy': loss['policy_loss'],
-                        'Value': loss['value_loss'],
-                        'Entropy': loss['entropy_loss'],
-                        'Total': loss['total_loss']
-                            }, total_timesteps)
-                    else:
+                    total_reward = sum(sum(memory.rewards) for memory in all_memories)
+                    avg_reward = total_reward / args.num_processes # Average reward per process in this iteration
+                    print(f", Average Reward: {avg_reward:.2f}")
+                    
+                    # Logging every time the model is updated.
+                    if loss is not None:
+                        writer.add_scalar('Average Reward', avg_reward, iteration)
+                        if loss:
+                            writer.add_scalars('Losses', {
+                                'Policy': loss['policy_loss'],
+                                'Value': loss['value_loss'],
+                                'Entropy': loss['entropy_loss'],
+                                'Total': loss['total_loss']
+                            }, iteration)
+                    else: 
                         print("Warning: loss is None")
 
-                if done or truncated: # Support for episode truncation based on crash or other unwanted events.
-                    average_reward_per_episode = total_reward/action_timesteps
+                    # Save model every n
+                    if args.save_freq > 0 and (iteration + 1) % args.save_freq == 0:
+                        torch.save(ppo.policy.state_dict(), os.path.join(save_dir, f'model_iteration_{iteration+1}.pth'))
 
-                    writer.add_scalars('Episode Metrics', {
-                    'Average Reward': average_reward_per_episode, # Reward is logged at the end of each episode.
-                    'Episode Length': action_timesteps
-                        }, ep)
-                    
-                    # Logging
-                    print(f'Episode: {ep}/{total_episodes} (total timesteps: {total_timesteps}) \t Average reward per episode: {average_reward_per_episode:.2f} ')
-                    
-                    # Save model periodically
-                    if args.save_freq > 0 and ep % args.save_freq == 0:
-                        torch.save(ppo.policy.state_dict(), os.path.join(save_dir, f'model_episode_{ep}.pth'))
-                    
-                    # Save best model
-                    if average_reward_per_episode > best_reward:
-                        best_reward = average_reward_per_episode
-                        torch.save(ppo.policy.state_dict(), os.path.join(save_dir, 'best_average_reward_model.pth'))
-                    
-                    # Reset for next episode
-                    state, _ = env.reset()
-                    break
+                    # Save best model so far
+                    if avg_reward > best_reward:
+                        best_reward = avg_reward
+                        torch.save(ppo.policy.state_dict(), os.path.join(save_dir, 'best_model.pth'))
 
-        env.close()
         writer.close()
 
 if __name__ == "__main__":
