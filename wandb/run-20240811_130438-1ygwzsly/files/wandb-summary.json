@@ -1,1 +1,0 @@
-{"iteration": 0, "avg_reward": 0.0, "policy_loss": 0.0002899304963648319, "value_loss": 0.9843748062849045, "entropy_loss": 0.6931440085172653, "total_loss": 0.9274739711220156, "global_step": 0, "_timestamp": 1723396034.0268333, "_runtime": 155.13771319389343, "_step": 3}
