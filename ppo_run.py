@@ -1,12 +1,15 @@
 import os
 import json
+import wandb
 import traci
 import argparse
 import torch
 import torch.optim as optim
-import torch.nn.functional as F
 import torch.multiprocessing as mp # wow we get this from torch itself
-from collections import deque
+
+# from collections import deque
+# from functools import partial
+#import torch.nn.functional as F
 
 from torch.utils.tensorboard import SummaryWriter
 import os
@@ -17,22 +20,22 @@ from models import MLPActorCritic
 class Memory:
     """
     Storage class for saving experience from interactions with the environment.
+    These memories will be made in CPU but loaded in GPU for the policy update.
     """
-    def __init__(self, device):
-        self.device = device
+    def __init__(self,):
         self.actions = []
         self.states = []
         self.logprobs = []
         self.rewards = []
         self.is_terminals = []
-    
+
     def append(self, state, action, logprob, reward, done):
-        self.states.append(torch.FloatTensor(state).to(self.device))
-        self.actions.append(torch.tensor(action).to(self.device))
+        self.states.append(torch.FloatTensor(state))
+        self.actions.append(torch.tensor(action.clone().detach())) # Not sure why the clone is necessary (the action is sampled from the worker device = cpu). But got warning without.
         self.logprobs.append(logprob)
         self.rewards.append(reward)
         self.is_terminals.append(done)
-    
+
     def clear_memory(self):
         del self.actions[:]
         del self.states[:]
@@ -88,7 +91,7 @@ class PPO:
         TODO: Use KL divergence instead of clipping
 
         """
-        combined_memory = Memory(self.device)
+        combined_memory = Memory()
         for memory in memories:
             combined_memory.actions.extend(memory.actions)
             combined_memory.states.extend(memory.states)
@@ -399,15 +402,19 @@ def worker(rank, args, shared_policy_old, memory_queue):
     At every iteration, 1 worker will carry out one episode.
     memory_queue is used to store the memory of each worker and send it back to the main process.
     shared_policy_old is used for importance sampling.
+
+    How frequently should a parallel worker send a memory to the main process?
+    Lets set this to 8.
     """
     env = CraverRoadEnv(args)
     worker_device = torch.device("cpu")
+    memory_transfer_freq = 8
 
     # The central memory is a collection of memories from all processes.
     # A worker instance must have their own memory 
-    local_memory = Memory(worker_device)
+    local_memory = Memory()
     shared_policy_old = shared_policy_old.to(worker_device)
-    
+
     state, _ = env.reset()
     state = state.flatten()
 
@@ -433,10 +440,10 @@ def worker(rank, args, shared_policy_old, memory_queue):
         local_memory.append(state, action, logprob, reward, done)
         steps_since_update += 1
 
-        if steps_since_update >= args.update_freq or done or truncated:
+        if steps_since_update >= memory_transfer_freq or done or truncated:
             # Put local memory in the queue for the main process to collect
             memory_queue.put((rank, local_memory))
-            local_memory = Memory(worker_device)  # Reset local memory
+            local_memory = Memory()  # Reset local memory
             steps_since_update = 0
 
         if done or truncated:
@@ -447,54 +454,112 @@ def worker(rank, args, shared_policy_old, memory_queue):
     print(f"Worker {rank} finished. Total reward: {ep_reward}")
     env.close()
     memory_queue.put((rank, None))  # Signal that this worker is done
+
+def define_sweep_config():
+    """
+    If using random, max and min values are required.
+    However, if using grid search requires all parameters to be categorical, constant, int_uniform
+    """
+    sweep_config = {
+        'method': 'random', # options: random, grid, bayes
+        'metric': {
+            'name': 'reward',
+            'goal': 'maximize'
+        },
+
+        # For random
+        'parameters': {
+            'lr': {'min': 1e-4, 'max': 1e-2},
+            'gamma': {'min': 0.9, 'max': 0.999},
+            'K_epochs': {'values': [2, 4, 8]},
+            'eps_clip': {'min': 0.1, 'max': 0.3},
+            'ent_coef': {'min': 0.001, 'max': 0.1},
+            'vf_coef': {'min': 0.1, 'max': 1.0},
+            'batch_size': {'values': [16, 32, 64]},
+        }
+
+        #  For grid
+        # 'parameters': {
+        #     'lr': {'values': [0.001, 0.002, 0.005] },
+        #     'gamma': {'values': [0.95, 0.99, 0.999]},
+        #     'K_epochs': {'values': [4, 8, 16] },
+        #     'eps_clip': {'values': [0.1, 0.2, 0.3]},
+        #     'ent_coef': {'values': [0.01, 0.05, 0.1]},
+        #     'vf_coef': {'values': [0.5, 0.75, 1.0]},
+        #     'batch_size': {'values': [32, 64, 128]},
+        #     'num_processes': {'values': [4, 8, 16]}
+        # }
+
+    }
+
+    return sweep_config
+
+def train_sweep(config=None):
+    """
     
-def main(args):
+    """
+    with wandb.init(config=config):
+        config = wandb.config
+        
+        # Update args with wandb config
+        args.lr = config.lr
+        args.gamma = config.gamma
+        args.K_epochs = config.K_epochs
+        args.eps_clip = config.eps_clip
+        args.ent_coef = config.ent_coef
+        args.vf_coef = config.vf_coef
+        args.batch_size = config.batch_size
+        
+        # Call the main training function
+        train(args, is_sweep=True)
+
+def run_sweep():
+    sweep_config = define_sweep_config()
+    sweep_id = wandb.sweep(sweep_config, project="ppo_urban_and_traffic_control")
+    wandb.agent(sweep_id, function=train_sweep, count=5) # 5 is the Number of sweeps trials to try 
+
+def train(args, is_sweep=False):
     """
     Actors are parallelized i.e., create their own instance of the envinronment and interact with it (perform policy rollout).
     All aspects of training are centralized.
+    Auto tune hyperparameters using wandb sweeps.
     """
+    global_step = 0
     env = CraverRoadEnv(args) # First environment instance. Required for setup.
+ 
+    # Spawn creates a new process. There is a fork method as well which will create a copy of the current process.
+    mp.set_start_method('spawn') 
 
-    if args.evaluate: # Eval TL or PPO
-        if args.manual_demand_veh is None or args.manual_demand_ped is None:
-            print("Manual demand is None. Please specify a demand for both vehicles and pedestrians.")
-            return None
-        else: 
-            run_data, all_directions = evaluate_controller(args, env)
-            calculate_performance(run_data, all_directions, args.step_length)
-        env.close()
-    
-    else: # Train PPO
-        
-        # Spawn creates a new process. There is a fork method as well which will create a copy of the current process.
-        mp.set_start_method('spawn') 
+    device = torch.device("cuda:0" if torch.cuda.is_available() and args.gpu else "cpu")
+    print(f"Using device: {device}")
+    print(f"\nDefined observation space: {env.observation_space}")
+    print(f"Observation space shape: {env.observation_space.shape}")
+    print(f"\nDefined action space: {env.action_space}")
+    print(f"Options per action dimension: {env.action_space.nvec}")
 
-        device = torch.device("cuda:0" if torch.cuda.is_available() and args.gpu else "cpu")
-        print(f"Using device: {device}")
+    state_dim = env.observation_space.shape[0] * env.observation_space.shape[1]
+    action_dim = len(env.action_space.nvec)
+    print(f"State dimension: {state_dim}, Action dimension: {action_dim}\n")
+    env.close() # We actually dont make use of this environment for any other stuff. Each worker will have their own environment.
 
-        print(f"\nDefined observation space: {env.observation_space}")
-        print(f"Observation space shape: {env.observation_space.shape}")
-        print(f"\nDefined action space: {env.action_space}")
-        print(f"Options per action dimension: {env.action_space.nvec}")
+    ppo = PPO(state_dim, 
+            action_dim, 
+            args.lr, 
+            args.gamma, 
+            args.K_epochs, 
+            args.eps_clip, 
+            args.ent_coef, 
+            args.vf_coef, 
+            device, 
+            args.batch_size,
+            args.num_processes)
 
-        state_dim = env.observation_space.shape[0] * env.observation_space.shape[1]
-        action_dim = len(env.action_space.nvec)
-        print(f"State dimension: {state_dim}, Action dimension: {action_dim}\n")
-        env.close() # We actually dont make use of this environment for any other stuff. Each worker will have their own environment.
-
-        ppo = PPO(state_dim, 
-                  action_dim, 
-                  args.lr, 
-                  args.gamma, 
-                  args.K_epochs, 
-                  args.eps_clip, 
-                  args.ent_coef, 
-                  args.vf_coef, 
-                  device, 
-                  args.batch_size,
-                  args.num_processes)
-
+    if is_sweep:
+        # Wandb setup
+        wandb.init(project="ppo_urban_and_traffic_control", config=args)
+    else: 
         # TensorBoard setup
+        # No need to save the model during sweep.
         current_time = datetime.now().strftime('%b%d_%H-%M-%S')
         log_dir = os.path.join('runs', current_time)
         os.makedirs('runs', exist_ok=True)
@@ -510,89 +575,131 @@ def main(args):
         os.makedirs(save_dir, exist_ok=True)
         best_reward = float('-inf')
 
-        # In a parallel setup, instead of using total_episodes, we will use total_iterations. 
-        # In each iteration, multiple actors interact with the environment for max_timesteps. i.e., each iteration will have num_processes episodes.
-        total_iterations = args.total_timesteps // (args.max_timesteps * args.num_processes)
-        args.total_action_timesteps_per_episode = args.max_timesteps // args.action_duration # Each actor will run for max_timesteps and each timestep will have action_duration steps.
+    # In a parallel setup, instead of using total_episodes, we will use total_iterations. 
+    # In each iteration, multiple actors interact with the environment for max_timesteps. i.e., each iteration will have num_processes episodes.
+    total_iterations = args.total_timesteps // (args.max_timesteps * args.num_processes)
+    args.total_action_timesteps_per_episode = args.max_timesteps // args.action_duration # Each actor will run for max_timesteps and each timestep will have action_duration steps.
+    
+    # Counter to keep track of how many times action has been taken 
+    action_timesteps = 0
+    memory_queue = mp.Queue()
+
+    for iteration in range(total_iterations):
+        print(f"\nIteration: {iteration}/{total_iterations}", end = "\t")
+
+        processes = [] # Create a list of processes
+        #manager = mp.Manager() # Facilitates communication and sharing of data between processes
+
+        for rank in range(args.num_processes):
+            p = mp.Process(target=worker, args=(rank, args, ppo.policy_old, memory_queue)) # Create a process to execute the worker function
+            p.start()
+            processes.append(p)
+
+        # Essential for synchronization. However, we are not performing updates to the policy only after the episode is over.
+        # We are updating the policy every n times action has been taken. (See PPO paper). Hence this is disabled.
+        # The join() method is called on each process in the processes list. This ensures that the main program waits for all processes to complete before continuing.
+        # for p in processes:
+        #     p.join()
+
+        all_memories = []
+        active_workers = set(range(args.num_processes))
+
+        while active_workers:
+            rank, memory = memory_queue.get()
+
+            if memory is None:
+                active_workers.remove(rank)
+
+            else:
+                all_memories.append(memory)
+                print(f"Memory from worker {rank} received. Memory size: {len(memory.states)}")
+
+                # Look at the size of the memory and update action_timesteps
+                action_timesteps += len(memory.states)
+
+                # Update PPO every n times action has been taken
+                if action_timesteps % args.update_freq == 0:
+                    loss = ppo.update(all_memories)
         
-        # Counter to keep track of how many times action has been taken 
-        action_timesteps = 0
-        memory_queue = mp.Queue()
-
-        for iteration in range(total_iterations):
-            print(f"\nIteration: {iteration}/{total_iterations}", end = "\t")
-
-            processes = [] # Create a list of processes
-            manager = mp.Manager() # Facilitates communication and sharing of data between processes
-            return_dict = manager.dict()
-
-            for rank in range(args.num_processes):
-                p = mp.Process(target=worker, args=(rank, args, ppo.policy_old, memory_queue)) # Create a process to execute the worker function
-                p.start()
-                processes.append(p)
-
-            # Essential for synchronization. However, we are not performing updates to the policy only after the episode is over.
-            # We are updating the policy every n times action has been taken. (See PPO paper). Hence this is disabled.
-            # The join() method is called on each process in the processes list. This ensures that the main program waits for all processes to complete before continuing.
-            # for p in processes:
-            #     p.join()
-
-            all_memories = []
-            active_workers = set(range(args.num_processes))
-
-            while active_workers:
-                rank, memory = memory_queue.get()
-                if memory is None:
-                    active_workers.remove(rank)
-
-                else:
-                    all_memories.append(memory)
-
-                    # Look at the size of the memory and update action_timesteps
-                    action_timesteps += len(memory.states)
-
-                    # Update PPO every n times action has been taken
-                    if action_timesteps % args.update_freq == 0:
-                        loss = ppo.update(all_memories)
-            
                     # clear memory to prevent memory growth 
                     for memory in all_memories:
                         memory.clear_memory()
-
-                    # reset all_memories
-                    all_memories = []
 
                     total_reward = sum(sum(memory.rewards) for memory in all_memories)
                     avg_reward = total_reward / args.num_processes # Average reward per process in this iteration
                     print(f", Average Reward: {avg_reward:.2f}")
                     
+                    # reset all memories
+                    all_memories = []
+
                     # Logging every time the model is updated.
                     if loss is not None:
-                        writer.add_scalar('Average Reward', avg_reward, iteration)
-                        if loss:
-                            writer.add_scalars('Losses', {
-                                'Policy': loss['policy_loss'],
-                                'Value': loss['value_loss'],
-                                'Entropy': loss['entropy_loss'],
-                                'Total': loss['total_loss']
-                            }, iteration)
-                    else: 
+
+                        if is_sweep: # Wandb for hyperparameter tuning
+                            
+                            wandb.log({     "iteration": iteration,
+                                            "avg_reward": avg_reward,
+                                            "policy_loss": loss['policy_loss'],
+                                            "value_loss": loss['value_loss'],
+                                            "entropy_loss": loss['entropy_loss'],
+                                            "total_loss": loss['total_loss'],
+                                            "global_step": global_step          })
+                        
+                        else: # Tensorboard for regular training
+                            global_step = iteration * args.num_processes + action_timesteps*args.action_duration
+                            total_updates = int(action_timesteps / args.update_freq)
+
+                            writer.add_scalar('Rewards/Average_Reward', avg_reward, global_step)
+                            writer.add_scalar('Updates/Total_Policy_Updates', total_updates, global_step)
+                            writer.add_scalar('Losses/Policy_Loss', loss['policy_loss'], global_step)
+                            writer.add_scalar('Losses/Value_Loss', loss['value_loss'], global_step)
+                            writer.add_scalar('Losses/Entropy_Loss', loss['entropy_loss'], global_step)
+                            writer.add_scalar('Losses/Total_Loss', loss['total_loss'], global_step)
+                            print(f"Logged data at step {global_step}")
+
+                            # Save model every n times it has been updated (Important: Not every iteration)
+                            if args.save_freq > 0 and total_updates % args.save_freq == 0:
+                                torch.save(ppo.policy.state_dict(), os.path.join(save_dir, f'model_iteration_{iteration+1}.pth'))
+
+                            # Save best model so far
+                            if avg_reward > best_reward:
+                                best_reward = avg_reward
+                                torch.save(ppo.policy.state_dict(), os.path.join(save_dir, 'best_model.pth'))
+                                
+                    else: # For some reason..
                         print("Warning: loss is None")
 
-                    # Save model every n
-                    if args.save_freq > 0 and (iteration + 1) % args.save_freq == 0:
-                        torch.save(ppo.policy.state_dict(), os.path.join(save_dir, f'model_iteration_{iteration+1}.pth'))
-
-                    # Save best model so far
-                    if avg_reward > best_reward:
-                        best_reward = avg_reward
-                        torch.save(ppo.policy.state_dict(), os.path.join(save_dir, 'best_model.pth'))
-
+    if is_sweep:
+        wandb.finish()
+    else:
         writer.close()
+
+def main(args):
+    """
+    Keep main short.
+    """
+
+    if args.evaluate:  # Eval TL or PPO
+        if args.manual_demand_veh is None or args.manual_demand_ped is None:
+            print("Manual demand is None. Please specify a demand for both vehicles and pedestrians.")
+            return None
+        
+        else: 
+            env = CraverRoadEnv(args)
+            run_data, all_directions = evaluate_controller(args, env)
+            calculate_performance(run_data, all_directions, args.step_length)
+            env.close()
+
+    elif args.sweep:
+        run_sweep()
+
+    else:
+        train(args)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run SUMO traffic simulation with PPO.')
-
+    parser.add_argument('--sweep', action='store_true', help='Use wandb sweeps for hyperparameter tuning')
     # Simulation
     parser.add_argument('--gui', action='store_true', help='Use SUMO GUI (default: False)')
     parser.add_argument('--step_length', type=float, default=1.0, help='Simulation step length (default: 1.0)') # What is one unit of increment in the simulation?
@@ -614,12 +721,14 @@ if __name__ == "__main__":
     parser.add_argument('--gpu', action='store_true', default=True, help='Use GPU if available (default: use CPU)')
     parser.add_argument('--total_timesteps', type=int, default=300000, help='Total number of timesteps the simulation will run (default: 300000)')
     parser.add_argument('--max_timesteps', type=int, default=1500, help='Maximum number of steps in one episode (default: 500)')
-    parser.add_argument('--update_freq', type=int, default=128, help='Number of action timesteps between each policy update (default: 128)')
+    
+    # The default update freq in the PPO paper is 128 but in our case, the interval between actions itself is 10 timesteps.
+    parser.add_argument('--update_freq', type=int, default=64, help='Number of action timesteps between each policy update (default: 128)')
     parser.add_argument('--lr', type=float, default=0.002, help='Learning rate (default: 0.002)')
     parser.add_argument('--gamma', type=float, default=0.99, help='Discount factor (default: 0.99)')
     parser.add_argument('--K_epochs', type=int, default=4, help='Number of epochs to update policy (default: 4)')
     parser.add_argument('--eps_clip', type=float, default=0.2, help='Clip parameter for PPO (default: 0.2)')
-    parser.add_argument('--save_freq', type=int, default=10, help='Save model every n episodes (default: 10, 0 to disable)')
+    parser.add_argument('--save_freq', type=int, default=2, help='Save model after every n updates (default: 2, 0 to disable)')
     parser.add_argument('--ent_coef', type=float, default=0.01, help='Entropy coefficient (default: 0.01)')
     parser.add_argument('--vf_coef', type=float, default=0.5, help='Value function coefficient (default: 0.5)')
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size (default: 32)')

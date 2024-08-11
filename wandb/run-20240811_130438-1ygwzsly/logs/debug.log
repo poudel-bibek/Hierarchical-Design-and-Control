@@ -1,0 +1,42 @@
+2024-08-11 13:04:38,881 INFO    Thread-2 (_run_job):64966 [wandb_setup.py:_flush():76] Current SDK version is 0.17.6
+2024-08-11 13:04:38,881 INFO    Thread-2 (_run_job):64966 [wandb_setup.py:_flush():76] Configure stats pid to 64966
+2024-08-11 13:04:38,881 INFO    Thread-2 (_run_job):64966 [wandb_setup.py:_flush():76] Loading settings from /home/kurukshetra/.config/wandb/settings
+2024-08-11 13:04:38,881 INFO    Thread-2 (_run_job):64966 [wandb_setup.py:_flush():76] Loading settings from /mnt/c/Users/bpoudel3/Desktop/Urban_Design/wandb/settings
+2024-08-11 13:04:38,881 INFO    Thread-2 (_run_job):64966 [wandb_setup.py:_flush():76] Loading settings from environment variables: {'project': 'ppo_urban_and_traffic_control', 'entity': 'urban-and-traffic', 'root_dir': '/mnt/c/Users/bpoudel3/Desktop/Urban_Design', 'sweep_id': 'dvfzrsij', 'run_id': '1ygwzsly', 'sweep_param_path': '/mnt/c/Users/bpoudel3/Desktop/Urban_Design/wandb/sweep-dvfzrsij/config-1ygwzsly.yaml'}
+2024-08-11 13:04:38,881 INFO    Thread-2 (_run_job):64966 [wandb_setup.py:_flush():76] Applying setup settings: {'_disable_service': False}
+2024-08-11 13:04:38,881 INFO    Thread-2 (_run_job):64966 [wandb_setup.py:_flush():76] Inferring run settings from compute environment: {'program_relpath': 'ppo_run.py', 'program_abspath': '/mnt/c/Users/bpoudel3/Desktop/Urban_Design/ppo_run.py', 'program': '/mnt/c/Users/bpoudel3/Desktop/Urban_Design/ppo_run.py'}
+2024-08-11 13:04:38,881 INFO    Thread-2 (_run_job):64966 [wandb_setup.py:_flush():76] Applying login settings: {}
+2024-08-11 13:04:38,881 INFO    Thread-2 (_run_job):64966 [wandb_init.py:_log_setup():521] Logging user logs to /mnt/c/Users/bpoudel3/Desktop/Urban_Design/wandb/run-20240811_130438-1ygwzsly/logs/debug.log
+2024-08-11 13:04:38,882 INFO    Thread-2 (_run_job):64966 [wandb_init.py:_log_setup():522] Logging internal logs to /mnt/c/Users/bpoudel3/Desktop/Urban_Design/wandb/run-20240811_130438-1ygwzsly/logs/debug-internal.log
+2024-08-11 13:04:38,882 INFO    Thread-2 (_run_job):64966 [wandb_init.py:init():559] calling init triggers
+2024-08-11 13:04:38,882 INFO    Thread-2 (_run_job):64966 [wandb_init.py:init():566] wandb.init called with sweep_config: {'K_epochs': 4, 'batch_size': 64, 'ent_coef': 0.0791678723329548, 'eps_clip': 0.27216632541381214, 'gamma': 0.9522650241734938, 'lr': 0.0005924112644713218, 'vf_coef': 0.9976472078827908}
+config: {}
+2024-08-11 13:04:38,882 INFO    Thread-2 (_run_job):64966 [wandb_init.py:init():609] starting backend
+2024-08-11 13:04:38,882 INFO    Thread-2 (_run_job):64966 [wandb_init.py:init():613] setting up manager
+2024-08-11 13:04:38,887 INFO    Thread-2 (_run_job):64966 [backend.py:_multiprocessing_setup():105] multiprocessing start_methods=fork,spawn,forkserver, using: spawn
+2024-08-11 13:04:38,888 INFO    Thread-2 (_run_job):64966 [wandb_init.py:init():621] backend started and connected
+2024-08-11 13:04:38,896 INFO    Thread-2 (_run_job):64966 [wandb_run.py:_config_callback():1385] config_cb None None {'K_epochs': 4, 'batch_size': 64, 'ent_coef': 0.0791678723329548, 'eps_clip': 0.27216632541381214, 'gamma': 0.9522650241734938, 'lr': 0.0005924112644713218, 'vf_coef': 0.9976472078827908}
+2024-08-11 13:04:38,897 INFO    Thread-2 (_run_job):64966 [wandb_init.py:init():716] updated telemetry
+2024-08-11 13:04:38,945 INFO    Thread-2 (_run_job):64966 [wandb_init.py:init():749] communicating run to backend with 90.0 second timeout
+2024-08-11 13:04:39,111 INFO    Thread-2 (_run_job):64966 [wandb_run.py:_on_init():2438] communicating current version
+2024-08-11 13:04:39,281 INFO    Thread-2 (_run_job):64966 [wandb_run.py:_on_init():2447] got version response 
+2024-08-11 13:04:39,282 INFO    Thread-2 (_run_job):64966 [wandb_init.py:init():800] starting run threads in backend
+2024-08-11 13:04:42,248 INFO    Thread-2 (_run_job):64966 [wandb_run.py:_console_start():2416] atexit reg
+2024-08-11 13:04:42,249 INFO    Thread-2 (_run_job):64966 [wandb_run.py:_redirect():2258] redirect: wrap_raw
+2024-08-11 13:04:42,249 INFO    Thread-2 (_run_job):64966 [wandb_run.py:_redirect():2323] Wrapping output streams.
+2024-08-11 13:04:42,249 INFO    Thread-2 (_run_job):64966 [wandb_run.py:_redirect():2348] Redirects installed.
+2024-08-11 13:04:42,252 INFO    Thread-2 (_run_job):64966 [wandb_init.py:init():843] run started, returning control to user process
+2024-08-11 13:04:42,960 INFO    Thread-2 (_run_job):64966 [wandb_setup.py:_flush():76] Current SDK version is 0.17.6
+2024-08-11 13:04:42,960 INFO    Thread-2 (_run_job):64966 [wandb_setup.py:_flush():76] Configure stats pid to 64966
+2024-08-11 13:04:42,960 INFO    Thread-2 (_run_job):64966 [wandb_setup.py:_flush():76] Loading settings from /home/kurukshetra/.config/wandb/settings
+2024-08-11 13:04:42,960 INFO    Thread-2 (_run_job):64966 [wandb_setup.py:_flush():76] Loading settings from /mnt/c/Users/bpoudel3/Desktop/Urban_Design/wandb/settings
+2024-08-11 13:04:42,960 INFO    Thread-2 (_run_job):64966 [wandb_setup.py:_flush():76] Loading settings from environment variables: {'project': 'ppo_urban_and_traffic_control', 'entity': 'urban-and-traffic', 'root_dir': '/mnt/c/Users/bpoudel3/Desktop/Urban_Design', 'sweep_id': 'dvfzrsij', 'run_id': '1ygwzsly', 'sweep_param_path': '/mnt/c/Users/bpoudel3/Desktop/Urban_Design/wandb/sweep-dvfzrsij/config-1ygwzsly.yaml'}
+2024-08-11 13:04:42,961 INFO    Thread-2 (_run_job):64966 [wandb_setup.py:_flush():76] Applying setup settings: {'_disable_service': False}
+2024-08-11 13:04:42,961 INFO    Thread-2 (_run_job):64966 [wandb_setup.py:_flush():76] Inferring run settings from compute environment: {'program_relpath': 'ppo_run.py', 'program_abspath': '/mnt/c/Users/bpoudel3/Desktop/Urban_Design/ppo_run.py', 'program': '/mnt/c/Users/bpoudel3/Desktop/Urban_Design/ppo_run.py'}
+2024-08-11 13:04:42,961 INFO    Thread-2 (_run_job):64966 [wandb_setup.py:_flush():76] Applying login settings: {}
+2024-08-11 13:04:42,962 INFO    Thread-2 (_run_job):64966 [wandb_init.py:_log_setup():521] Logging user logs to /mnt/c/Users/bpoudel3/Desktop/Urban_Design/wandb/run-20240811_130442-1ygwzsly/logs/debug.log
+2024-08-11 13:04:42,962 INFO    Thread-2 (_run_job):64966 [wandb_init.py:_log_setup():522] Logging internal logs to /mnt/c/Users/bpoudel3/Desktop/Urban_Design/wandb/run-20240811_130442-1ygwzsly/logs/debug-internal.log
+2024-08-11 13:04:42,962 INFO    Thread-2 (_run_job):64966 [wandb_init.py:init():559] calling init triggers
+2024-08-11 13:04:42,963 INFO    Thread-2 (_run_job):64966 [wandb_init.py:init():566] wandb.init called with sweep_config: {'K_epochs': 4, 'batch_size': 64, 'ent_coef': 0.0791678723329548, 'eps_clip': 0.27216632541381214, 'gamma': 0.9522650241734938, 'lr': 0.0005924112644713218, 'vf_coef': 0.9976472078827908}
+config: {'sweep': True, 'gui': True, 'step_length': 1.0, 'action_duration': 10, 'auto_start': True, 'vehicle_input_trips': './SUMO_files/original_vehtrips.xml', 'vehicle_output_trips': './SUMO_files/scaled_vehtrips.xml', 'pedestrian_input_trips': './SUMO_files/original_pedtrips.xml', 'pedestrian_output_trips': './SUMO_files/scaled_pedtrips.xml', 'manual_demand_veh': None, 'manual_demand_ped': None, 'demand_scale_min': 1.0, 'demand_scale_max': 2.0, 'gpu': True, 'total_timesteps': 300000, 'max_timesteps': 1500, 'update_freq': 64, 'lr': 0.0005924112644713218, 'gamma': 0.9522650241734938, 'K_epochs': 4, 'eps_clip': 0.27216632541381214, 'save_freq': 2, 'ent_coef': 0.0791678723329548, 'vf_coef': 0.9976472078827908, 'batch_size': 64, 'num_processes': 4, 'evaluate': None, 'model_path': None}
+2024-08-11 13:04:42,963 INFO    Thread-2 (_run_job):64966 [wandb_init.py:init():604] wandb.init() called when a run is still active

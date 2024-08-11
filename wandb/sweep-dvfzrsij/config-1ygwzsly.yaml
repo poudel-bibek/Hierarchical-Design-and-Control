@@ -1,0 +1,16 @@
+wandb_version: 1
+
+K_epochs:
+  value: 4
+batch_size:
+  value: 64
+ent_coef:
+  value: 0.0791678723329548
+eps_clip:
+  value: 0.27216632541381214
+gamma:
+  value: 0.9522650241734938
+lr:
+  value: 0.0005924112644713218
+vf_coef:
+  value: 0.9976472078827908

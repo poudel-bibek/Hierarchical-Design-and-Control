@@ -1,0 +1,33 @@
+Using device: cuda:0
+Defined observation space: Box(0.0, 1.0, (10, 38), float32)
+Observation space shape: (10, 38)
+Defined action space: MultiDiscrete([2 2 2 2 2 2 2 2 2 2])
+Options per action dimension: [2 2 2 2 2 2 2 2 2 2]
+State dimension: 380, Action dimension: 10
+Iteration: 0/50	
+Iteration: 0/50	Memory from worker 2 received. Memory size: 8
+Memory from worker 1 received. Memory size: 8
+Memory from worker 0 received. Memory size: 8
+Memory from worker 3 received. Memory size: 8
+Memory from worker 2 received. Memory size: 8
+Memory from worker 1 received. Memory size: 8
+Memory from worker 0 received. Memory size: 8
+Memory from worker 3 received. Memory size: 8
+, Average Reward: 0.00
+Memory from worker 2 received. Memory size: 8
+Memory from worker 1 received. Memory size: 8
+Memory from worker 0 received. Memory size: 8
+Memory from worker 3 received. Memory size: 8
+Memory from worker 2 received. Memory size: 8
+Memory from worker 0 received. Memory size: 8
+Memory from worker 1 received. Memory size: 8
+Memory from worker 3 received. Memory size: 8
+, Average Reward: 0.00
+Memory from worker 2 received. Memory size: 8
+Memory from worker 1 received. Memory size: 8
+Memory from worker 0 received. Memory size: 8
+Memory from worker 3 received. Memory size: 8
+Memory from worker 2 received. Memory size: 8
+Memory from worker 0 received. Memory size: 8
+Memory from worker 1 received. Memory size: 8
+Memory from worker 3 received. Memory size: 8
