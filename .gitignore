@@ -11,3 +11,5 @@ runs/
 # Saved models
 saved_models/
 
+./wandb
+wandb/

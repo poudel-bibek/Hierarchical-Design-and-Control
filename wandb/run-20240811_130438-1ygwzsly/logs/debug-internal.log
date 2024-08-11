@@ -206,3 +206,96 @@
 2024-08-11 13:06:21,258 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
 2024-08-11 13:06:22,258 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
 2024-08-11 13:06:23,258 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:06:24,258 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:06:25,259 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:06:26,250 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: status_report
+2024-08-11 13:06:26,259 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:06:27,248 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: stop_status
+2024-08-11 13:06:27,248 DEBUG   SenderThread:65042 [sender.py:send_request():418] send_request: stop_status
+2024-08-11 13:06:27,289 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:06:28,259 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:06:29,259 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:06:30,259 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:06:31,259 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:06:31,366 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: status_report
+2024-08-11 13:06:32,259 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:06:33,259 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:06:34,259 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:06:35,259 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:06:36,260 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:06:37,250 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: status_report
+2024-08-11 13:06:37,260 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:06:38,260 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:06:39,260 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:06:40,260 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:06:41,204 DEBUG   SenderThread:65042 [sender.py:send():391] send: stats
+2024-08-11 13:06:41,260 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:06:42,248 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: stop_status
+2024-08-11 13:06:42,248 DEBUG   SenderThread:65042 [sender.py:send_request():418] send_request: stop_status
+2024-08-11 13:06:42,260 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:06:42,303 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: status_report
+2024-08-11 13:06:42,606 INFO    Thread-12 :65042 [dir_watcher.py:_on_file_modified():288] file/dir modified: /mnt/c/Users/bpoudel3/Desktop/Urban_Design/wandb/run-20240811_130438-1ygwzsly/files/output.log
+2024-08-11 13:06:43,260 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:06:44,260 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:06:44,612 INFO    Thread-12 :65042 [dir_watcher.py:_on_file_modified():288] file/dir modified: /mnt/c/Users/bpoudel3/Desktop/Urban_Design/wandb/run-20240811_130438-1ygwzsly/files/output.log
+2024-08-11 13:06:45,260 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:06:46,260 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:06:46,616 INFO    Thread-12 :65042 [dir_watcher.py:_on_file_modified():288] file/dir modified: /mnt/c/Users/bpoudel3/Desktop/Urban_Design/wandb/run-20240811_130438-1ygwzsly/files/output.log
+2024-08-11 13:06:47,260 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:06:48,251 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: status_report
+2024-08-11 13:06:48,261 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:06:49,261 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:06:50,261 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:06:51,261 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:06:52,261 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:06:53,261 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:06:54,251 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: status_report
+2024-08-11 13:06:54,261 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:06:55,261 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:06:56,261 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:06:57,248 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: stop_status
+2024-08-11 13:06:57,249 DEBUG   SenderThread:65042 [sender.py:send_request():418] send_request: stop_status
+2024-08-11 13:06:57,289 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:06:58,261 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:06:59,262 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:06:59,398 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: status_report
+2024-08-11 13:07:00,262 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:07:01,262 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:07:02,262 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:07:03,262 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:07:04,262 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:07:05,251 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: status_report
+2024-08-11 13:07:05,262 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:07:06,262 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:07:07,262 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:07:08,262 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:07:09,262 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:07:10,251 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: status_report
+2024-08-11 13:07:10,262 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:07:11,204 DEBUG   SenderThread:65042 [sender.py:send():391] send: stats
+2024-08-11 13:07:11,263 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:07:12,248 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: stop_status
+2024-08-11 13:07:12,249 DEBUG   SenderThread:65042 [sender.py:send_request():418] send_request: stop_status
+2024-08-11 13:07:12,305 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:07:12,713 INFO    Thread-12 :65042 [dir_watcher.py:_on_file_modified():288] file/dir modified: /mnt/c/Users/bpoudel3/Desktop/Urban_Design/wandb/run-20240811_130438-1ygwzsly/files/output.log
+2024-08-11 13:07:13,263 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:07:14,027 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: partial_history
+2024-08-11 13:07:14,027 DEBUG   SenderThread:65042 [sender.py:send():391] send: history
+2024-08-11 13:07:14,028 DEBUG   SenderThread:65042 [sender.py:send_request():418] send_request: summary_record
+2024-08-11 13:07:14,030 INFO    SenderThread:65042 [sender.py:_save_file():1466] saving file wandb-summary.json with policy end
+2024-08-11 13:07:14,263 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:07:14,728 INFO    Thread-12 :65042 [dir_watcher.py:_on_file_modified():288] file/dir modified: /mnt/c/Users/bpoudel3/Desktop/Urban_Design/wandb/run-20240811_130438-1ygwzsly/files/output.log
+2024-08-11 13:07:14,728 INFO    Thread-12 :65042 [dir_watcher.py:_on_file_modified():288] file/dir modified: /mnt/c/Users/bpoudel3/Desktop/Urban_Design/wandb/run-20240811_130438-1ygwzsly/files/wandb-summary.json
+2024-08-11 13:07:15,263 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:07:16,033 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: status_report
+2024-08-11 13:07:16,263 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:07:16,734 INFO    Thread-12 :65042 [dir_watcher.py:_on_file_modified():288] file/dir modified: /mnt/c/Users/bpoudel3/Desktop/Urban_Design/wandb/run-20240811_130438-1ygwzsly/files/output.log
+2024-08-11 13:07:17,263 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:07:18,263 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:07:19,263 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:07:20,263 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:07:21,251 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: status_report
+2024-08-11 13:07:21,263 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:07:22,263 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:07:23,264 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
+2024-08-11 13:07:24,264 DEBUG   HandlerThread:65042 [handler.py:handle_request():158] handle_request: internal_messages
