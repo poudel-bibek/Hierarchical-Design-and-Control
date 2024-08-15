@@ -2,8 +2,10 @@ import os
 import json
 import wandb
 import traci
-import argparse
 import torch
+import random
+import argparse
+import numpy as np
 import torch.optim as optim
 import torch.multiprocessing as mp # wow we get this from torch itself
 
@@ -396,7 +398,7 @@ def calculate_performance(run_data, all_directions, step_length):
     for direction, avg_length in avg_queue_lengths.items():
         print(f"  {direction}: {avg_length:.2f}")
 
-def worker(rank, args, shared_policy_old, memory_queue):
+def worker(rank, args, shared_policy_old, memory_queue, global_seed):
     """
     The device for each worker is always CPU.
     At every iteration, 1 worker will carry out one episode.
@@ -406,6 +408,13 @@ def worker(rank, args, shared_policy_old, memory_queue):
     How frequently should a parallel worker send a memory to the main process?
     Lets set this to 8.
     """
+    
+    # Set seed for this worker
+    worker_seed = global_seed + rank
+    random.seed(worker_seed)
+    np.random.seed(worker_seed)
+    torch.manual_seed(worker_seed)
+
     env = CraverRoadEnv(args)
     worker_device = torch.device("cpu")
     memory_transfer_freq = 8
@@ -524,6 +533,16 @@ def train(args, is_sweep=False):
     All aspects of training are centralized.
     Auto tune hyperparameters using wandb sweeps.
     """
+    SEED = args.seed if args.seed else random.randint(0, 1000000)
+    print(f"Random seed: {SEED}")
+
+    # Set global seed
+    random.seed(SEED)
+    np.random.seed(SEED)
+    torch.manual_seed(SEED)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(SEED)
+
     global_step = 0
     env = CraverRoadEnv(args) # First environment instance. Required for setup.
  
@@ -591,7 +610,7 @@ def train(args, is_sweep=False):
         #manager = mp.Manager() # Facilitates communication and sharing of data between processes
 
         for rank in range(args.num_processes):
-            p = mp.Process(target=worker, args=(rank, args, ppo.policy_old, memory_queue)) # Create a process to execute the worker function
+            p = mp.Process(target=worker, args=(rank, args, ppo.policy_old, memory_queue, SEED)) # Create a process to execute the worker function
             p.start()
             processes.append(p)
 
@@ -717,13 +736,13 @@ if __name__ == "__main__":
     parser.add_argument('--demand_scale_max', type=float, default=2.0, help='Maximum demand scaling factor for automatic scaling (default: 5.0)')
 
     # PPO
-    #parser.add_argument('--seed', type=int, default=42, help='Random seed (default: 42)')
+    parser.add_argument('--seed', type=int, default=None, help='Random seed (default: None)')
     parser.add_argument('--gpu', action='store_true', default=True, help='Use GPU if available (default: use CPU)')
-    parser.add_argument('--total_timesteps', type=int, default=300000, help='Total number of timesteps the simulation will run (default: 300000)')
+    parser.add_argument('--total_timesteps', type=int, default=500000, help='Total number of timesteps the simulation will run (default: 300000)')
     parser.add_argument('--max_timesteps', type=int, default=1500, help='Maximum number of steps in one episode (default: 500)')
     
     # The default update freq in the PPO paper is 128 but in our case, the interval between actions itself is 10 timesteps.
-    parser.add_argument('--update_freq', type=int, default=64, help='Number of action timesteps between each policy update (default: 128)')
+    parser.add_argument('--update_freq', type=int, default=128, help='Number of action timesteps between each policy update (default: 128)')
     parser.add_argument('--lr', type=float, default=0.002, help='Learning rate (default: 0.002)')
     parser.add_argument('--gamma', type=float, default=0.99, help='Discount factor (default: 0.99)')
     parser.add_argument('--K_epochs', type=int, default=4, help='Number of epochs to update policy (default: 4)')
@@ -732,7 +751,7 @@ if __name__ == "__main__":
     parser.add_argument('--ent_coef', type=float, default=0.01, help='Entropy coefficient (default: 0.01)')
     parser.add_argument('--vf_coef', type=float, default=0.5, help='Value function coefficient (default: 0.5)')
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size (default: 32)')
-    parser.add_argument('--num_processes', type=int, default=4, help='Number of parallel processes to use')
+    parser.add_argument('--num_processes', type=int, default=8, help='Number of parallel processes to use')
     
     # Evaluations
     parser.add_argument('--evaluate', choices=['tl', 'ppo'], help='Evaluation mode: traffic light (tl), PPO (ppo), or both')

@@ -1103,12 +1103,12 @@ class CraverRoadEnv(gym.Env):
 
             return False
 
-    def reset(self, seed=None, options=None):
+    def reset(self, options=None):
         """
         
         """
 
-        super().reset(seed=seed)
+        super().reset()
         if self.sumo_running:
             traci.close()
         
