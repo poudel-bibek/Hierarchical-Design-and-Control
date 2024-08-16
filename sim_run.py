@@ -1,4 +1,5 @@
 import math
+import time 
 import traci
 import torch
 import random
@@ -58,7 +59,6 @@ class CraverRoadEnv(gym.Env):
         self.tl_ids = ['cluster_172228464_482708521_9687148201_9687148202_#5more'] # Only control this one for now
         
         # Original 10 phases defaulted by SUMO with 93 seconds cycle time
-        # TODO: Correct this with the new link info. Done
         # Keep this, required for TL only evaluation
         self.phases = {'cluster_172228464_482708521_9687148201_9687148202_#5more': [
             {"duration": 32, "state": "rrrrgGggrrrrgGggrrGrrG"},
@@ -134,6 +134,8 @@ class CraverRoadEnv(gym.Env):
         # This cannot be done when the pedestrian is too far away. This is already where we are looking into something that cannot be determined observationally. 
 
         # Re-route edges (Present in the route) which acts as a focal point to ensure that pedestrians are infact crossing the crosswalk.
+        # For controlled teleportation to the starting point.
+        # Cannot put internal edges in reroute edges (wont be detected in teleportation). Also cannot put the edges after the junction, cannot find a route from there.
 
         # What is excluded is the walking areas in the junctions near the crosswalks. Pedestrians present here could be going anywhere.
         # _w0 or _w1 attached to junction names will be the walking areas over that junction. Pedestrians over these junctions will not be re-routed. 
@@ -141,10 +143,10 @@ class CraverRoadEnv(gym.Env):
         self.controlled_crosswalks_dict = {
             0: { # This one is special case of a crosswalk (because of the double structure), the ones in the  middle should be excluded
                 'ids': [':9687187500_c0', ':9687187501_c0'],
-                'vicinity_walking_edges': [':9687187501_w1', '1054121747#2', ':9687187495_w0', '1058666192',':9687187500_w0', ':9687187501_w0'], 
-                'related_junction_edges': [':9727816658_w0', ':9687187526_w0'], 
+                'vicinity_walking_edges': [':9687187501_w1', '1054121747#2', ':9687187495_w0', '1058666192',':9687187500_w0', ':9687187501_w0'], # To re-route from
+                'related_junction_edges': [':9727816658_w0', ':9687187526_w0'], # For forward lookup
                 'connected_edges': ['1054121752#1', '1054121752#0', '1058666191#4', '1058666191#5'],
-                'reroute_edges': {'upside': '1054121747#2' , 'downside': '1058666192' },
+                'reroute_edges': {'upside': '1054121747#2' , 'downside': '1058666192' }, # Used as a fulcrum
             },
 
             # Add crosswalks that are not controlled but are necessary to be present for re-route
@@ -153,10 +155,10 @@ class CraverRoadEnv(gym.Env):
 
             1: {
                 'ids': [':9727816850_c0'],
-                'vicinity_walking_edges': [':9727816850_w1', '1058666207#1', ':9727816844_w0', '1058666207#0',':9727816850_w0'],
-                'related_junction_edges': [':9727816846_w0', ':9727816851_w0'],
+                'vicinity_walking_edges': [':9727816850_w1', '1058666207#1', ':9727816844_w0',':9727816850_w0', '1058666206#0', '1058666207#0' ], # Have to be re-routed # JUnctions should not be here
+                'related_junction_edges': [':9727816846_w0', ':9727816851_w0'], 
                 'connected_edges': ['1050677005#7','1050677005#6','1058666191#1','1058666191#2'],
-                'reroute_edges': {'upside': '1058666207#1' , 'downside': '1058666207#0' },
+                'reroute_edges': {'upside': '1058666207#1' , 'downside': '1058666207#0' }, 
             },
             2: {
                 'ids': [':9727816623_c0'],
@@ -164,6 +166,7 @@ class CraverRoadEnv(gym.Env):
                 'related_junction_edges': [':9727816625_w0', ':9666274798_w0'], # All edges with _w0 in the end begin with : in front
                 'connected_edges': ['1058666187#2','1058666187#3', '1050677005#10','1050677005#9' ], 
                 'reroute_edges': {'upside': '1051865729#3' , 'downside': '1058666188#1' },
+                
             },
 
             3: {
@@ -171,14 +174,14 @@ class CraverRoadEnv(gym.Env):
                 'vicinity_walking_edges': ['1060131391#1', '1060131391#0', ':9740157155_w0',':9740157155_w1',':9740157153_w0', '1060131390' ],
                 'related_junction_edges': [':9666274886_w0', ':9740157154_w0'],
                 'connected_edges': ['1060131388#2','1060131388#3', '1050677005#13', '1050677005#12'],
-                'reroute_edges': {'upside': '1060131391#1' , 'downside': ':1060131391#0'},   
+                'reroute_edges': {'upside': '1060131391#1' , 'downside': '1060131391#0'}, 
             },
 
             4: {
                 'ids': [':cluster_9740157181_9740483933_c0'],
-                'vicinity_walking_edges': ['1060131402_0', ':cluster_9740157181_9740483933_w0', ':cluster_9740157181_9740483933_w1', '1060131401#2', '1060131401#3'],
+                'vicinity_walking_edges': ['1060131402', ':cluster_9740157181_9740483933_w0', ':cluster_9740157181_9740483933_w1', '1060131401#2', '1060131401#3'],
                 'related_junction_edges': [':9740157180_w0', ':9655154530_w0'],
-                'connected_edges': ['1060131402_0', ':9740483934_w0', ':9740157180_w0', '1060131401#1', '1050677005#14', '1050677005#13', '1050677007#1'],
+                'connected_edges': ['1060131402', ':9740483934_w0', ':9740157180_w0', '1060131401#1', '1050677005#14', '1050677005#13', '1050677007#1'],
                 'reroute_edges': {'upside': '1060131401#3' , 'downside': '1060131401#2'},
             },
 
@@ -195,7 +198,7 @@ class CraverRoadEnv(gym.Env):
                 'vicinity_walking_edges': ['1060131408#1', ':9740157209_w0', ':9740157209_w1', '1060131408#0', '1060131410' ],
                 'related_junction_edges': [':9740157207_w0', ':9740157211_w0', ':9740157210_w0', '1060131404#2' ], # For lookup
                 'connected_edges': [':9740484420_w0', '1060131404#3', '1050677005#19', '1050677005#18', '1060131409#1' ],
-                'reroute_edges': {'upside': '1060131408#1'  , 'downside': '1060131408#0' },
+                'reroute_edges': {'upside': '1060131408#1'  , 'downside': '1060131408#0' }, 
             },
 
             7: {
@@ -237,7 +240,7 @@ class CraverRoadEnv(gym.Env):
 
             'downside': [ 
                 ':9727816658_w0', '1058666192', ':9687187495_w0', ':9687187500_w0',
-                ':9727816846_w0', ':9727816850_w0', ':9727816844_w0', '1058666207#0',
+                ':9727816846_w0', ':9727816850_w0', ':9727816844_w0', '1058666207#0', '1058666206#0',
                 ':9727816625_w0', '1058666188#1', ':9727816623_w1',
                 ':9740157154_w0', '1060131391#0', ':9740157155_w1', ':9740157153_w0', '1060131390',
                 '1060131402_0', ':9740157180_w0', ':cluster_9740157181_9740483933_w0', '1060131401#2',
@@ -264,7 +267,7 @@ class CraverRoadEnv(gym.Env):
             for crosswalk_id in data['ids']
         }
 
-        # Given any edge among all edges (including the corsswalk itself), return the re-route edge
+        # Given any edge among all edges (including the corsswalk itself), return the re-route edge dict
         self.crosswalk_to_reroute_edges = {}
         for _, data in self.controlled_crosswalks_dict.items():
             reroute_edges = data['reroute_edges']
@@ -278,6 +281,15 @@ class CraverRoadEnv(gym.Env):
         for direction, edges in self.direction_and_edges.items():
             for edge in edges:
                 self.edge_to_direction[edge] = direction
+
+        # Get the ids of all crosswalks
+        self.all_crosswalk_ids = [crosswalk_id for _, data in self.controlled_crosswalks_dict.items() for crosswalk_id in data['ids']]
+
+        # For crosswalk control 
+        self.walking_edges_to_reroute_from = []
+        self.related_junction_edges_to_lookup_from = []
+        self.alternative_crosswalks_flat = []
+        self.currently_rerouted = []
 
         
     def _initialize_lanes(self,):
@@ -835,24 +847,19 @@ class CraverRoadEnv(gym.Env):
                     # Skip the first two phases, they are for buffering the transition.
                     traci.trafficlight.setRedYellowGreenState(tl_id, state)
 
-        # For the crosswalk control. For the same action, what choice is performed remains same within the action timesteps
-        # Only need to do this only when current_action_step is 0 i.e., when a new action is gotten
-        walking_edges_to_reroute_from = []
-        related_junction_edges_to_lookup_from = []
-        alternative_crosswalks_flat = []
-
+        # For the same action, what choice is performed remains same within the action timesteps
+        # Only update the corsswalk control lists when current_action_step is 0 i.e., when a new action is gotten
         if current_action_step == 0:   
-            current_crosswalk_action = action[1:]
+            # Clear the previous values 
+            self.walking_edges_to_reroute_from = []
+            self.related_junction_edges_to_lookup_from = []
+            self.alternative_crosswalks_flat = []
+            self.currently_rerouted = []
+
+            current_crosswalk_action = action[1:] # The first element is the TL action
             crosswalks_to_disable = []
-            all_crosswalks = [] 
 
-            for i in range(len(current_crosswalk_action)): # The first element is the TL action
-                
-                # We want to get the id of individual crosswalks
-                crosswalks_list = self.controlled_crosswalks_dict[i]['ids']
-                for item in crosswalks_list:
-                    all_crosswalks.append(item)
-
+            for i in range(len(current_crosswalk_action)): 
                 if current_crosswalk_action[i] == 0: # 0 means disable 
                     crosswalks_list = self.controlled_crosswalks_dict[i]['ids']
                     for item in crosswalks_list:
@@ -862,12 +869,12 @@ class CraverRoadEnv(gym.Env):
             # For testing purposes.
             # Based on the timesteps, allow a bunch and then disallow the bunch
             print(f"Step count: {self.step_count}") # Increments by 10 here
-
+            
             # Define time ranges for disabling crosswalks
             time_ranges = [
-                (200, 1000, all_crosswalks[:5]),
-                (1000, 2000, all_crosswalks[5:]),
-                (2000, float('inf'), all_crosswalks[:5])
+                (200, 1000, self.all_crosswalk_ids[:5]),
+                (1000, 2000, self.all_crosswalk_ids[5:]),
+                (2000, float('inf'), self.all_crosswalk_ids[:5])
             ]
 
             # Determine which crosswalks to disable based on current step
@@ -877,16 +884,19 @@ class CraverRoadEnv(gym.Env):
                     #print(f"\nTime range: {start} - {end}, Disabled Crosswalks: {crosswalks}")
                     crosswalks_to_disable = crosswalks
                     break
+            
+            print(f"All crosswalks: {self.all_crosswalk_ids}\nCrosswalks to disable: {crosswalks_to_disable}")
+
             # End of testing purposes code
             ######################################
 
             for crosswalk_id in crosswalks_to_disable:
 
-                edges = self.crosswalk_to_disabled_vicinity_walking_edges[crosswalk_id] # Does not contain the crosswalk itself, just the vicinity areas
-                walking_edges_to_reroute_from.extend(edges)
+                edges = self.crosswalk_to_disabled_vicinity_walking_edges[crosswalk_id] # Does not contain the crosswalk itself, just the vicinity walking edges list
+                self.walking_edges_to_reroute_from.extend(edges)
 
-                lookup_edges = self.crosswalk_to_related_junction_edges[crosswalk_id]
-                related_junction_edges_to_lookup_from.extend(lookup_edges)
+                lookup_edges = self.crosswalk_to_related_junction_edges[crosswalk_id] # Just the lookup edges i.e., related_junction_edges
+                self.related_junction_edges_to_lookup_from.extend(lookup_edges)
                 
             #print(f"\nWalking edges to disable: {walking_edges_to_reroute_from}\n")
             #print(f"\nRelated junction edges to lookup from: {related_junction_edges_to_lookup_from}\n")
@@ -897,15 +907,16 @@ class CraverRoadEnv(gym.Env):
                 for crosswalk_data in self.controlled_crosswalks_dict.values()
                 if not any(cw in crosswalks_to_disable for cw in crosswalk_data['ids'])
             ]
-            alternative_crosswalks_flat.extend([item for sublist in alternative_crosswalks for item in sublist])
+
+            self.alternative_crosswalks_flat.extend([item for sublist in alternative_crosswalks for item in sublist])
             #print(f"\nAlternative crosswalks flattened: {alternative_crosswalks}\n")
 
         # Although the crosswalks to disable are gotten every 10 timesteps, the enforcement of the action (i.e., re-routing pedestrians) is done every step.
         # This is going to be severely computationally taxing on the simulation.
         #print(f"\nAll crosswalks: {all_crosswalks}\n\nCrosswalks to disable: {crosswalks_to_disable}\n")
-        disabled_crosswalks = self._disallow_pedestrians(walking_edges_to_reroute_from,
-                                                         related_junction_edges_to_lookup_from,
-                                                        alternative_crosswalks_flat,)
+        self._disallow_pedestrians(self.walking_edges_to_reroute_from,
+                                                         self.related_junction_edges_to_lookup_from,
+                                                        self.alternative_crosswalks_flat,)
         
         #print(f"\nDisabled crosswalks: {disabled_crosswalks}\n")
 
@@ -947,7 +958,7 @@ class CraverRoadEnv(gym.Env):
     def _check_done(self):
         """
         TODO: What more conditions can be added here?
-        - Gridlock?
+        - Gridlock? of vehicles or pedestrians?
         - Crashes?
         """
         return self.step_count >= self.max_timesteps
@@ -989,7 +1000,7 @@ class CraverRoadEnv(gym.Env):
         Pedestrian current edge can be the crosswalk id itself.. or the walking areas associated. Both begin with :, Both will be invisible in the route but can be obtained by current edge.  
         Pedestrian can be in the internal edge (related to the junction) which will be _w0 or _w1 attached to the junction name. This can also be obtained using current edge.
 
-        1. After assigning the new route, move the pedestrian to the first edge/ lane of the new route.
+        
         3. Why are the re-routed pedestrians actually not going to the other side of crosswalk?
         4. Measure the efficacy of the re-routing.
         5. Convert to shortest path method.
@@ -1002,88 +1013,82 @@ class CraverRoadEnv(gym.Env):
          2. Pedestrians who are just passing by, not too close, should not be re-routed.
          6. One step forward lookup is necessary because we can only get the last step pedestrian info from the simulation. For forward lookup, we have their remaining route, and we have the related junction edges, make use of that.
          7. Make the second route where they go to the other side of the crosswalk. The third one to the destination.
+         1. After assigning the new route, move the pedestrian to the first edge/ lane of the new route. (teleport)? The teleportation from simulation seems to work fine. And my own teleport does not
         """
-
-        disabled_crosswalks = []
         for ped_id in traci.person.getIDList():
-        
-            current_edge = traci.person.getRoadID(ped_id) # This may contain an internal edge.
             
-            # Get the remaining edges in the person's route
-            remaining_stages_count = traci.person.getRemainingStages(ped_id)
-            remaining_edges = []
-            for i in range(remaining_stages_count):  
-                stage = traci.person.getStage(ped_id, i)
-                remaining_edges.extend(stage.edges)
-            
-            # For all pedestrians, print their route
-            #print(f"\nPedestrian {ped_id} remaining route: {remaining_edges}\n current edge: {current_edge}\n")
-
-            # Get the destination (end) edge
-            destination_edge = remaining_edges[-1] # Last edge of the last stage is the destination.
-
-            # If the person is in the vicinity of the crosswalk we want to disable or the look forward in the current edge by 1.
-            # If the person is directly on the edge that we want to disable, then they are continued to walk
-            if self._check_vicinity(current_edge, walking_edges_to_reroute_from, remaining_edges, related_junction_edges_to_lookup_from): # If the route includes the ones we want to disable.
-
-                #print(f"\nRerouting pedestrian {ped_id}\t with remaining edges: {remaining_edges}\n")
-
-                # TODO: We want the direction to prevent the next-reroute edge to be in the other side of the road 
-                # i.e., potentially making the pedestrians cross twice. Or not enforce the disable condition of the current crosswalk.
-                # Based on whether current edge is upside or downside, select the new crosswalk's downside or upside.
-                current_direction = self.edge_to_direction.get(current_edge) # This is the direction of the current edge.
-                other_direction = 'upside' if current_direction == 'downside' else 'downside' # Just a simple way to get the other direction.
-
-                # TODO: Right now, a new crosswalk is chosen randomly. Make this choice based on shortest path. 
-                new_crosswalk = ':9740157209_c0' #random.choice(alternative_crosswalks)
-
-                # Get the re-route point related to this new crosswalk
-                next_reroute_edge = self.crosswalk_to_reroute_edges[new_crosswalk].get(current_direction)
-                #print(f"\nCurrent edge: {current_edge}\t Next reoute edge: {next_reroute_edge}\t Destination edge: {destination_edge}\n")
-
-                # There may still be a missing connection from the current edge to the current reroute edge
-                # Move the person there, using coordinates
-
-                # # Fourth, append two new walking stages:
-                # Althrough the routing can find a route from current edge directly to the destination edge, this is a problem because it can repeat the same route. 
-                # Moreoever, we want to ensure that we pass through an enabled crosswalk. Hence, we do routing in two stages.
-                # #    - One from the current edge to the new crosswalk 
-                found_route = traci.simulation.findIntermodalRoute(current_edge, next_reroute_edge, modes='') # Walking is the default mode. This returns a Stage object.
-                #print(f"\nFound route: {found_route}\n")
-
-                other_side_of_crosswalk = self.crosswalk_to_reroute_edges[new_crosswalk].get(other_direction)
-                found_route_2 = traci.simulation.findIntermodalRoute(next_reroute_edge, other_side_of_crosswalk, modes='') 
-                #print(f"\nFound route 2: {found_route_2}\n")
-
-                #   - Other from the new crosswalk to the destination edge
-                found_route_3 = traci.simulation.findIntermodalRoute(other_side_of_crosswalk, destination_edge, modes='') # Walking is the default mode. This returns a Stage object.
-                #print(f"\nFound route 3: {found_route_2}\n")
-
-                # Clear all the remaining stages of the pedestrian
-                # If a new stage is not immediately appended, this automatically removes the person in the next timestep.
-                traci.person.removeStages(ped_id)
-
-                # Since we are finding intermodal route, this route could potentially have had many stages. Just append the first one. which is walking to the destination.
-                traci.person.appendStage(ped_id, found_route[0]) 
-                traci.person.appendStage(ped_id, found_route_2[0]) 
-                traci.person.appendStage(ped_id, found_route_3[0])
-
-                # If they got re-routed, change color to red
-                traci.person.setColor(ped_id, (255, 0, 0, 255))
+            if ped_id not in self.currently_rerouted: # If they are already re-routed, no need to re-route them again. Until the next action where this list gets reset.
+                current_edge = traci.person.getRoadID(ped_id) # This may contain an internal edge.
                 
+                # Get the remaining edges in the person's route
+                remaining_stages_count = traci.person.getRemainingStages(ped_id)
+                remaining_edges = []
+                for i in range(remaining_stages_count):  
+                    stage = traci.person.getStage(ped_id, i)
+                    remaining_edges.extend(stage.edges)
+                
+                # For all pedestrians, print their route
+                print(f"\nPedestrian {ped_id} remaining route: {remaining_edges}\n current edge: {current_edge}\n")
+                print(f"\nWalking edges to reroute from: {walking_edges_to_reroute_from}\n")
+                print(f"\nRelated junction edges to lookup from: {related_junction_edges_to_lookup_from}\n")
 
-        #disabled_crosswalks.append(crosswalk_id)
-        return disabled_crosswalks
+                # If the person is in the vicinity of the crosswalk we want to disable or the look forward in the current edge by 1.
+                # If the person is directly on the edge that we want to disable, then they are continued to walk
+                # Disabling the forward lookup. Works without problems.
+                # If forward lookup is enabled, the auto-teleportation is too harsh. We need to do controlled teleportation 
+                if self._check_vicinity(current_edge, walking_edges_to_reroute_from, remaining_edges, related_junction_edges_to_lookup_from, forward_lookup= False): # If the route includes the ones we want to disable.
+                    
+                    # Get the destination (end) edge
+                    destination_edge = remaining_edges[-1] # Last edge of the last stage is the destination.
 
+                    print(f"\nRerouting pedestrian {ped_id}\t with remaining edges: {remaining_edges}\n")
 
-    def _check_vicinity(self, current_edge, walking_edges_to_reroute_from, remaining_edges, related_junction_edges_to_lookup_from):
+                    # TODO: We want the direction to prevent the next-reroute edge to be in the other side of the road 
+                    # i.e., potentially making the pedestrians cross twice. Or not enforce the disable condition of the current crosswalk.
+                    # Based on whether current edge is upside or downside, select the new crosswalk's downside or upside.
+                    current_direction = self.edge_to_direction.get(current_edge) # This is the direction of the current edge.
+                    other_direction = 'upside' if current_direction == 'downside' else 'downside' # Just a simple way to get the other direction.
+
+                    # TODO: Right now, a new crosswalk is chosen randomly. Make this choice based on shortest path. 
+                    new_crosswalk = ':9740157209_c0' #random.choice(alternative_crosswalks)
+                    
+                    # Get the re-route point related to this new crosswalk
+                    next_reroute_edge = self.crosswalk_to_reroute_edges[new_crosswalk].get(current_direction) # Understand the difference between teleport point and reroute point.
+
+                    # Append two new walking stages:
+                    # Althrough the routing can find a route from current edge directly to the destination edge, this is a problem because it can repeat the same route. 
+                    # Moreoever, we want to ensure that we pass through an enabled crosswalk. Hence, we do routing in two stages.
+                    # #    - One from the current edge to the new crosswalk 
+                    found_route = traci.simulation.findIntermodalRoute(current_edge, next_reroute_edge, modes='') # Walking is the default mode. This returns a Stage object.
+                    #print(f"\nFound route: {found_route}\n")
+
+                    other_side_of_crosswalk = self.crosswalk_to_reroute_edges[new_crosswalk].get(other_direction)
+                    found_route_2 = traci.simulation.findIntermodalRoute(next_reroute_edge, other_side_of_crosswalk, modes='') 
+                    #print(f"\nFound route 2: {found_route_2}\n")
+
+                    #   - Other from the new crosswalk to the destination edge
+                    found_route_3 = traci.simulation.findIntermodalRoute(other_side_of_crosswalk, destination_edge, modes='') # Walking is the default mode. This returns a Stage object.
+                    #print(f"\nFound route 3: {found_route_2}\n")
+
+                    # Clear all the remaining stages of the pedestrian
+                    # If a new stage is not immediately appended, this automatically removes the person in the next timestep.
+                    traci.person.removeStages(ped_id)
+                    
+                    # Since we are finding intermodal route, this route could potentially have had many stages. Just append the first one. which is walking to the destination.
+                    traci.person.appendStage(ped_id, found_route[0]) 
+                    traci.person.appendStage(ped_id, found_route_2[0]) 
+                    traci.person.appendStage(ped_id, found_route_3[0])
+
+                    # If they got re-routed, change color to red
+                    traci.person.setColor(ped_id, (255, 0, 0, 255))
+                    self.currently_rerouted.append(ped_id)
+
+    def _check_vicinity(self, current_edge, walking_edges_to_reroute_from, remaining_edges, related_junction_edges_to_lookup_from, forward_lookup=False):
         """
         If the current edge is already in the vicinity of the crosswalk to disable
 
-        Or the next edge in the 1 step forward lookup in the route is in the vicinity
-        For the 1 step lookup, we need to know next edge. However, if cant even determine the current edge if they are internal.
-
-        TODO: There may be a slight optimization possible here. Saved for later.
+        Or the next edge in the forward lookup in the route is in the vicinity
+        For the fowrard step lookup, we need to know next edge. However, if cant even determine the current edge if they are internal.
         """
 
         # Basic conditon.
@@ -1091,18 +1096,25 @@ class CraverRoadEnv(gym.Env):
             #print(f"\nCurrent edge: {current_edge} is in the vicinity\n")
             return True
         
-        else: # Forward lookup
+        else: 
+            return False 
+        
+            # If foward lookup is disabled, comment this entire block for efficiency. 
             # IMPORTANT: If they are currently in the junction, and the next edge is among the one we want to diasble.
             # Forward lookup of one step does not work because, remaining_edges[0] does not give the exact remaining route but rather the first edge in entire route. 
-            # We have to lookat the entire route. 
-            #next_edge = remaining_edges[0] # If we were to do a 1 step forward lookup. 
+            # If that first edge happens to be an internal edge, then it wont be present in the walking_edges_to_reroute_from.
+            
+            # if forward_lookup: # Forward lookup of the entire remaining route. 
+            #     if current_edge in related_junction_edges_to_lookup_from and any(next_edge in walking_edges_to_reroute_from for next_edge in remaining_edges): # If any edge in the remaining route is in the vicinity.                         
+            #         #print(f"\nNext edge in the future is in the vicinity\n")
+            #         return True
+            #     else: 
+            #         print(f"\nCurrent edge: {current_edge} is not in the vicinity\n")
+            #         return False
+            # else:
+            #     return False
 
-            if current_edge in related_junction_edges_to_lookup_from and any(next_edge in walking_edges_to_reroute_from for next_edge in remaining_edges):                            
-                #print(f"\nNext edge in the future is in the vicinity\n")
-                return True
-
-            return False
-
+            
     def reset(self, options=None):
         """
         
@@ -1119,7 +1131,7 @@ class CraverRoadEnv(gym.Env):
         scale_demand(self.vehicle_input_trips, self.vehicle_output_trips, scale_factor_vehicle, demand_type="vehicle")
         scale_demand(self.pedestrian_input_trips, self.pedestrian_output_trips, scale_factor_pedestrian, demand_type="pedestrian")
 
-        # TODO 1: If going the route of higher-level agent disabling a set of crosswalks, then this should be done here before the SUMO call.
+        # This should be done here before the SUMO call. This can disallow pedestrians before the simulation run.
         # Randomly select crosswalks to disable
         # to_disable = random.sample(self.controlled_crosswalks, min(5, len(self.controlled_crosswalks)))
         # Before sumo call 
@@ -1145,7 +1157,7 @@ class CraverRoadEnv(gym.Env):
 
         traci.start(sumo_cmd)
 
-        # TODO 2: And this should be done here after the SUMO call. 
+        # This should be done here after the SUMO call. As this can disallow pedestrians during the simulation run. 
         # Disallow pedestrians in some crosswalks. After sumo call beacuse we need traci.
         # disabled_crosswalks = self._disallow_pedestrians(to_disable)
         # print(f"\nDisabled crosswalks: {disabled_crosswalks}\n")

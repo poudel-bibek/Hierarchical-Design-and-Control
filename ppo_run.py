@@ -81,9 +81,24 @@ class PPO:
         self.policy_old.share_memory() # Share the old policy network across all processes. 
 
         # Set up the optimizer for the current policy network
-        self.optimizer = optim.Adam(self.policy.parameters(), lr=lr)
+        self.initial_lr = lr
+        self.optimizer = optim.Adam(self.policy.parameters(), lr=self.initial_lr)
+        self.total_iterations = None  # Will be set in the train function
+    
+    def update_learning_rate(self, iteration):
+        """
+        Linear annealing. At the end of training, the learning rate is 0.
+        """
+        if self.total_iterations is None:
+            raise ValueError("total_iterations must be set before calling update_learning_rate")
         
-        
+        frac = 1.0 - (iteration / self.total_iterations)
+        new_lr = frac * self.initial_lr
+
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = new_lr
+        return new_lr
+    
     def update(self, memories):
         """
         memories = combined memories from all processes.
@@ -181,12 +196,13 @@ class PPO:
             'total_loss': avg_policy_loss + self.vf_coef * avg_value_loss - self.ent_coef * avg_entropy_loss
         }
     
-def save_config(args, model, save_path):
+def save_config(args, SEED, model, save_path):
     """
     Save hyperparameters and model architecture to a JSON file.
     """
     config = {
         "hyperparameters": vars(args),
+        "global_seed": SEED,
         "model_architecture": {
             "actor": str(model.policy.actor),
             "critic": str(model.policy.critic)
@@ -408,7 +424,7 @@ def worker(rank, args, shared_policy_old, memory_queue, global_seed):
     How frequently should a parallel worker send a memory to the main process?
     Lets set this to 8.
     """
-    
+
     # Set seed for this worker
     worker_seed = global_seed + rank
     random.seed(worker_seed)
@@ -532,6 +548,10 @@ def train(args, is_sweep=False):
     Actors are parallelized i.e., create their own instance of the envinronment and interact with it (perform policy rollout).
     All aspects of training are centralized.
     Auto tune hyperparameters using wandb sweeps.
+
+    Although Adam maintains an independent and changing lr for each policy parameter, there are still potential benefits of having a lr schedule
+    Annealing is a special form of scheduling where the learning rate may not strictly decrease 
+
     """
     SEED = args.seed if args.seed else random.randint(0, 1000000)
     print(f"Random seed: {SEED}")
@@ -586,7 +606,7 @@ def train(args, is_sweep=False):
 
         # Save hyperparameters and model architecture
         config_path = os.path.join(log_dir, f'config_{current_time}.json')
-        save_config(args, ppo, config_path)
+        save_config(args, SEED, ppo, config_path)
         print(f"Configuration saved to {config_path}")
 
         # Model saving setup
@@ -597,6 +617,7 @@ def train(args, is_sweep=False):
     # In a parallel setup, instead of using total_episodes, we will use total_iterations. 
     # In each iteration, multiple actors interact with the environment for max_timesteps. i.e., each iteration will have num_processes episodes.
     total_iterations = args.total_timesteps // (args.max_timesteps * args.num_processes)
+    ppo.total_iterations = total_iterations # For lr annealing
     args.total_action_timesteps_per_episode = args.max_timesteps // args.action_duration # Each actor will run for max_timesteps and each timestep will have action_duration steps.
     
     # Counter to keep track of how many times action has been taken 
@@ -619,6 +640,9 @@ def train(args, is_sweep=False):
         # The join() method is called on each process in the processes list. This ensures that the main program waits for all processes to complete before continuing.
         # for p in processes:
         #     p.join()
+
+        if args.anneal_lr:
+            current_lr = ppo.update_learning_rate(iteration)
 
         all_memories = []
         active_workers = set(range(args.num_processes))
@@ -662,6 +686,7 @@ def train(args, is_sweep=False):
                                             "value_loss": loss['value_loss'],
                                             "entropy_loss": loss['entropy_loss'],
                                             "total_loss": loss['total_loss'],
+                                            "current_lr": current_lr,
                                             "global_step": global_step          })
                         
                         else: # Tensorboard for regular training
@@ -674,6 +699,7 @@ def train(args, is_sweep=False):
                             writer.add_scalar('Losses/Value_Loss', loss['value_loss'], global_step)
                             writer.add_scalar('Losses/Entropy_Loss', loss['entropy_loss'], global_step)
                             writer.add_scalar('Losses/Total_Loss', loss['total_loss'], global_step)
+                            writer.add_scalar('Learning_Rate/Current_LR', current_lr, global_step)
                             print(f"Logged data at step {global_step}")
 
                             # Save model every n times it has been updated (Important: Not every iteration)
@@ -740,7 +766,8 @@ if __name__ == "__main__":
     parser.add_argument('--gpu', action='store_true', default=True, help='Use GPU if available (default: use CPU)')
     parser.add_argument('--total_timesteps', type=int, default=500000, help='Total number of timesteps the simulation will run (default: 300000)')
     parser.add_argument('--max_timesteps', type=int, default=1500, help='Maximum number of steps in one episode (default: 500)')
-    
+    parser.add_argument('--anneal_lr', action='store_true', help='Anneal learning rate (default: False)')
+
     # The default update freq in the PPO paper is 128 but in our case, the interval between actions itself is 10 timesteps.
     parser.add_argument('--update_freq', type=int, default=128, help='Number of action timesteps between each policy update (default: 128)')
     parser.add_argument('--lr', type=float, default=0.002, help='Learning rate (default: 0.002)')
@@ -751,7 +778,7 @@ if __name__ == "__main__":
     parser.add_argument('--ent_coef', type=float, default=0.01, help='Entropy coefficient (default: 0.01)')
     parser.add_argument('--vf_coef', type=float, default=0.5, help='Value function coefficient (default: 0.5)')
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size (default: 32)')
-    parser.add_argument('--num_processes', type=int, default=8, help='Number of parallel processes to use')
+    parser.add_argument('--num_processes', type=int, default=1, help='Number of parallel processes to use')
     
     # Evaluations
     parser.add_argument('--evaluate', choices=['tl', 'ppo'], help='Evaluation mode: traffic light (tl), PPO (ppo), or both')
