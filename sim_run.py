@@ -148,69 +148,71 @@ class CraverRoadEnv(gym.Env):
                 'connected_edges': ['1054121752#1', '1054121752#0', '1058666191#4', '1058666191#5'],
                 'reroute_edges': {'upside': '1054121747#2' , 'downside': '1058666192' }, # Used as a fulcrum
             },
-
-            # Add crosswalks that are not controlled but are necessary to be present for re-route
-            # 9: {
-            # }, 
-
+            # Crosswalk no. 1 and 2 are not controlled. They are simply present here to serve as a next best route if crosswalk 0 or 3 are disabled.
             1: {
+                'ids': [':cluster_172228464_482708521_9687148201_9687148202_#5more_c2',],
+                'vicinity_walking_edges': ['1054116929#4', '1054116929#2',':cluster_172228464_482708521_9687148201_9687148202_#5more_w6','1058666193_0',':cluster_172228464_482708521_9687148201_9687148202_#5more_w5' ], 
+                'related_junction_edges': [':9687148199_w0','1054116933_0',':9687148198_w0',':9727816638_w0'],  
+                'connected_edges': ['1078803478#0','1058666191#4','1058666191#3','1054116932#1','1054116932#0'],
+                'reroute_edges': {'upside': '1054116929#4' , 'downside': '1054116929#2' }, 
+            },
+            2: {
+                'ids': [':cluster_172228464_482708521_9687148201_9687148202_#5more_c1',],
+                'vicinity_walking_edges': ['1054116929#0', '1054116929#1',':cluster_172228464_482708521_9687148201_9687148202_#5more_w4'], 
+                'related_junction_edges': [':9687148197_w0',':9666242268_w0',':9727816638_w0',':9687148198_w0'],
+                'connected_edges': ['1058666191#4','1058666191#3','1050677005#3','452522817#1','1050677005#2'],  
+                'reroute_edges': {'upside': '1054116929#0' , 'downside': '1054116929#1' }, 
+            },
+            3: {
                 'ids': [':9727816850_c0'],
                 'vicinity_walking_edges': [':9727816850_w1', '1058666207#1', ':9727816844_w0',':9727816850_w0', '1058666206#0', '1058666207#0' ], # Have to be re-routed # JUnctions should not be here
                 'related_junction_edges': [':9727816846_w0', ':9727816851_w0'], 
                 'connected_edges': ['1050677005#7','1050677005#6','1058666191#1','1058666191#2'],
                 'reroute_edges': {'upside': '1058666207#1' , 'downside': '1058666207#0' }, 
             },
-            2: {
+            4: {
                 'ids': [':9727816623_c0'],
                 'vicinity_walking_edges': ['1058666188#1', '1051865729#3',':9727816623_w0', ':9727816623_w1'],
                 'related_junction_edges': [':9727816625_w0', ':9666274798_w0'], # All edges with _w0 in the end begin with : in front
                 'connected_edges': ['1058666187#2','1058666187#3', '1050677005#10','1050677005#9' ], 
                 'reroute_edges': {'upside': '1051865729#3' , 'downside': '1058666188#1' },
-                
             },
-
-            3: {
+            5: {
                 'ids': [':9740157155_c0'],
                 'vicinity_walking_edges': ['1060131391#1', '1060131391#0', ':9740157155_w0',':9740157155_w1',':9740157153_w0', '1060131390' ],
                 'related_junction_edges': [':9666274886_w0', ':9740157154_w0'],
                 'connected_edges': ['1060131388#2','1060131388#3', '1050677005#13', '1050677005#12'],
                 'reroute_edges': {'upside': '1060131391#1' , 'downside': '1060131391#0'}, 
             },
-
-            4: {
+            6: {
                 'ids': [':cluster_9740157181_9740483933_c0'],
                 'vicinity_walking_edges': ['1060131402', ':cluster_9740157181_9740483933_w0', ':cluster_9740157181_9740483933_w1', '1060131401#2', '1060131401#3'],
                 'related_junction_edges': [':9740157180_w0', ':9655154530_w0'],
                 'connected_edges': ['1060131402', ':9740483934_w0', ':9740157180_w0', '1060131401#1', '1050677005#14', '1050677005#13', '1050677007#1'],
                 'reroute_edges': {'upside': '1060131401#3' , 'downside': '1060131401#2'},
             },
-
-            5: {
+            7: {
                 'ids': [':9740157194_c0'],
                 'vicinity_walking_edges': ['1060131405#1', ':9740157194_w1', ':9740157194_w0', ':9740157192_w0', '1060131406', '1060131405#0'], # Have to be re-routed
                 'related_junction_edges': [':9740157204_w0', ':9740157195_w0', ':10054309033_w0', ], # One step lookup
                 'connected_edges': ['1050677005#16', '1098062395', '1050677005#18', '1060131403#1', '1060112727#1', '1060131404#1'],
                 'reroute_edges': {'upside': '1060131406'  , 'downside': '1060131405#1'},
             },
-
-            6: {
+            8: {
                 'ids': [':9740157209_c0'],
                 'vicinity_walking_edges': ['1060131408#1', ':9740157209_w0', ':9740157209_w1', '1060131408#0', '1060131410' ],
                 'related_junction_edges': [':9740157207_w0', ':9740157211_w0', ':9740157210_w0', '1060131404#2' ], # For lookup
                 'connected_edges': [':9740484420_w0', '1060131404#3', '1050677005#19', '1050677005#18', '1060131409#1' ],
                 'reroute_edges': {'upside': '1060131408#1'  , 'downside': '1060131408#0' }, 
             },
-
-            7: {
+            9: {
                 'ids': [':9740484527_c0'],
                 'vicinity_walking_edges': ['1060166260#1', ':9740484527_w0', ':9740484527_w1', '1050677005#21'],
                 'related_junction_edges': [':9740484528_w0', ':9740484524_w0'],
                 'connected_edges': ['1060166262#2', '1050677005#20', '1060112787#2', '1060112787#1'],
                 'reroute_edges': {'upside': '1050677005#21' , 'downside': '1060166260#1' },
             },
-
-            # Potential (if causes problems): Discard this crosswalk. The vicinity walking edges are a junction that connects two different crosswalks. 
-            8: {
+            10: {
                 'ids': [':cluster_172228408_9739966907_9739966910_c2'],
                 'vicinity_walking_edges': [':cluster_172228408_9739966907_9739966910_w2', ':cluster_172228408_9739966907_9739966910_w3', '1060112789#1'], # Reroute. w3 covers both to the right and down from up
                 'related_junction_edges': [':9739966908_w0', ':9739966904_w0', '1060112789#0', '1060112789#2'], # Lookup. 89#0 is the right one (downside)
@@ -225,6 +227,8 @@ class CraverRoadEnv(gym.Env):
         self.direction_and_edges = {
             'upside': [ 
                 '1054121747#2', ':9687187501_w1', ':9687187526_w0', ':9687187501_w0',
+                '1054116929#4', ':9687148199_w0','1054116933_0',':cluster_172228464_482708521_9687148201_9687148202_#5more_w6',
+                '1054116929#0', ':9687148197_w0',':9666242268_w0', '1054116930',
                 ':9727816851_w0', '1058666207#1', ':9727816850_w1',
                 ':9666274798_w0', '1051865729#3', ':9727816623_w0',
                 ':9666274886_w0', '1060131391#1', ':9740157155_w0',
@@ -233,13 +237,12 @@ class CraverRoadEnv(gym.Env):
                 '1060131408#1', ':9740157209_w1', ':9740157210_w0',
                 ':9740484527_w1', '1050677005#21', ':9740484524_w0',
                 ':cluster_172228408_9739966907_9739966910_w3', '1060112789#2',
-
-                
-
                 ],
 
             'downside': [ 
                 ':9727816658_w0', '1058666192', ':9687187495_w0', ':9687187500_w0',
+                '1054116929#2', '1058666193_0',':9687148198_w0',':9727816638_w0',':cluster_172228464_482708521_9687148201_9687148202_#5more_w5',
+                '1054116929#1', ':9727816638_w0',':9687148198_w0',':cluster_172228464_482708521_9687148201_9687148202_#5more_w4',
                 ':9727816846_w0', ':9727816850_w0', ':9727816844_w0', '1058666207#0', '1058666206#0',
                 ':9727816625_w0', '1058666188#1', ':9727816623_w1',
                 ':9740157154_w0', '1060131391#0', ':9740157155_w1', ':9740157153_w0', '1060131390',
@@ -872,9 +875,9 @@ class CraverRoadEnv(gym.Env):
             
             # Define time ranges for disabling crosswalks
             time_ranges = [
-                (200, 1000, self.all_crosswalk_ids[:5]),
+                (200, 1000, self.all_crosswalk_ids[2:5]),
                 (1000, 2000, self.all_crosswalk_ids[5:]),
-                (2000, float('inf'), self.all_crosswalk_ids[:5])
+                (2000, float('inf'), self.all_crosswalk_ids[2:5])
             ]
 
             # Determine which crosswalks to disable based on current step
@@ -885,6 +888,7 @@ class CraverRoadEnv(gym.Env):
                     crosswalks_to_disable = crosswalks
                     break
             
+            # self.all_crosswalks contains 0 and 1 both as separate.
             print(f"All crosswalks: {self.all_crosswalk_ids}\nCrosswalks to disable: {crosswalks_to_disable}")
 
             # End of testing purposes code
@@ -1000,15 +1004,14 @@ class CraverRoadEnv(gym.Env):
         Pedestrian current edge can be the crosswalk id itself.. or the walking areas associated. Both begin with :, Both will be invisible in the route but can be obtained by current edge.  
         Pedestrian can be in the internal edge (related to the junction) which will be _w0 or _w1 attached to the junction name. This can also be obtained using current edge.
 
-        
-        3. Why are the re-routed pedestrians actually not going to the other side of crosswalk?
-        4. Measure the efficacy of the re-routing.
-        5. Convert to shortest path method.
-        8. Track the edges from which pedestrians are being missed.    
         9.  Change pedestrian icon size
-        10. Only route if they have already not been re-routed or something like that?
-
+        
         # Done.
+         10. Only route if they have already not been re-routed or something like that?
+         3. Why are the re-routed pedestrians actually not going to the other side of crosswalk?
+         4. Measure the efficacy of the re-routing.
+         5. Convert to shortest path method.
+         8. Track the edges from which pedestrians are being missed.
          3. Since the re-routing happens every 10 timesteps, that can be too late. Because pedestrians keep moving beween the two decision times. Switched to enforecement of disabling crosswalks every step.
          2. Pedestrians who are just passing by, not too close, should not be re-routed.
          6. One step forward lookup is necessary because we can only get the last step pedestrian info from the simulation. For forward lookup, we have their remaining route, and we have the related junction edges, make use of that.
@@ -1050,7 +1053,7 @@ class CraverRoadEnv(gym.Env):
                     other_direction = 'upside' if current_direction == 'downside' else 'downside' # Just a simple way to get the other direction.
 
                     # TODO: Right now, a new crosswalk is chosen randomly. Make this choice based on shortest path. 
-                    new_crosswalk = ':9740157209_c0' #random.choice(alternative_crosswalks)
+                    new_crosswalk = ':9687187500_c0'#, ':9687187501_c0' #':cluster_172228408_9739966907_9739966910_c2' #':9740157209_c0' #random.choice(alternative_crosswalks)
                     
                     # Get the re-route point related to this new crosswalk
                     next_reroute_edge = self.crosswalk_to_reroute_edges[new_crosswalk].get(current_direction) # Understand the difference between teleport point and reroute point.

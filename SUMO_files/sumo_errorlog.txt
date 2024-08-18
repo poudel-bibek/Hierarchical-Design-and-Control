@@ -1,0 +1,6 @@
+Warning: Invalid departPos 0.94 given for person '1911' walking from edge '1058666207#0'. Using edge end instead.
+Warning: Invalid departPos 1.07 given for person '1901' walking from edge '1058666207#0'. Using edge end instead.
+Warning: Invalid departPos 0.51 given for person '1901' walking from edge '1058666206#0'. Using edge end instead.
+Warning: Invalid departPos 0.93 given for person '1916' walking from edge '1058666207#0'. Using edge end instead.
+Warning: Invalid departPos 0.49 given for person '1934' walking from edge '1058666207#0'. Using edge end instead.
+Warning: Invalid departPos 1.17 given for person '1918' walking from edge '1058666207#0'. Using edge end instead.
