@@ -778,7 +778,7 @@ if __name__ == "__main__":
     parser.add_argument('--ent_coef', type=float, default=0.01, help='Entropy coefficient (default: 0.01)')
     parser.add_argument('--vf_coef', type=float, default=0.5, help='Value function coefficient (default: 0.5)')
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size (default: 32)')
-    parser.add_argument('--num_processes', type=int, default=1, help='Number of parallel processes to use')
+    parser.add_argument('--num_processes', type=int, default=10, help='Number of parallel processes to use')
     
     # Evaluations
     parser.add_argument('--evaluate', choices=['tl', 'ppo'], help='Evaluation mode: traffic light (tl), PPO (ppo), or both')

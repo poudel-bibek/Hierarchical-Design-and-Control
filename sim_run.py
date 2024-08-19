@@ -3,7 +3,6 @@ import time
 import traci
 import torch
 import random
-import argparse
 import gymnasium as gym
 import numpy as np
 import xml.etree.ElementTree as ET
@@ -102,6 +101,7 @@ class CraverRoadEnv(gym.Env):
         self.corrected_occupancy_map = None
 
         self.tl_lane_dict = {}
+        self.tl_pedestrian_status = {} # For pedestrians related to crosswalks attached to TLS.
 
         self.vehicle_input_trips = args.vehicle_input_trips
         self.vehicle_output_trips = args.vehicle_output_trips
@@ -448,8 +448,9 @@ class CraverRoadEnv(gym.Env):
         for tl_id in self.tl_ids:
             for _, persons in occupancy_map[tl_id]['pedestrian']['outgoing'].items():
                 for person in persons:
-                    if traci.person.getColor(person) != (255, 0, 255, 255):
-                        traci.person.setColor(person, (255, 0, 255, 255))
+                    if person not in self.tl_pedestrian_status or self.tl_pedestrian_status[person] != 'crossed':
+                        # If the pedestrian crossed once, consider them as crossed (assume they wont cross twice, there is no way to know this without looking into their route, which is not practical.) 
+                        self.tl_pedestrian_status[person] = 'crossed'
 
         
         # Handle special case for incoming vehicles
@@ -656,14 +657,14 @@ class CraverRoadEnv(gym.Env):
                                     all_persons = traci.person.getIDList()
                                     # Filter persons on this junction
                                     for person in all_persons:
-                                        person_edge = traci.person.getRoadID(person)
-                                        person_color = traci.person.getColor(person)
-                                        if person_edge == lane:
-                                            # print(f"Person: {person} Color: {traci.person.getColor(person)} " ) # By default this is the color.
-                                            if direction == "incoming" and person_color == (255, 255, 0, 255):# And the color is still the default color (255, 255, 0, 255). 
-                                                occupancy_map[tl_id][agent_type][direction][lane_group].append(person)
-
-                                            else: # For outgoing, just being inside the crossing is enough.
+                                        if traci.person.getRoadID(person) == lane:
+                                            # If not crossed yet, add to incoming 
+                                            
+                                            if direction == "incoming":
+                                                if person not in self.tl_pedestrian_status or self.tl_pedestrian_status[person] != 'crossed': 
+                                                    occupancy_map[tl_id][agent_type][direction][lane_group].append(person)
+                                            else: 
+                                                # Add to outgoing, just being inside the crossing is enough.
                                                 occupancy_map[tl_id][agent_type][direction][lane_group].append(person)
 
                                 else: 
@@ -905,7 +906,7 @@ class CraverRoadEnv(gym.Env):
             ######################################
 
             # self.all_crosswalks contains 1 and 2, controlled_crosswalks_masked_dict does not
-            print(f"All crosswalks: {self.controlled_crosswalk_masked_ids}\nCrosswalks to disable: {crosswalks_to_disable}")
+            #print(f"All crosswalks: {self.controlled_crosswalk_masked_ids}\nCrosswalks to disable: {crosswalks_to_disable}")
 
             for crosswalk_id in crosswalks_to_disable:
 
@@ -929,7 +930,7 @@ class CraverRoadEnv(gym.Env):
             # Get the numerical crosswalk ids
             self.alternative_crosswalks_num = [self.edge_to_numerical_crosswalk_id[crosswalk_id] for crosswalk_id in self.alternative_crosswalks_flat]
 
-            print(f"\nAlternative crosswalks flattened: {self.alternative_crosswalks_flat}\n")
+            #print(f"\nAlternative crosswalks flattened: {self.alternative_crosswalks_flat}\n")
 
         # Although the crosswalks to disable are gotten every 10 timesteps, the enforcement of the action (i.e., re-routing pedestrians) is done every step.
         # This is going to be severely computationally taxing on the simulation.
