@@ -186,7 +186,7 @@ class CraverRoadEnv(gym.Env):
             },
             6: {
                 'ids': [':cluster_9740157181_9740483933_c0'],
-                'vicinity_walking_edges': ['1060131402', ':cluster_9740157181_9740483933_w0', ':cluster_9740157181_9740483933_w1', '1060131401#2', '1060131401#3'],
+                'vicinity_walking_edges': [':cluster_9740157181_9740483933_w0', ':cluster_9740157181_9740483933_w1', '1060131401#2', '1060131401#3'],
                 'related_junction_edges': [':9740157180_w0', ':9655154530_w0'],
                 'connected_edges': ['1060131402', ':9740483934_w0', ':9740157180_w0', '1060131401#1', '1050677005#14', '1050677005#13', '1050677007#1'],
                 'reroute_edges': {'upside': '1060131401#3' , 'downside': '1060131401#2'},
@@ -255,8 +255,8 @@ class CraverRoadEnv(gym.Env):
             }
         
         self.current_crosswalk_selection = None 
-
-        # Create a bunch of reverse lookup dictionaries
+        
+        # Create a bunch of reverse lookup dictionaries which can be referenced in various ways
         self.crosswalk_to_disabled_vicinity_walking_edges = {
             crosswalk_id: data['vicinity_walking_edges']
             for _, data in self.controlled_crosswalks_dict.items()
@@ -285,14 +285,26 @@ class CraverRoadEnv(gym.Env):
             for edge in edges:
                 self.edge_to_direction[edge] = direction
 
-        # Get the ids of all crosswalks
+        # Get the numerical id of the crosswalk, given any edge including the ID
+        self.edge_to_numerical_crosswalk_id = {}
+        for number, data in self.controlled_crosswalks_dict.items():
+            all_edges = data['vicinity_walking_edges'] + data['connected_edges'] + data['ids']
+            for edge in all_edges:
+                self.edge_to_numerical_crosswalk_id[edge] = number 
+
+        # Get the ids of all crosswalks. This includes 1 and 2 as well.
         self.all_crosswalk_ids = [crosswalk_id for _, data in self.controlled_crosswalks_dict.items() for crosswalk_id in data['ids']]
+
+        self.controlled_crosswalk_mask = [0, 3, 4, 5, 6, 7, 8, 9, 10] # The crosswalks that can be disabled. 1 and 2 are not controlled. 
+        self.controlled_crosswalks_masked_dict = {k: self.controlled_crosswalks_dict[k] for k in self.controlled_crosswalk_mask if k in self.controlled_crosswalks_dict}
+        self.controlled_crosswalk_masked_ids = [crosswalk_id for _, data in self.controlled_crosswalks_masked_dict.items() for crosswalk_id in data['ids']]
 
         # For crosswalk control 
         self.walking_edges_to_reroute_from = []
         self.related_junction_edges_to_lookup_from = []
         self.alternative_crosswalks_flat = []
         self.currently_rerouted = []
+        self.alternative_crosswalks_num = []
 
         
     def _initialize_lanes(self,):
@@ -666,7 +678,8 @@ class CraverRoadEnv(gym.Env):
         Changed this to use MultiDiscrete 
         """
         num_actions = len(self.tl_ids) # Number of traffic lights where the choice is between the number of phase groups (in this case just two).
-        num_actions += len(self.controlled_crosswalks_dict) # Plus the size of the controlled_crosswalks_dict (enable/ disable)
+        num_actions += len(self.controlled_crosswalk_mask) # Plus the size of the controlled_crosswalks_masked_dict (enable/ disable)
+        
         return gym.spaces.MultiDiscrete([2] * num_actions) # 2 indicates the binary choice
         
        
@@ -696,7 +709,6 @@ class CraverRoadEnv(gym.Env):
         """
         
         """
-
         if not self.sumo_running:
             raise Exception("Environment is not running. Call reset() to start the environment.")
         
@@ -858,41 +870,42 @@ class CraverRoadEnv(gym.Env):
             self.related_junction_edges_to_lookup_from = []
             self.alternative_crosswalks_flat = []
             self.currently_rerouted = []
-
-            current_crosswalk_action = action[1:] # The first element is the TL action
             crosswalks_to_disable = []
-
+            self.alternative_crosswalks_num = []
+            
+            current_crosswalk_action = action[1:].tolist() # The first element is the TL action
+            # controlled_crosswalks_dict goes from 0 to 10, but we need to exclude 1 and 2
             for i in range(len(current_crosswalk_action)): 
                 if current_crosswalk_action[i] == 0: # 0 means disable 
-                    crosswalks_list = self.controlled_crosswalks_dict[i]['ids']
-                    for item in crosswalks_list:
+
+                    j = self.controlled_crosswalk_mask[i] # Get the actual crosswalk number (key), excludes 1 and 2
+                    crosswalks_list = self.controlled_crosswalks_masked_dict[j]['ids'] # Get the crosswalks that are controlled by this action
+                    for item in crosswalks_list: # Need a for loop because of them contains multiple crosswalks in a list
                         crosswalks_to_disable.append(item)
 
             ######################################
             # For testing purposes.
             # Based on the timesteps, allow a bunch and then disallow the bunch
-            print(f"Step count: {self.step_count}") # Increments by 10 here
+            # print(f"Step count: {self.step_count}") # Increments by 10 here
             
-            # Define time ranges for disabling crosswalks
-            time_ranges = [
-                (200, 1000, self.all_crosswalk_ids[2:5]),
-                (1000, 2000, self.all_crosswalk_ids[5:]),
-                (2000, float('inf'), self.all_crosswalk_ids[2:5])
-            ]
+            # # Define time ranges for disabling crosswalks
+            # time_ranges = [
+            #     (200, 1000, self.all_crosswalk_ids[3:7]),
+            # ]
 
-            # Determine which crosswalks to disable based on current step
-            crosswalks_to_disable = [] 
-            for start, end, crosswalks in time_ranges:
-                if start < self.step_count <= end:
-                    #print(f"\nTime range: {start} - {end}, Disabled Crosswalks: {crosswalks}")
-                    crosswalks_to_disable = crosswalks
-                    break
+            # # Determine which crosswalks to disable based on current step
+            # crosswalks_to_disable = [] 
+            # for start, end, crosswalks in time_ranges:
+            #     if start < self.step_count <= end:
+            #         #print(f"\nTime range: {start} - {end}, Disabled Crosswalks: {crosswalks}")
+            #         crosswalks_to_disable = crosswalks
+            #         break
             
-            # self.all_crosswalks contains 0 and 1 both as separate.
-            print(f"All crosswalks: {self.all_crosswalk_ids}\nCrosswalks to disable: {crosswalks_to_disable}")
-
             # End of testing purposes code
             ######################################
+
+            # self.all_crosswalks contains 1 and 2, controlled_crosswalks_masked_dict does not
+            print(f"All crosswalks: {self.controlled_crosswalk_masked_ids}\nCrosswalks to disable: {crosswalks_to_disable}")
 
             for crosswalk_id in crosswalks_to_disable:
 
@@ -905,7 +918,7 @@ class CraverRoadEnv(gym.Env):
             #print(f"\nWalking edges to disable: {walking_edges_to_reroute_from}\n")
             #print(f"\nRelated junction edges to lookup from: {related_junction_edges_to_lookup_from}\n")
 
-            # Find alternative crosswalks and flatten
+            # Find alternative crosswalks ids (they should include crosswalk 1 and 2, because 1 and 2 are present in the sim. we are controlling them as part of TL) and flatten
             alternative_crosswalks = [
                 crosswalk_data['ids']
                 for crosswalk_data in self.controlled_crosswalks_dict.values()
@@ -913,11 +926,14 @@ class CraverRoadEnv(gym.Env):
             ]
 
             self.alternative_crosswalks_flat.extend([item for sublist in alternative_crosswalks for item in sublist])
-            #print(f"\nAlternative crosswalks flattened: {alternative_crosswalks}\n")
+            # Get the numerical crosswalk ids
+            self.alternative_crosswalks_num = [self.edge_to_numerical_crosswalk_id[crosswalk_id] for crosswalk_id in self.alternative_crosswalks_flat]
+
+            print(f"\nAlternative crosswalks flattened: {self.alternative_crosswalks_flat}\n")
 
         # Although the crosswalks to disable are gotten every 10 timesteps, the enforcement of the action (i.e., re-routing pedestrians) is done every step.
         # This is going to be severely computationally taxing on the simulation.
-        #print(f"\nAll crosswalks: {all_crosswalks}\n\nCrosswalks to disable: {crosswalks_to_disable}\n")
+
         self._disallow_pedestrians(self.walking_edges_to_reroute_from,
                                                          self.related_junction_edges_to_lookup_from,
                                                         self.alternative_crosswalks_flat,)
@@ -934,7 +950,6 @@ class CraverRoadEnv(gym.Env):
         """
 
         reward = 0
-
         vehicle_pressure = 0
         pedestrian_pressure = 0
 
@@ -986,7 +1001,7 @@ class CraverRoadEnv(gym.Env):
 
         tree.write('./SUMO_files/modified_craver_road.net.xml')
 
-    def _disallow_pedestrians(self, walking_edges_to_reroute_from, related_junction_edges_to_lookup_from, alternative_crosswalks):
+    def _disallow_pedestrians(self, walking_edges_to_reroute_from, related_junction_edges_to_lookup_from, alternate_crosswalks):
         """ 
         Disallow pedestrians means reroute pedestrians from the nearest possible crosswalk.
         This is called once per action i.e., after 10 actual simulation steps. 
@@ -1031,9 +1046,9 @@ class CraverRoadEnv(gym.Env):
                     remaining_edges.extend(stage.edges)
                 
                 # For all pedestrians, print their route
-                print(f"\nPedestrian {ped_id} remaining route: {remaining_edges}\n current edge: {current_edge}\n")
-                print(f"\nWalking edges to reroute from: {walking_edges_to_reroute_from}\n")
-                print(f"\nRelated junction edges to lookup from: {related_junction_edges_to_lookup_from}\n")
+                # print(f"\nPedestrian {ped_id} remaining route: {remaining_edges}\n current edge: {current_edge}\n")
+                # print(f"\nWalking edges to reroute from: {walking_edges_to_reroute_from}\n")
+                # print(f"\nRelated junction edges to lookup from: {related_junction_edges_to_lookup_from}\n")
 
                 # If the person is in the vicinity of the crosswalk we want to disable or the look forward in the current edge by 1.
                 # If the person is directly on the edge that we want to disable, then they are continued to walk
@@ -1044,19 +1059,26 @@ class CraverRoadEnv(gym.Env):
                     # Get the destination (end) edge
                     destination_edge = remaining_edges[-1] # Last edge of the last stage is the destination.
 
-                    print(f"\nRerouting pedestrian {ped_id}\t with remaining edges: {remaining_edges}\n")
-
-                    # TODO: We want the direction to prevent the next-reroute edge to be in the other side of the road 
-                    # i.e., potentially making the pedestrians cross twice. Or not enforce the disable condition of the current crosswalk.
                     # Based on whether current edge is upside or downside, select the new crosswalk's downside or upside.
                     current_direction = self.edge_to_direction.get(current_edge) # This is the direction of the current edge.
                     other_direction = 'upside' if current_direction == 'downside' else 'downside' # Just a simple way to get the other direction.
 
-                    # TODO: Right now, a new crosswalk is chosen randomly. Make this choice based on shortest path. 
-                    new_crosswalk = ':9687187500_c0'#, ':9687187501_c0' #':cluster_172228408_9739966907_9739966910_c2' #':9740157209_c0' #random.choice(alternative_crosswalks)
+                    # Choice of which alternate crosswalk to choose is based on shortest path. 
+                    # Among the alternate crosswalks, for each pedestrian, find the closest crosswalk.
+                    current_crosswalk_num = self.edge_to_numerical_crosswalk_id.get(current_edge)
+                    # make use of self.alternative_crosswalks_num to calculate smallest difference with current_crosswalk_num
+                    differences = [abs(current_crosswalk_num - crosswalk_num) for crosswalk_num in self.alternative_crosswalks_num]
+                    closest_crosswalk_index = differences.index(min(differences))
+                    new_crosswalk_num = self.alternative_crosswalks_num[closest_crosswalk_index]
+
+                    # This has to be gotten from the unmasked one because we need to include 1 and 2
+                    new_crosswalk_id = self.controlled_crosswalks_dict[new_crosswalk_num]['ids'][0] # Just get the first one.
                     
+                    print(f"\nPedestrian {ped_id} is being re-routed from crosswalk {current_crosswalk_num} to crosswalk {new_crosswalk_num} with ID: {new_crosswalk_id}")
+                    print(f"Alternate crosswalk nums: {self.alternative_crosswalks_num}, differences: {differences}\n")
+
                     # Get the re-route point related to this new crosswalk
-                    next_reroute_edge = self.crosswalk_to_reroute_edges[new_crosswalk].get(current_direction) # Understand the difference between teleport point and reroute point.
+                    next_reroute_edge = self.crosswalk_to_reroute_edges[new_crosswalk_id].get(current_direction) # Understand the difference between teleport point and reroute point.
 
                     # Append two new walking stages:
                     # Althrough the routing can find a route from current edge directly to the destination edge, this is a problem because it can repeat the same route. 
@@ -1065,7 +1087,7 @@ class CraverRoadEnv(gym.Env):
                     found_route = traci.simulation.findIntermodalRoute(current_edge, next_reroute_edge, modes='') # Walking is the default mode. This returns a Stage object.
                     #print(f"\nFound route: {found_route}\n")
 
-                    other_side_of_crosswalk = self.crosswalk_to_reroute_edges[new_crosswalk].get(other_direction)
+                    other_side_of_crosswalk = self.crosswalk_to_reroute_edges[new_crosswalk_id].get(other_direction)
                     found_route_2 = traci.simulation.findIntermodalRoute(next_reroute_edge, other_side_of_crosswalk, modes='') 
                     #print(f"\nFound route 2: {found_route_2}\n")
 
@@ -1173,7 +1195,7 @@ class CraverRoadEnv(gym.Env):
 
         # Randomly initialize the actions (current phase group and the current choice of crosswalks to activate) 
         self.current_phase_group = random.choice(list(self.phase_groups.keys()))
-        self.current_crosswalk_selection = np.random.randint(2, size=len(self.controlled_crosswalks_dict)).tolist() # 2 because of binary choice
+        self.current_crosswalk_selection = np.random.randint(2, size=len(self.controlled_crosswalks_masked_dict)).tolist() # 2 because of binary choice
         initial_action = torch.tensor([self.current_phase_group] + self.current_crosswalk_selection) # Make it a tensor so that its compatible with other outputs
 
         # Initialize the observation buffer
