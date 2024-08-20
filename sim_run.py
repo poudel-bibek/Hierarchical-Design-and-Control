@@ -916,17 +916,11 @@ class CraverRoadEnv(gym.Env):
                 lookup_edges = self.crosswalk_to_related_junction_edges[crosswalk_id] # Just the lookup edges i.e., related_junction_edges
                 self.related_junction_edges_to_lookup_from.extend(lookup_edges)
                 
-            #print(f"\nWalking edges to disable: {walking_edges_to_reroute_from}\n")
-            #print(f"\nRelated junction edges to lookup from: {related_junction_edges_to_lookup_from}\n")
-
             # Find alternative crosswalks ids (they should include crosswalk 1 and 2, because 1 and 2 are present in the sim. we are controlling them as part of TL) and flatten
-            alternative_crosswalks = [
-                crosswalk_data['ids']
-                for crosswalk_data in self.controlled_crosswalks_dict.values()
-                if not any(cw in crosswalks_to_disable for cw in crosswalk_data['ids'])
-            ]
+            for crosswalk_data in self.controlled_crosswalks_dict.values():
+                if not any(cw in crosswalks_to_disable for cw in crosswalk_data['ids']):
+                    self.alternative_crosswalks_flat.extend(crosswalk_data['ids'])
 
-            self.alternative_crosswalks_flat.extend([item for sublist in alternative_crosswalks for item in sublist])
             # Get the numerical crosswalk ids
             self.alternative_crosswalks_num = [self.edge_to_numerical_crosswalk_id[crosswalk_id] for crosswalk_id in self.alternative_crosswalks_flat]
 
