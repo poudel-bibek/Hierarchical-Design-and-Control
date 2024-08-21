@@ -57,7 +57,7 @@ class PPO:
     - However, multiprocessing has higher overhead than multithreading due to the need to create separate processes and manage inter-process communication.
     - In Multiprocessing, we create separate processes, each with its own Python interpreter and memory space
     """
-    def __init__(self, state_dim, action_dim, lr, gamma, K_epochs, eps_clip, ent_coef, vf_coef, device, batch_size, num_processes):
+    def __init__(self, state_dim, action_dim, lr, gamma, K_epochs, eps_clip, ent_coef, vf_coef, device, batch_size, num_processes, gae_lambda):
         
         self.device = device
         self.gamma = gamma
@@ -67,6 +67,7 @@ class PPO:
         self.vf_coef = vf_coef
         self.batch_size = batch_size
         self.num_processes = num_processes
+        self.gae_lambda = gae_lambda
 
         # Initialize the current policy network
         self.policy = MLPActorCritic(state_dim, action_dim, device).to(device)
@@ -99,14 +100,42 @@ class PPO:
             param_group['lr'] = new_lr
         return new_lr
     
+    def compute_gae(self, rewards, values, dones, gamma, gae_lambda):
+        """
+        Compute the Generalized Advantage Estimation (GAE) for the collected experiences.
+        For most steps in the sequence, we use the value estimate of the next state to calculate the TD error.
+        For the last step (step == len(rewards) - 1), we use the value estimate of the current state. 
+
+        """ 
+        advantages = []
+        gae = 0
+
+        # First, we iterate through the rewards in reverse order.
+        for step in reversed(range(len(rewards))):
+
+            # Handle the last step
+            if dones[step]:
+                next_value = 0
+                gae = 0
+            else:
+                next_value = values[step + 1]
+            # For each step, we calculate the TD error (delta). Equation 12 in the paper. delta = r + γV(s') - V(s)
+            delta = rewards[step] + gamma * next_value * (1 - dones[step]) - values[step]
+
+            # Equation 11 in the paper. GAE(t) = δ(t) + (γλ)δ(t+1) + (γλ)²δ(t+2) + ...
+            gae = delta + gamma * gae_lambda * (1 - dones[step]) * gae # (1 - dones[step]) term ensures that the advantage calculation stops at episode boundaries.
+            advantages.insert(0, gae) # Insert the advantage at the beginning of the list so that it is in the same order as the rewards.
+
+        return torch.tensor(advantages, dtype=torch.float32)
+
+
     def update(self, memories):
         """
         memories = combined memories from all processes.
         Update the policy and value networks using the collected experiences.
         
-        TODO: Add support for GAE
-        TODO: Use KL divergence instead of clipping
-
+        Includes GAE
+        For the choice between KL divergence vs. clipping, we use clipping.
         """
         combined_memory = Memory()
         for memory in memories:
@@ -116,26 +145,27 @@ class PPO:
             combined_memory.rewards.extend(memory.rewards)
             combined_memory.is_terminals.extend(memory.is_terminals)
 
-        # Monte Carlo estimate of rewards
-        rewards = []
-        discounted_reward = 0
-        for reward, is_terminal in zip(reversed(combined_memory.rewards), reversed(combined_memory.is_terminals)): # Reverse the order
-            if is_terminal: # Terminal timesteps have no future.
-                discounted_reward = 0
-            discounted_reward = reward + (self.gamma * discounted_reward)
-            rewards.insert(0, discounted_reward) # At the begining of the list, insert the calculated discounted reward
-        
-        # Convert rewards to tensor and z-score normalize them
-        rewards = torch.tensor(rewards, dtype=torch.float32).to(self.device)
-        rewards = (rewards - rewards.mean()) / (rewards.std() + 1e-5) # The 1e-5 prevents division by zero and prevents large values (stabilizes) 
-        
         # Convert collected experiences to tensors
         old_states = torch.stack(combined_memory.states).detach().to(self.device)
         old_actions = torch.stack(combined_memory.actions).detach().to(self.device)
         old_logprobs = torch.stack(combined_memory.logprobs).detach().to(self.device)
         
-        # Create a dataloader first, not everyone does this way.
-        dataset = torch.utils.data.TensorDataset(old_states, old_actions, old_logprobs, rewards)
+        # Compute values for all states 
+        with torch.no_grad():
+            values = self.policy.critic(old_states).squeeze()
+
+        # Compute GAE
+        advantages = self.compute_gae(combined_memory.rewards, values, combined_memory.is_terminals, self.gamma, self.gae_lambda)
+
+        # Normalize the advantages
+        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8) # Small constant to prevent division by zero
+        # Advantage = how much better is it to take a specific action compared to the average action. 
+        # GAE = difference between the empirical return and the value function estimate.
+        # advantages + val = Reconstruction of empirical returns. Because we want the critic to predict the empirical returns.
+        returns = advantages + values
+
+        # Create a dataloader for mini-batching 
+        dataset = torch.utils.data.TensorDataset(old_states, old_actions, old_logprobs, advantages, returns)
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
 
         avg_policy_loss = 0
@@ -144,40 +174,36 @@ class PPO:
 
         # Optimize policy for K epochs
         for _ in range(self.K_epochs):
-            for states, actions, old_logprobs_batch, rewards_batch in dataloader:
+            for states_batch, actions_batch, old_logprobs_batch, advantages_batch, returns_batch in dataloader:
 
                 # Evaluating old actions and values using current policy network
-                logprobs, state_values, dist_entropy = self.policy.evaluate(states, actions)
+                logprobs, state_values, dist_entropy = self.policy.evaluate(states_batch, actions_batch)
                 
                 # Finding the ratio (pi_theta / pi_theta_old) for imporatnce sampling (we want to use the samples obtained from old policy to get the new policy)
                 ratios = torch.exp(logprobs - old_logprobs_batch.detach())
-                
-                # Action Advantage = difference between expected return of taking the action and expected return of following the policy
-                # First term is monte carlo estimate of the reward with discounting
-                advantages = rewards_batch - state_values.detach() 
 
                 # Finding Surrogate Loss
-                surr1 = ratios * advantages
-                surr2 = torch.clamp(ratios, 1-self.eps_clip, 1+self.eps_clip) * advantages
+                surr1 = ratios * advantages_batch
+                surr2 = torch.clamp(ratios, 1-self.eps_clip, 1+self.eps_clip) * advantages_batch
                 
                 # Calculate policy and value losses
-                # TODO: Is the mean necessary here? In policy loss and entropy loss.
+                # TODO: Is the mean necessary here? In policy loss and entropy loss. Probably yes, for averaging across the batch.
                 policy_loss = -torch.min(surr1, surr2).mean() # Equation 7 in the paper
-                value_loss = ((state_values - rewards) ** 2).mean() # MSE 
+                value_loss = ((state_values - returns_batch) ** 2).mean() # MSE 
                 entropy_loss = dist_entropy.mean()
                 
                 # Total loss
                 loss = policy_loss + self.vf_coef * value_loss - self.ent_coef * entropy_loss # Equation 9 in the paper
                 
-                # Accumulate losses
-                avg_policy_loss += policy_loss.item()
-                avg_value_loss += value_loss.item()
-                avg_entropy_loss += entropy_loss.item()
-
                 # Take gradient step
                 self.optimizer.zero_grad()
                 loss.backward()
                 self.optimizer.step()
+
+                # Accumulate losses
+                avg_policy_loss += policy_loss.item()
+                avg_value_loss += value_loss.item()
+                avg_entropy_loss += entropy_loss.item()
         
         num_batches = len(dataloader) * self.K_epochs
         avg_policy_loss /= num_batches
@@ -492,29 +518,19 @@ def define_sweep_config():
             'goal': 'maximize'
         },
 
-        # For random
-        'parameters': {
-            'lr': {'min': 1e-4, 'max': 1e-2},
-            'gamma': {'min': 0.9, 'max': 0.999},
-            'K_epochs': {'values': [2, 4, 8]},
-            'eps_clip': {'min': 0.1, 'max': 0.3},
-            'ent_coef': {'min': 0.001, 'max': 0.1},
-            'vf_coef': {'min': 0.1, 'max': 1.0},
-            'batch_size': {'values': [16, 32, 64]},
-        }
-
+        # We do not want to get weird weights such as 0.192 for various params. Hence not using random search.
         #  For grid
-        # 'parameters': {
-        #     'lr': {'values': [0.001, 0.002, 0.005] },
-        #     'gamma': {'values': [0.95, 0.99, 0.999]},
-        #     'K_epochs': {'values': [4, 8, 16] },
-        #     'eps_clip': {'values': [0.1, 0.2, 0.3]},
-        #     'ent_coef': {'values': [0.01, 0.05, 0.1]},
-        #     'vf_coef': {'values': [0.5, 0.75, 1.0]},
-        #     'batch_size': {'values': [32, 64, 128]},
-        #     'num_processes': {'values': [4, 8, 16]}
-        # }
-
+        'parameters': {
+            'lr': {'values': [0.001, 0.002, 0.005] },
+            'gamma': {'values': [0.95, 0.99, 0.999]},
+            'K_epochs': {'values': [4, 8, 16] },
+            'eps_clip': {'values': [0.1, 0.2, 0.3]},
+            'gae_lambda': {'values': [0.9, 0.95, 0.99]},
+            'ent_coef': {'values': [0.01, 0.05, 0.1]},
+            'vf_coef': {'values': [0.5, 0.75, 1.0]},
+            'batch_size': {'values': [32, 64, 128]},
+            'update_freq': {'values': [128, 256, 512]},
+        }
     }
 
     return sweep_config
@@ -534,7 +550,9 @@ def train_sweep(config=None):
         args.ent_coef = config.ent_coef
         args.vf_coef = config.vf_coef
         args.batch_size = config.batch_size
-        
+        args.gae_lambda = config.gae_lambda
+        args.update_freq = config.update_freq
+
         # Call the main training function
         train(args, is_sweep=True)
 
@@ -591,7 +609,8 @@ def train(args, is_sweep=False):
             args.vf_coef, 
             device, 
             args.batch_size,
-            args.num_processes)
+            args.num_processes, 
+            args.gae_lambda)
 
     if is_sweep:
         # Wandb setup
@@ -764,9 +783,10 @@ if __name__ == "__main__":
     # PPO
     parser.add_argument('--seed', type=int, default=None, help='Random seed (default: None)')
     parser.add_argument('--gpu', action='store_true', default=True, help='Use GPU if available (default: use CPU)')
-    parser.add_argument('--total_timesteps', type=int, default=500000, help='Total number of timesteps the simulation will run (default: 300000)')
+    parser.add_argument('--total_timesteps', type=int, default=200000, help='Total number of timesteps the simulation will run (default: 300000)')
     parser.add_argument('--max_timesteps', type=int, default=1500, help='Maximum number of steps in one episode (default: 500)')
     parser.add_argument('--anneal_lr', action='store_true', help='Anneal learning rate (default: False)')
+    parser.add_argument('--gae_lambda', type=float, default=0.95, help='GAE lambda (default: 0.95)')
 
     # The default update freq in the PPO paper is 128 but in our case, the interval between actions itself is 10 timesteps.
     parser.add_argument('--update_freq', type=int, default=128, help='Number of action timesteps between each policy update (default: 128)')
