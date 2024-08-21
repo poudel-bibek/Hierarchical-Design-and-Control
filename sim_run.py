@@ -745,9 +745,9 @@ class CraverRoadEnv(gym.Env):
                 break
 
         formatted_buffer = "\n".join(f"{arr})" for arr in observation_buffer)
-        print(f"\nAccumulated Observation:\n{formatted_buffer}")
-        print(f"\nCurrent Action: {action}")
-        print(f"\nAccumulated Reward: {reward}")
+        # print(f"\nAccumulated Observation:\n{formatted_buffer}")
+        # print(f"\nCurrent Action: {action}")
+        #print(f"\nAccumulated Reward: {reward}")
 
         self.previous_tl_action = current_tl_action
         observation = np.asarray(observation_buffer)
@@ -1069,8 +1069,8 @@ class CraverRoadEnv(gym.Env):
                     # This has to be gotten from the unmasked one because we need to include 1 and 2
                     new_crosswalk_id = self.controlled_crosswalks_dict[new_crosswalk_num]['ids'][0] # Just get the first one.
                     
-                    print(f"\nPedestrian {ped_id} is being re-routed from crosswalk {current_crosswalk_num} to crosswalk {new_crosswalk_num} with ID: {new_crosswalk_id}")
-                    print(f"Alternate crosswalk nums: {self.alternative_crosswalks_num}, differences: {differences}\n")
+                    # print(f"\nPedestrian {ped_id} is being re-routed from crosswalk {current_crosswalk_num} to crosswalk {new_crosswalk_num} with ID: {new_crosswalk_id}")
+                    # print(f"Alternate crosswalk nums: {self.alternative_crosswalks_num}, differences: {differences}\n")
 
                     # Get the re-route point related to this new crosswalk
                     next_reroute_edge = self.crosswalk_to_reroute_edges[new_crosswalk_id].get(current_direction) # Understand the difference between teleport point and reroute point.
@@ -1205,8 +1205,8 @@ class CraverRoadEnv(gym.Env):
             observation_buffer.append(obs)
 
         observation = np.asarray(observation_buffer, dtype=np.float32)
-        print(f"\nInitial observation inside: {observation}\n")
-        print(f"\nInitial observation inside shape: {observation.shape}\n")
+        # print(f"\nInitial observation inside: {observation}\n")
+        # print(f"\nInitial observation inside shape: {observation.shape}\n")
         info = {}
         return observation, info
 

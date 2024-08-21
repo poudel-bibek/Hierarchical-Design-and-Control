@@ -33,7 +33,10 @@ class Memory:
 
     def append(self, state, action, logprob, reward, done):
         self.states.append(torch.FloatTensor(state))
-        self.actions.append(torch.tensor(action.clone().detach())) # Not sure why the clone is necessary (the action is sampled from the worker device = cpu). But got warning without.
+
+        # clone creates a copy to ensure that subsequent operations on the copy do not affect the original tensor. 
+        # Detach removes a tensor from the computational graph, preventing gradients from flowing through it during backpropagation.
+        self.actions.append(action.clone().detach()) 
         self.logprobs.append(logprob)
         self.rewards.append(reward)
         self.is_terminals.append(done)
@@ -100,7 +103,7 @@ class PPO:
             param_group['lr'] = new_lr
         return new_lr
     
-    def compute_gae(self, rewards, values, dones, gamma, gae_lambda):
+    def compute_gae(self, rewards, values, is_terminals, gamma, gae_lambda):
         """
         Compute the Generalized Advantage Estimation (GAE) for the collected experiences.
         For most steps in the sequence, we use the value estimate of the next state to calculate the TD error.
@@ -113,20 +116,20 @@ class PPO:
         # First, we iterate through the rewards in reverse order.
         for step in reversed(range(len(rewards))):
 
-            # Handle the last step
-            if dones[step]:
+            # If its the terminal step (which has no future) or if its the last step in our collected experiences (which may not be terminal).
+            if is_terminals[step] or step == len(rewards) - 1:
                 next_value = 0
                 gae = 0
             else:
                 next_value = values[step + 1]
             # For each step, we calculate the TD error (delta). Equation 12 in the paper. delta = r + γV(s') - V(s)
-            delta = rewards[step] + gamma * next_value * (1 - dones[step]) - values[step]
+            delta = rewards[step] + gamma * next_value * (1 - is_terminals[step]) - values[step]
 
             # Equation 11 in the paper. GAE(t) = δ(t) + (γλ)δ(t+1) + (γλ)²δ(t+2) + ...
-            gae = delta + gamma * gae_lambda * (1 - dones[step]) * gae # (1 - dones[step]) term ensures that the advantage calculation stops at episode boundaries.
+            gae = delta + gamma * gae_lambda * (1 - is_terminals[step]) * gae # (1 - dones[step]) term ensures that the advantage calculation stops at episode boundaries.
             advantages.insert(0, gae) # Insert the advantage at the beginning of the list so that it is in the same order as the rewards.
 
-        return torch.tensor(advantages, dtype=torch.float32)
+        return torch.tensor(advantages, dtype=torch.float32).to(self.device)
 
 
     def update(self, memories):
@@ -152,18 +155,19 @@ class PPO:
         
         # Compute values for all states 
         with torch.no_grad():
-            values = self.policy.critic(old_states).squeeze()
+            values = self.policy.critic(old_states).squeeze().to(self.device)
 
         # Compute GAE
         advantages = self.compute_gae(combined_memory.rewards, values, combined_memory.is_terminals, self.gamma, self.gae_lambda)
 
-        # Normalize the advantages
-        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8) # Small constant to prevent division by zero
         # Advantage = how much better is it to take a specific action compared to the average action. 
         # GAE = difference between the empirical return and the value function estimate.
         # advantages + val = Reconstruction of empirical returns. Because we want the critic to predict the empirical returns.
         returns = advantages + values
 
+        # Normalize the advantages (only for use in policy loss calculation) after they have been added to get returns.
+        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8) # Small constant to prevent division by zero
+        
         # Create a dataloader for mini-batching 
         dataset = torch.utils.data.TensorDataset(old_states, old_actions, old_logprobs, advantages, returns)
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
@@ -469,9 +473,9 @@ def worker(rank, args, shared_policy_old, memory_queue, global_seed):
     state, _ = env.reset()
     state = state.flatten()
 
-    print(f"Worker {rank} started.")
-    print(f"Initial observation (flattened): {state}")
-    print(f"Initial observation (flattened) shape: {state.shape}\n")
+    # print(f"Worker {rank} started.")
+    # print(f"Initial observation (flattened): {state}")
+    # print(f"Initial observation (flattened) shape: {state.shape}\n")
     ep_reward = 0
     steps_since_update = 0
      
@@ -510,11 +514,13 @@ def define_sweep_config():
     """
     If using random, max and min values are required.
     However, if using grid search requires all parameters to be categorical, constant, int_uniform
+
+    Uses the maximum value of that metric logged during the entire run to represent that run's performance.
     """
     sweep_config = {
         'method': 'random', # options: random, grid, bayes
         'metric': {
-            'name': 'reward',
+            'name': 'avg_reward',
             'goal': 'maximize'
         },
 
@@ -570,6 +576,8 @@ def train(args, is_sweep=False):
     Although Adam maintains an independent and changing lr for each policy parameter, there are still potential benefits of having a lr schedule
     Annealing is a special form of scheduling where the learning rate may not strictly decrease 
 
+    TODO: For evaluation of a sweep, currently we are looking at reward (and not the traffic related metrics). 
+    In the future, evals can be added here. i.e., evaluate the policy and then calculate the waiting time, queue length, throughput etc. metrics
     """
     SEED = args.seed if args.seed else random.randint(0, 1000000)
     print(f"Random seed: {SEED}")
@@ -583,9 +591,6 @@ def train(args, is_sweep=False):
 
     global_step = 0
     env = CraverRoadEnv(args) # First environment instance. Required for setup.
- 
-    # Spawn creates a new process. There is a fork method as well which will create a copy of the current process.
-    mp.set_start_method('spawn') 
 
     device = torch.device("cuda:0" if torch.cuda.is_available() and args.gpu else "cpu")
     print(f"Using device: {device}")
@@ -682,15 +687,15 @@ def train(args, is_sweep=False):
                 # Update PPO every n times action has been taken
                 if action_timesteps % args.update_freq == 0:
                     loss = ppo.update(all_memories)
-        
-                    # clear memory to prevent memory growth 
-                    for memory in all_memories:
-                        memory.clear_memory()
 
                     total_reward = sum(sum(memory.rewards) for memory in all_memories)
                     avg_reward = total_reward / args.num_processes # Average reward per process in this iteration
-                    print(f", Average Reward: {avg_reward:.2f}")
+                    print(f", Average Reward per process: {avg_reward:.2f}")
                     
+                    # clear memory to prevent memory growth (after the reward calculation)
+                    for memory in all_memories:
+                        memory.clear_memory()
+
                     # reset all memories
                     all_memories = []
 
@@ -698,14 +703,13 @@ def train(args, is_sweep=False):
                     if loss is not None:
 
                         if is_sweep: # Wandb for hyperparameter tuning
-                            
                             wandb.log({     "iteration": iteration,
-                                            "avg_reward": avg_reward,
+                                            "avg_reward": avg_reward, # Set as maximize in the sweep config
                                             "policy_loss": loss['policy_loss'],
                                             "value_loss": loss['value_loss'],
                                             "entropy_loss": loss['entropy_loss'],
                                             "total_loss": loss['total_loss'],
-                                            "current_lr": current_lr,
+                                            "current_lr": current_lr if args.anneal_lr else args.lr,
                                             "global_step": global_step          })
                         
                         else: # Tensorboard for regular training
@@ -742,6 +746,10 @@ def main(args):
     """
     Keep main short.
     """
+
+    # Set the start method for multiprocessing. It does not create a process itself but sets the method for creating a process.
+    # Spawn means create a new process. There is a fork method as well which will create a copy of the current process.
+    mp.set_start_method('spawn') 
 
     if args.evaluate:  # Eval TL or PPO
         if args.manual_demand_veh is None or args.manual_demand_ped is None:
@@ -785,7 +793,7 @@ if __name__ == "__main__":
     parser.add_argument('--gpu', action='store_true', default=True, help='Use GPU if available (default: use CPU)')
     parser.add_argument('--total_timesteps', type=int, default=200000, help='Total number of timesteps the simulation will run (default: 300000)')
     parser.add_argument('--max_timesteps', type=int, default=1500, help='Maximum number of steps in one episode (default: 500)')
-    parser.add_argument('--anneal_lr', action='store_true', help='Anneal learning rate (default: False)')
+    parser.add_argument('--anneal_lr', action='store_true', default=True, help='Anneal learning rate (default: False)')
     parser.add_argument('--gae_lambda', type=float, default=0.95, help='GAE lambda (default: 0.95)')
 
     # The default update freq in the PPO paper is 128 but in our case, the interval between actions itself is 10 timesteps.
@@ -798,8 +806,8 @@ if __name__ == "__main__":
     parser.add_argument('--ent_coef', type=float, default=0.01, help='Entropy coefficient (default: 0.01)')
     parser.add_argument('--vf_coef', type=float, default=0.5, help='Value function coefficient (default: 0.5)')
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size (default: 32)')
-    parser.add_argument('--num_processes', type=int, default=10, help='Number of parallel processes to use')
-    
+    parser.add_argument('--num_processes', type=int, default=8, help='Number of parallel processes to use')
+
     # Evaluations
     parser.add_argument('--evaluate', choices=['tl', 'ppo'], help='Evaluation mode: traffic light (tl), PPO (ppo), or both')
     parser.add_argument('--model_path', type=str, help='Path to the saved PPO model for evaluation')
