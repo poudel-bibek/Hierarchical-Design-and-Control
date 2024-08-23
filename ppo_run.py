@@ -511,13 +511,14 @@ def worker(rank, args, shared_policy_old, memory_queue, global_seed):
     traci.close()
     memory_queue.put((rank, None))  # Signal that this worker is done
 
-def define_sweep_config():
+def train_sweep(sweep_args):
     """
     If using random, max and min values are required.
     However, if using grid search requires all parameters to be categorical, constant, int_uniform
 
     Uses the maximum value of that metric logged during the entire run to represent that run's performance.
     """
+
     sweep_config = {
         'method': 'random', # options: random, grid, bayes
         'metric': {
@@ -540,35 +541,10 @@ def define_sweep_config():
         }
     }
 
-    return sweep_config
-
-def train_sweep(config=None):
-    """
-    
-    """
-    with wandb.init(config=config):
-        config = wandb.config
-        
-        # Update args with wandb config
-        args.lr = config.lr
-        args.gamma = config.gamma
-        args.K_epochs = config.K_epochs
-        args.eps_clip = config.eps_clip
-        args.ent_coef = config.ent_coef
-        args.vf_coef = config.vf_coef
-        args.batch_size = config.batch_size
-        args.gae_lambda = config.gae_lambda
-        args.update_freq = config.update_freq
-
-        # Call the main training function
-        train(args, is_sweep=True)
-
-def run_sweep():
-    sweep_config = define_sweep_config()
     sweep_id = wandb.sweep(sweep_config, project="ppo_urban_and_traffic_control")
-    wandb.agent(sweep_id, function=train_sweep, count=5) # 5 is the Number of sweeps trials to try 
+    wandb.agent(sweep_id, function= train(sweep_args, is_sweep=True), count= 32) # sweep_args is the train_args
 
-def train(args, is_sweep=False):
+def train(train_args, is_sweep=False):
     """
     Actors are parallelized i.e., create their own instance of the envinronment and interact with it (perform policy rollout).
     All aspects of training are centralized.
@@ -580,7 +556,8 @@ def train(args, is_sweep=False):
     TODO: For evaluation of a sweep, currently we are looking at reward (and not the traffic related metrics). 
     In the future, evals can be added here. i.e., evaluate the policy and then calculate the waiting time, queue length, throughput etc. metrics
     """
-    SEED = args.seed if args.seed else random.randint(0, 1000000)
+
+    SEED = train_args.seed if train_args.seed else random.randint(0, 1000000)
     print(f"Random seed: {SEED}")
 
     # Set global seed
@@ -591,9 +568,9 @@ def train(args, is_sweep=False):
         torch.cuda.manual_seed_all(SEED)
 
     global_step = 0
-    env = CraverRoadEnv(args) # First environment instance. Required for setup.
+    env = CraverRoadEnv(train_args) # First environment instance. Required for setup.
 
-    device = torch.device("cuda:0" if torch.cuda.is_available() and args.gpu else "cpu")
+    device = torch.device("cuda:0" if torch.cuda.is_available() and train_args.gpu else "cpu")
     print(f"Using device: {device}")
     print(f"\nDefined observation space: {env.observation_space}")
     print(f"Observation space shape: {env.observation_space.shape}")
@@ -604,24 +581,23 @@ def train(args, is_sweep=False):
     action_dim = len(env.action_space.nvec)
     print(f"State dimension: {state_dim}, Action dimension: {action_dim}\n")
     env.close() # We actually dont make use of this environment for any other stuff. Each worker will have their own environment.
-    traci.close()
-    
-    ppo = PPO(state_dim, 
-            action_dim, 
-            args.lr, 
-            args.gamma, 
-            args.K_epochs, 
-            args.eps_clip, 
-            args.ent_coef, 
-            args.vf_coef, 
-            device, 
-            args.batch_size,
-            args.num_processes, 
-            args.gae_lambda)
 
     if is_sweep:
         # Wandb setup
-        wandb.init(project="ppo_urban_and_traffic_control", config=args)
+        wandb.init(project="ppo_urban_and_traffic_control", config=train_args)
+        config = wandb.config
+        
+        # Update args with wandb config
+        train_args.lr = config.lr
+        train_args.gamma = config.gamma
+        train_args.K_epochs = config.K_epochs
+        train_args.eps_clip = config.eps_clip
+        train_args.ent_coef = config.ent_coef
+        train_args.vf_coef = config.vf_coef
+        train_args.batch_size = config.batch_size
+        train_args.gae_lambda = config.gae_lambda
+        train_args.update_freq = config.update_freq
+
     else: 
         # TensorBoard setup
         # No need to save the model during sweep.
@@ -632,7 +608,7 @@ def train(args, is_sweep=False):
 
         # Save hyperparameters and model architecture
         config_path = os.path.join(log_dir, f'config_{current_time}.json')
-        save_config(args, SEED, ppo, config_path)
+        save_config(train_args, SEED, ppo, config_path)
         print(f"Configuration saved to {config_path}")
 
         # Model saving setup
@@ -640,11 +616,24 @@ def train(args, is_sweep=False):
         os.makedirs(save_dir, exist_ok=True)
         best_reward = float('-inf')
 
+    ppo = PPO(state_dim, 
+            action_dim, 
+            train_args.lr, 
+            train_args.gamma, 
+            train_args.K_epochs, 
+            train_args.eps_clip, 
+            train_args.ent_coef, 
+            train_args.vf_coef, 
+            device, 
+            train_args.batch_size,
+            train_args.num_processes, 
+            train_args.gae_lambda)
+
     # In a parallel setup, instead of using total_episodes, we will use total_iterations. 
     # In each iteration, multiple actors interact with the environment for max_timesteps. i.e., each iteration will have num_processes episodes.
-    total_iterations = args.total_timesteps // (args.max_timesteps * args.num_processes)
+    total_iterations = train_args.total_timesteps // (train_args.max_timesteps * train_args.num_processes)
     ppo.total_iterations = total_iterations # For lr annealing
-    args.total_action_timesteps_per_episode = args.max_timesteps // args.action_duration # Each actor will run for max_timesteps and each timestep will have action_duration steps.
+    train_args.total_action_timesteps_per_episode = train_args.max_timesteps // train_args.action_duration # Each actor will run for max_timesteps and each timestep will have action_duration steps.
     
     # Counter to keep track of how many times action has been taken 
     action_timesteps = 0
@@ -656,8 +645,8 @@ def train(args, is_sweep=False):
         processes = [] # Create a list of processes
         #manager = mp.Manager() # Facilitates communication and sharing of data between processes
 
-        for rank in range(args.num_processes):
-            p = mp.Process(target=worker, args=(rank, args, ppo.policy_old, memory_queue, SEED)) # Create a process to execute the worker function
+        for rank in range(train_args.num_processes):
+            p = mp.Process(target=worker, args=(rank, train_args, ppo.policy_old, memory_queue, SEED)) # Create a process to execute the worker function
             p.start()
             processes.append(p)
 
@@ -667,11 +656,11 @@ def train(args, is_sweep=False):
         # for p in processes:
         #     p.join()
 
-        if args.anneal_lr:
+        if train_args.anneal_lr:
             current_lr = ppo.update_learning_rate(iteration)
 
         all_memories = []
-        active_workers = set(range(args.num_processes))
+        active_workers = set(range(train_args.num_processes))
 
         while active_workers:
             rank, memory = memory_queue.get()
@@ -687,11 +676,11 @@ def train(args, is_sweep=False):
                 action_timesteps += len(memory.states)
 
                 # Update PPO every n times action has been taken
-                if action_timesteps % args.update_freq == 0:
+                if action_timesteps % train_args.update_freq == 0:
                     loss = ppo.update(all_memories)
 
                     total_reward = sum(sum(memory.rewards) for memory in all_memories)
-                    avg_reward = total_reward / args.num_processes # Average reward per process in this iteration
+                    avg_reward = total_reward / train_args.num_processes # Average reward per process in this iteration
                     print(f", Average Reward per process: {avg_reward:.2f}")
                     
                     # clear memory to prevent memory growth (after the reward calculation)
@@ -711,12 +700,12 @@ def train(args, is_sweep=False):
                                             "value_loss": loss['value_loss'],
                                             "entropy_loss": loss['entropy_loss'],
                                             "total_loss": loss['total_loss'],
-                                            "current_lr": current_lr if args.anneal_lr else args.lr,
+                                            "current_lr": current_lr if train_args.anneal_lr else train_args.lr,
                                             "global_step": global_step          })
                         
                         else: # Tensorboard for regular training
-                            global_step = iteration * args.num_processes + action_timesteps*args.action_duration
-                            total_updates = int(action_timesteps / args.update_freq)
+                            global_step = iteration * train_args.num_processes + action_timesteps*train_args.action_duration
+                            total_updates = int(action_timesteps / train_args.update_freq)
 
                             writer.add_scalar('Rewards/Average_Reward', avg_reward, global_step)
                             writer.add_scalar('Updates/Total_Policy_Updates', total_updates, global_step)
@@ -728,7 +717,7 @@ def train(args, is_sweep=False):
                             print(f"Logged data at step {global_step}")
 
                             # Save model every n times it has been updated (Important: Not every iteration)
-                            if args.save_freq > 0 and total_updates % args.save_freq == 0:
+                            if train_args.save_freq > 0 and total_updates % train_args.save_freq == 0:
                                 torch.save(ppo.policy.state_dict(), os.path.join(save_dir, f'model_iteration_{iteration+1}.pth'))
 
                             # Save best model so far
@@ -765,7 +754,7 @@ def main(args):
             env.close()
 
     elif args.sweep:
-        run_sweep()
+        train_sweep(args) 
 
     else:
         train(args)
