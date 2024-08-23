@@ -508,6 +508,7 @@ def worker(rank, args, shared_policy_old, memory_queue, global_seed):
 
     print(f"Worker {rank} finished. Total reward: {ep_reward}")
     env.close()
+    traci.close()
     memory_queue.put((rank, None))  # Signal that this worker is done
 
 def define_sweep_config():
@@ -603,7 +604,8 @@ def train(args, is_sweep=False):
     action_dim = len(env.action_space.nvec)
     print(f"State dimension: {state_dim}, Action dimension: {action_dim}\n")
     env.close() # We actually dont make use of this environment for any other stuff. Each worker will have their own environment.
-
+    traci.close()
+    
     ppo = PPO(state_dim, 
             action_dim, 
             args.lr, 

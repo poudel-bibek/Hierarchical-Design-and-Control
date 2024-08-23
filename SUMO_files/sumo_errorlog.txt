@@ -1,0 +1,75 @@
+Warning: Invalid departPos 12.45 given for stopping at :cluster_9740157181_9740483933_w0. Using edge end instead.
+Warning: Invalid departPos 5.78 given for person '1120' walking from edge '1060131401#2'. Using edge end instead.
+Warning: Invalid departPos 0.42 given for person '1650' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 0.62 given for person '1609' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 0.44 given for person '1780' walking from edge '1058666207#0'. Using edge end instead.
+Warning: Invalid departPos 2.00 given for stopping at :9727816623_w1. Using edge end instead.
+Warning: Invalid departPos 1.05 given for person '1911' walking from edge '1058666207#0'. Using edge end instead.
+Warning: Invalid departPos 1.21 given for person '1932' walking from edge '1058666207#0'. Using edge end instead.
+Warning: Invalid departPos 2.12 given for stopping at :9727816623_w1. Using edge end instead.
+Warning: Invalid departPos 2.17 given for person '1558' walking from edge '1060131401#2'. Using edge end instead.
+Warning: Invalid departPos 2.72 given for person '1726' walking from edge '1060131401#2'. Using edge end instead.
+Warning: Invalid departPos 1.17 given for person '1715' walking from edge '1058666207#0'. Using edge end instead.
+Warning: Invalid departPos 1.25 given for stopping at :9727816850_w0. Using edge end instead.
+Warning: Invalid departPos 1.23 given for person '1918' walking from edge '1058666207#0'. Using edge end instead.
+Warning: Invalid departPos 1.15 given for person '1654' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 0.98 given for person '1820' walking from edge '1058666206#0'. Using edge end instead.
+Warning: Invalid departPos 1.16 given for person '1858' walking from edge '1058666207#0'. Using edge end instead.
+Warning: Invalid departPos 1.11 given for person '382' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 0.67 given for person '1619' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 3.08 given for person '1120' walking from edge '-1060166174#4'. Using edge end instead.
+Warning: Invalid departPos 0.65 given for person '400' walking from edge '1060131390'. Using edge end instead.
+Warning: Invalid departPos 0.78 given for person '2211' walking from edge '1058666206#0'. Using edge end instead.
+Warning: Invalid departPos 1.66 given for stopping at :9727816850_w1. Using edge end instead.
+Warning: Invalid departPos 0.57 given for person '1529' walking from edge '1058666207#0'. Using edge end instead.
+Warning: Invalid departPos 1.20 given for person '1726' walking from edge '1060131405#0'. Using edge end instead.
+Warning: Invalid departPos 0.76 given for person '1711' walking from edge '1058666207#0'. Using edge end instead.
+Warning: Invalid departPos 1.18 given for person '1644' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 0.56 given for person '1586' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 1.29 given for person '1619' walking from edge '1060131401#3'. Using edge end instead.
+Warning: Invalid departPos 7.58 given for stopping at :cluster_9740157181_9740483933_w0. Using edge end instead.
+Warning: Invalid departPos 5.78 given for person '1654' walking from edge '-1060166174#4'. Using edge end instead.
+Warning: Invalid departPos 12.20 given for stopping at :cluster_9740157181_9740483933_w0. Using edge end instead.
+Warning: Invalid departPos 5.78 given for person '1123' walking from edge '-1060166174#4'. Using edge end instead.
+Warning: Invalid departPos 1.02 given for person '632' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 0.56 given for person '1537' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 0.23 given for person '1568' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 1.16 given for person '1899' walking from edge '1058666207#0'. Using edge end instead.
+Warning: Invalid departPos 1.50 given for stopping at :9740157194_w0. Using edge end instead.
+Warning: Invalid departPos 1.36 given for person '1558' walking from edge '1060131405#0'. Using edge end instead.
+Warning: Invalid departPos 2.01 given for stopping at :9727816623_w1. Using edge end instead.
+Warning: Invalid departPos 5.08 given for person '101' walking from edge '1060112789#2'. Using edge end instead.
+Warning: Invalid departPos 1.25 given for stopping at :9727816850_w0. Using edge end instead.
+Warning: Invalid departPos 1.23 given for person '1003' walking from edge '1058666207#0'. Using edge end instead.
+Warning: Invalid departPos 1.10 given for person '1739' walking from edge '1058666207#0'. Using edge end instead.
+Warning: Invalid departPos 0.54 given for person '412' walking from edge '1058666207#0'. Using edge end instead.
+Warning: Invalid departPos 1.17 given for person '1624' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 0.72 given for person '1660' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 3.98 given for stopping at :9687187500_w0. Using edge end instead.
+Warning: Invalid departPos 3.63 given for stopping at :9687187500_w0. Using edge end instead.
+Warning: Invalid departPos 0.31 given for person '384' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 1.03 given for person '1767' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 3.49 given for stopping at :9687187500_w0. Using edge end instead.
+Warning: Invalid departPos 1.11 given for person '1610' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 0.58 given for person '1729' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 0.64 given for person '1534' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 0.89 given for person '1571' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 0.85 given for person '1975' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 1.05 given for person '833' walking from edge '1058666206#0'. Using edge end instead.
+Warning: Invalid departPos 3.49 given for person '1558' walking from edge '-1060166174#4'. Using edge end instead.
+Warning: Invalid departPos 0.69 given for person '360' walking from edge '1058666207#0'. Using edge end instead.
+Warning: Invalid departPos 0.39 given for person '1605' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 0.52 given for person '1628' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 2.12 given for stopping at :9727816623_w1. Using edge end instead.
+Warning: Invalid departPos 0.70 given for person '1649' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 4.16 given for person '104' walking from edge '-1060166174#4'. Using edge end instead.
+Warning: Invalid departPos 0.38 given for person '635' walking from edge '1060131390'. Using edge end instead.
+Warning: Invalid departPos 1.26 given for person '1611' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 1.29 given for person '1860' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 0.51 given for person '1757' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 3.25 given for stopping at :9687187500_w0. Using edge end instead.
+Warning: Invalid departPos 1.18 given for person '1573' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 1.66 given for stopping at :9727816850_w1. Using edge end instead.
+Warning: Invalid departPos 3.65 given for person '365' walking from edge '-1060166174#4'. Using edge end instead.
+Warning: Invalid departPos 0.88 given for person '1610' walking from edge '1058666207#0'. Using edge end instead.
+Warning: Invalid departPos 0.93 given for person '1649' walking from edge '1060131401#3'. Using edge end instead.
