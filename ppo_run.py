@@ -508,10 +508,9 @@ def worker(rank, args, shared_policy_old, memory_queue, global_seed):
 
     print(f"Worker {rank} finished. Total reward: {ep_reward}")
     env.close()
-    traci.close()
     memory_queue.put((rank, None))  # Signal that this worker is done
 
-def train_sweep(sweep_args):
+def train_sweep(original_train_args):
     """
     If using random, max and min values are required.
     However, if using grid search requires all parameters to be categorical, constant, int_uniform
@@ -542,7 +541,7 @@ def train_sweep(sweep_args):
     }
 
     sweep_id = wandb.sweep(sweep_config, project="ppo_urban_and_traffic_control")
-    wandb.agent(sweep_id, function= train(sweep_args, is_sweep=True), count= 32) # sweep_args is the train_args
+    wandb.agent(sweep_id, function= train(original_train_args, is_sweep=True), count= 32) # 32 is the total number of trials
 
 def train(train_args, is_sweep=False):
     """
