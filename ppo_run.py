@@ -516,6 +516,7 @@ def train_sweep(original_train_args):
     However, if using grid search requires all parameters to be categorical, constant, int_uniform
 
     Uses the maximum value of that metric logged during the entire run to represent that run's performance.
+    TODO: Is this the best way to do it? Maybe we should use the average of the last 10 episodes.
     """
 
     sweep_config = {
