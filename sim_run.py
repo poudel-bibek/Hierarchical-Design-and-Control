@@ -1176,6 +1176,8 @@ class CraverRoadEnv(gym.Env):
                         
 
         traci.start(sumo_cmd)
+        # To prevent connection refulsal 
+        time.sleep(2)
 
         # This should be done here after the SUMO call. As this can disallow pedestrians during the simulation run. 
         # Disallow pedestrians in some crosswalks. After sumo call beacuse we need traci.
