@@ -598,8 +598,35 @@ def train(train_args, is_sweep=False):
         train_args.gae_lambda = config.gae_lambda
         train_args.update_freq = config.update_freq
 
+        ppo = PPO(state_dim, 
+            action_dim, 
+            train_args.lr, 
+            train_args.gamma, 
+            train_args.K_epochs, 
+            train_args.eps_clip, 
+            train_args.ent_coef, 
+            train_args.vf_coef, 
+            device, 
+            train_args.batch_size,
+            train_args.num_processes, 
+            train_args.gae_lambda)
+        
     else: 
         # TensorBoard setup
+
+        ppo = PPO(state_dim, 
+            action_dim, 
+            train_args.lr, 
+            train_args.gamma, 
+            train_args.K_epochs, 
+            train_args.eps_clip, 
+            train_args.ent_coef, 
+            train_args.vf_coef, 
+            device, 
+            train_args.batch_size,
+            train_args.num_processes, 
+            train_args.gae_lambda)
+        
         # No need to save the model during sweep.
         current_time = datetime.now().strftime('%b%d_%H-%M-%S')
         log_dir = os.path.join('runs', current_time)
@@ -615,19 +642,6 @@ def train(train_args, is_sweep=False):
         save_dir = os.path.join('saved_models', current_time)
         os.makedirs(save_dir, exist_ok=True)
         best_reward = float('-inf')
-
-    ppo = PPO(state_dim, 
-            action_dim, 
-            train_args.lr, 
-            train_args.gamma, 
-            train_args.K_epochs, 
-            train_args.eps_clip, 
-            train_args.ent_coef, 
-            train_args.vf_coef, 
-            device, 
-            train_args.batch_size,
-            train_args.num_processes, 
-            train_args.gae_lambda)
 
     # In a parallel setup, instead of using total_episodes, we will use total_iterations. 
     # In each iteration, multiple actors interact with the environment for max_timesteps. i.e., each iteration will have num_processes episodes.
@@ -774,8 +788,9 @@ if __name__ == "__main__":
     parser.add_argument('--pedestrian_output_trips', type=str, default='./SUMO_files/scaled_pedtrips.xml', help='Output pedestrian trips file')
 
     # If required to manually scale the demand (this happens automatically every episode as part of reset).
-    parser.add_argument('--manual_demand_veh', type=float, default=None, help='Manually scale vehicle demand before starting the simulation')
-    parser.add_argument('--manual_demand_ped', type=float, default=None, help='Manually scale pedestrian demand before starting the simulation')
+    # The real-world demand captured in the original_vehtrips.xml and original_pedtrips.xml files is in 201.54 veh/hr and 2222.80 ped/hr respectively (correesponding to scaling of 1.0).
+    parser.add_argument('--manual_demand_veh', type=float, default=None, help='Manually scale vehicle demand before starting the simulation (veh/hr) ')
+    parser.add_argument('--manual_demand_ped', type=float, default=None, help='Manually scale pedestrian demand before starting the simulation (ped/hr)')
     parser.add_argument('--demand_scale_min', type=float, default=1.0, help='Minimum demand scaling factor for automatic scaling (default: 0.5)')
     parser.add_argument('--demand_scale_max', type=float, default=2.0, help='Maximum demand scaling factor for automatic scaling (default: 5.0)')
 
