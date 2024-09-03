@@ -1,2 +1,0 @@
-Warning: Invalid departPos 0.83 given for person '1324' walking from edge '1060131391#0'. Using edge end instead.
-Warning: Invalid departPos 0.47 given for person '1619' walking from edge '1060131391#0'. Using edge end instead.

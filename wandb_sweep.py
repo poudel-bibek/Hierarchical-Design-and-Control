@@ -1,7 +1,6 @@
 import wandb
 wandb.require("core") # Bunch of improvements in using the core.
 
-
 class HyperParameterTuner: 
     def __init__(self, args):
         self.args = args
@@ -12,9 +11,9 @@ class HyperParameterTuner:
         wandb.agent(sweep_id, function= self.hyperparameter_tune_main, count= 32) # 32 is the total number of trials
 
     def hyperparameter_tune_main(self):
-        wandb.init(project=self.project)
+        wandb.init(project=self.project) 
         config = wandb.config
-        from ppo_run import train
+        from ppo_run import train # Importing here to avoid circular import error.
         train(self.args, is_sweep=True, config=config)
 
     def create_sweep_config(self):
@@ -32,7 +31,7 @@ class HyperParameterTuner:
             1. Robustness: avg_reward considers the performance across all processes in an iteration, each with potentially different demand scaling factors. 
             2. Consistency: By averaging rewards across processes, we reduce the impact of potential overfitting to a specific demand scaling factor.
         """
-        
+
         sweep_config = {
         'method': 'random', # options: random, grid, bayes
         'metric': {

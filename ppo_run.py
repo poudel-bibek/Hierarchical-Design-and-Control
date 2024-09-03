@@ -4,6 +4,7 @@ import wandb
 wandb.require("core") # Bunch of improvements in using the core.
 
 import traci
+import queue
 import torch
 import random
 import argparse
@@ -342,38 +343,24 @@ def train(train_args, is_sweep=False, config=None):
     env.close() # We actually dont make use of this environment for any other stuff. Each worker will have their own environment.
 
     if is_sweep:
-        
         # Update args with wandb config
         for key, value in config.items():
             setattr(train_args, key, value)
 
-        ppo = PPO(state_dim, 
-            action_dim, 
-            train_args.lr, 
-            train_args.gamma, 
-            train_args.K_epochs, 
-            train_args.eps_clip, 
-            train_args.ent_coef, 
-            train_args.vf_coef, 
-            device, 
-            train_args.batch_size,
-            train_args.num_processes, 
-            train_args.gae_lambda)
+    ppo = PPO(state_dim, 
+        action_dim, 
+        train_args.lr, 
+        train_args.gamma, 
+        train_args.K_epochs, 
+        train_args.eps_clip, 
+        train_args.ent_coef, 
+        train_args.vf_coef, 
+        device, 
+        train_args.batch_size,
+        train_args.num_processes, 
+        train_args.gae_lambda)
         
-    else: 
-        ppo = PPO(state_dim, 
-            action_dim, 
-            train_args.lr, 
-            train_args.gamma, 
-            train_args.K_epochs, 
-            train_args.eps_clip, 
-            train_args.ent_coef, 
-            train_args.vf_coef, 
-            device, 
-            train_args.batch_size,
-            train_args.num_processes, 
-            train_args.gae_lambda)
-        
+    if not is_sweep: 
         # TensorBoard setup
         # No need to save the model during sweep.
         current_time = datetime.now().strftime('%b%d_%H-%M-%S')
@@ -399,26 +386,20 @@ def train(train_args, is_sweep=False, config=None):
     
     # Counter to keep track of how many times action has been taken 
     action_timesteps = 0
-    memory_queue = mp.Queue()
 
     for iteration in range(total_iterations):
-
         global_step = iteration * train_args.num_processes + action_timesteps*train_args.action_duration
         print(f"\nStarting iteration: {iteration + 1}/{total_iterations} with {global_step} total steps so far\n")
 
-        processes = [] # Create a list of processes
-        #manager = mp.Manager() # Facilitates communication and sharing of data between processes
+        # Create a manager to handle shared objects
+        manager = mp.Manager()
+        memory_queue = manager.Queue()
 
+        processes = []
         for rank in range(train_args.num_processes):
             p = mp.Process(target=worker, args=(rank, train_args, ppo.policy_old, memory_queue, SEED)) # Create a process to execute the worker function
             p.start()
             processes.append(p)
-
-        # Essential for synchronization. However, we are not performing updates to the policy only after the episode is over.
-        # We are updating the policy every n times action has been taken. (See PPO paper). Hence this is disabled.
-        # The join() method is called on each process in the processes list. This ensures that the main program waits for all processes to complete before continuing.
-        # for p in processes:
-        #     p.join()
 
         if train_args.anneal_lr:
             current_lr = ppo.update_learning_rate(iteration)
@@ -427,69 +408,78 @@ def train(train_args, is_sweep=False, config=None):
         active_workers = set(range(train_args.num_processes))
 
         while active_workers:
-            rank, memory = memory_queue.get()
+            try:
+                rank, memory = memory_queue.get(timeout=60)  # Add a timeout to prevent infinite waiting
+                
+                if memory is None:
+                    active_workers.remove(rank)
+                else:
+                    all_memories.append(memory)
+                    print(f"Memory from worker {rank} received. Memory size: {len(memory.states)}")
 
-            if memory is None:
-                active_workers.remove(rank)
+                    # Look at the size of the memory and update action_timesteps
+                    action_timesteps += len(memory.states)
 
-            else:
-                all_memories.append(memory)
-                print(f"Memory from worker {rank} received. Memory size: {len(memory.states)}")
+                    # Update PPO every n times action has been taken
+                    if action_timesteps % train_args.update_freq == 0:
+                        loss = ppo.update(all_memories)
 
-                # Look at the size of the memory and update action_timesteps
-                action_timesteps += len(memory.states)
-
-                # Update PPO every n times action has been taken
-                if action_timesteps % train_args.update_freq == 0:
-                    loss = ppo.update(all_memories)
-
-                    total_reward = sum(sum(memory.rewards) for memory in all_memories)
-                    avg_reward = total_reward / train_args.num_processes # Average reward per process in this iteration
-                    print(f"\nAverage Reward per process: {avg_reward:.2f}\n")
-                    
-                    # clear memory to prevent memory growth (after the reward calculation)
-                    for memory in all_memories:
-                        memory.clear_memory()
-
-                    # reset all memories
-                    all_memories = []
-
-                    # Logging every time the model is updated.
-                    if loss is not None:
-
-                        if is_sweep: # Wandb for hyperparameter tuning
-                            wandb.log({     "iteration": iteration,
-                                            "avg_reward": avg_reward, # Set as maximize in the sweep config
-                                            "policy_loss": loss['policy_loss'],
-                                            "value_loss": loss['value_loss'],
-                                            "entropy_loss": loss['entropy_loss'],
-                                            "total_loss": loss['total_loss'],
-                                            "current_lr": current_lr if train_args.anneal_lr else train_args.lr,
-                                            "global_step": global_step          })
+                        total_reward = sum(sum(memory.rewards) for memory in all_memories)
+                        avg_reward = total_reward / train_args.num_processes # Average reward per process in this iteration
+                        print(f"\nAverage Reward per process: {avg_reward:.2f}\n")
                         
-                        else: # Tensorboard for regular training
+                        # clear memory to prevent memory growth (after the reward calculation)
+                        for memory in all_memories:
+                            memory.clear_memory()
+
+                        # reset all memories
+                        del all_memories #https://pytorch.org/docs/stable/multiprocessing.html
+                        all_memories = []
+
+                        # Logging every time the model is updated.
+                        if loss is not None:
+
+                            if is_sweep: # Wandb for hyperparameter tuning
+                                wandb.log({     "iteration": iteration,
+                                                "avg_reward": avg_reward, # Set as maximize in the sweep config
+                                                "policy_loss": loss['policy_loss'],
+                                                "value_loss": loss['value_loss'],
+                                                "entropy_loss": loss['entropy_loss'],
+                                                "total_loss": loss['total_loss'],
+                                                "current_lr": current_lr if train_args.anneal_lr else train_args.lr,
+                                                "global_step": global_step          })
                             
-                            total_updates = int(action_timesteps / train_args.update_freq)
-                            writer.add_scalar('Rewards/Average_Reward', avg_reward, global_step)
-                            writer.add_scalar('Updates/Total_Policy_Updates', total_updates, global_step)
-                            writer.add_scalar('Losses/Policy_Loss', loss['policy_loss'], global_step)
-                            writer.add_scalar('Losses/Value_Loss', loss['value_loss'], global_step)
-                            writer.add_scalar('Losses/Entropy_Loss', loss['entropy_loss'], global_step)
-                            writer.add_scalar('Losses/Total_Loss', loss['total_loss'], global_step)
-                            writer.add_scalar('Learning_Rate/Current_LR', current_lr, global_step)
-                            print(f"Logged data at step {global_step}")
-
-                            # Save model every n times it has been updated (Important: Not every iteration)
-                            if train_args.save_freq > 0 and total_updates % train_args.save_freq == 0:
-                                torch.save(ppo.policy.state_dict(), os.path.join(save_dir, f'model_iteration_{iteration+1}.pth'))
-
-                            # Save best model so far
-                            if avg_reward > best_reward:
-                                best_reward = avg_reward
-                                torch.save(ppo.policy.state_dict(), os.path.join(save_dir, 'best_model.pth'))
+                            else: # Tensorboard for regular training
                                 
-                    else: # For some reason..
-                        print("Warning: loss is None")
+                                total_updates = int(action_timesteps / train_args.update_freq)
+                                writer.add_scalar('Rewards/Average_Reward', avg_reward, global_step)
+                                writer.add_scalar('Updates/Total_Policy_Updates', total_updates, global_step)
+                                writer.add_scalar('Losses/Policy_Loss', loss['policy_loss'], global_step)
+                                writer.add_scalar('Losses/Value_Loss', loss['value_loss'], global_step)
+                                writer.add_scalar('Losses/Entropy_Loss', loss['entropy_loss'], global_step)
+                                writer.add_scalar('Losses/Total_Loss', loss['total_loss'], global_step)
+                                writer.add_scalar('Learning_Rate/Current_LR', current_lr, global_step)
+                                print(f"Logged data at step {global_step}")
+
+                                # Save model every n times it has been updated (Important: Not every iteration)
+                                if train_args.save_freq > 0 and total_updates % train_args.save_freq == 0:
+                                    torch.save(ppo.policy.state_dict(), os.path.join(save_dir, f'model_iteration_{iteration+1}.pth'))
+
+                                # Save best model so far
+                                if avg_reward > best_reward:
+                                    best_reward = avg_reward
+                                    torch.save(ppo.policy.state_dict(), os.path.join(save_dir, 'best_model.pth'))
+                                    
+                        else: # For some reason..
+                            print("Warning: loss is None")
+
+            except queue.Empty:
+                print("Timeout waiting for worker. Continuing...")
+
+        # At the end of an iteration, wait for all processes to finish
+        # The join() method is called on each process in the processes list. This ensures that the main program waits for all processes to complete before continuing.
+        for p in processes:
+            p.join()
 
     if is_sweep:
         wandb.finish()
@@ -499,11 +489,13 @@ def train(train_args, is_sweep=False, config=None):
 def main(args):
     """
     Keep main short.
+    We cannot create a bunch of connections in main and then pass them around. Because each new worker needs a separate pedestrian and vehicle trips file.
     """
 
     # Set the start method for multiprocessing. It does not create a process itself but sets the method for creating a process.
     # Spawn means create a new process. There is a fork method as well which will create a copy of the current process.
-    mp.set_start_method('spawn') 
+    mp.set_start_method('spawn', force=True) 
+    mp.set_sharing_strategy('file_system')
 
     if args.evaluate:  # Eval TL or PPO
         if args.manual_demand_veh is None or args.manual_demand_ped is None:
@@ -525,6 +517,7 @@ def main(args):
 
 
 if __name__ == "__main__":
+
     parser = argparse.ArgumentParser(description='Run SUMO traffic simulation with PPO.')
     parser.add_argument('--sweep', action='store_true', help='Use wandb sweeps for hyperparameter tuning')
     # Simulation
@@ -562,7 +555,7 @@ if __name__ == "__main__":
     parser.add_argument('--ent_coef', type=float, default=0.01, help='Entropy coefficient (default: 0.01)')
     parser.add_argument('--vf_coef', type=float, default=0.5, help='Value function coefficient (default: 0.5)')
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size (default: 32)')
-    parser.add_argument('--num_processes', type=int, default=8, help='Number of parallel processes to use')
+    parser.add_argument('--num_processes', type=int, default=6, help='Number of parallel processes to use')
 
     # Evaluations
     parser.add_argument('--evaluate', choices=['tl', 'ppo'], help='Evaluation mode: traffic light (tl), PPO (ppo), or both')

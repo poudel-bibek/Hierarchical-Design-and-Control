@@ -979,7 +979,7 @@ class CraverRoadEnv(gym.Env):
 
     def _modify_net_file(self, crosswalks_to_disable):
         """
-        Just for changing the appearence of disallowed crosswalks.
+        Just for changing the appearence of disallowed crosswalks. Not used right now.
         """
         tree = ET.parse(self.original_net_file)
         root = tree.getroot()
@@ -1142,7 +1142,7 @@ class CraverRoadEnv(gym.Env):
 
         super().reset()
         if self.sumo_running:
-            traci.close()
+            traci.close(False) #https://sumo.dlr.de/docs/TraCI/Interfacing_TraCI_from_Python.html
         
         # Automatically scale demand (separately for pedestrian and vehicle)
         scale_factor_vehicle = random.uniform(self.demand_scale_min, self.demand_scale_max)
@@ -1176,8 +1176,8 @@ class CraverRoadEnv(gym.Env):
                         
 
         traci.start(sumo_cmd)
-        # To prevent connection refulsal 
-        time.sleep(2)
+        # To prevent connection refusal 
+        time.sleep(5)
 
         # This should be done here after the SUMO call. As this can disallow pedestrians during the simulation run. 
         # Disallow pedestrians in some crosswalks. After sumo call beacuse we need traci.
@@ -1214,6 +1214,6 @@ class CraverRoadEnv(gym.Env):
 
     def close(self):
         if self.sumo_running:
-            traci.close()
+            traci.close(False) #https://sumo.dlr.de/docs/TraCI/Interfacing_TraCI_from_Python.html
             self.sumo_running = False
 
