@@ -1151,6 +1151,7 @@ class CraverRoadEnv(gym.Env):
 
         super().reset()
         if self.sumo_running:
+            time.sleep(5) # Wait until the process really finishes 
             traci.close(False) #https://sumo.dlr.de/docs/TraCI/Interfacing_TraCI_from_Python.html
         
         # Automatically scale demand (separately for pedestrian and vehicle)
@@ -1185,10 +1186,23 @@ class CraverRoadEnv(gym.Env):
                         "--route-files", f"{self.vehicle_output_trips},{self.pedestrian_output_trips}"
                         ]
                         
-
-        traci.start(sumo_cmd)
-        # To prevent connection refusal 
-        time.sleep(5)
+        
+        max_retries = 3
+        try:
+            for attempt in range(max_retries):
+                try:
+                    traci.start(sumo_cmd)
+                    break
+                except traci.exceptions.FatalTraCIError:
+                    if attempt < max_retries - 1:
+                        print(f"TraCI connection failed. Retrying... (Attempt {attempt + 1}/{max_retries})")
+                        time.sleep(10)
+                    else:
+                        print(f"Failed to start TraCI after {max_retries} attempts.")
+                        raise
+        except Exception as e:
+            print(f"An unexpected error occurred: {str(e)}")
+            raise
 
         # This should be done here after the SUMO call. As this can disallow pedestrians during the simulation run. 
         # Disallow pedestrians in some crosswalks. After sumo call beacuse we need traci.
