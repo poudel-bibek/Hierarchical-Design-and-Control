@@ -1,7 +1,7 @@
-
 import time
 import xml
 import xml.etree.ElementTree as ET
+import logging
 
 def convert_demand_to_scale_factor(demand, demand_type, input_file):
     """
@@ -105,6 +105,14 @@ def scale_demand(input_file, output_file, scale_factor, demand_type):
                 # Copy all child elements (like <walk>)
                 for child in person:
                     new_child = ET.SubElement(new_person, child.tag, child.attrib)
+                    # Ensure 'from' attribute is present for walk elements
+                    if child.tag == 'walk' and 'from' not in child.attrib:
+                        # If 'from' is missing, use the first edge in the route
+                        edges = child.get('edges', '').split()
+                        if edges:
+                            new_child.set('from', edges[0])
+                        else:
+                            logging.warning(f"Walk element for person {new_person.get('id')} is missing both 'from' and 'edges' attributes.")
                 
                 # Find the correct parent to append the new person
                 parent = root.find(".//routes")

@@ -9,7 +9,7 @@ import xml.etree.ElementTree as ET
 from utils import convert_demand_to_scale_factor, scale_demand
 
 class CraverRoadEnv(gym.Env):
-    def __init__(self, args):
+    def __init__(self, args, worker_id=None):
         super().__init__()
         """
         Phase information (22 characters). Incoming vehicle lanes, or pedestrian crossings
@@ -39,15 +39,28 @@ class CraverRoadEnv(gym.Env):
         TODO: Get network related stuff from a config file. To make the code more general purpose.
         """
 
+        self.vehicle_input_trips = args.vehicle_input_trips
+        self.pedestrian_input_trips = args.pedestrian_input_trips
+
+        self.worker_id = worker_id
+        self.unique_suffix = f"_{worker_id}" if worker_id is not None else ""
+        
+        # Modify file paths to include the unique suffix. Each worker has their own environment and hence their own copy of the trips file.
+        self.vehicle_output_trips = args.vehicle_output_trips.replace('.xml', f'{self.unique_suffix}.xml')
+        self.pedestrian_output_trips = args.pedestrian_output_trips.replace('.xml', f'{self.unique_suffix}.xml')
+        
+        # print(f"Vehicle trips file: {self.vehicle_output_trips}")
+        # print(f"Pedestrian trips file: {self.pedestrian_output_trips}")
+
         if args.manual_demand_veh is not None :
             # Convert the demand to scaling factor first
-            scaling = convert_demand_to_scale_factor(args.manual_demand_veh, "vehicle", args.vehicle_input_trips)
-            scale_demand(args.vehicle_input_trips, args.vehicle_output_trips, scaling, demand_type="vehicle")
+            scaling = convert_demand_to_scale_factor(args.manual_demand_veh, "vehicle", self.vehicle_input_trips)
+            scale_demand(self.vehicle_input_trips, self.vehicle_output_trips, scaling, demand_type="vehicle")
 
         if args.manual_demand_ped is not None:
             # Convert the demand to scaling factor first
-            scaling = convert_demand_to_scale_factor(args.manual_demand_ped, "pedestrian", args.pedestrian_input_trips)
-            scale_demand(args.pedestrian_input_trips, args.pedestrian_output_trips, scaling, demand_type="pedestrian")
+            scaling = convert_demand_to_scale_factor(args.manual_demand_ped, "pedestrian", self.pedestrian_input_trips)
+            scale_demand(self.pedestrian_input_trips, self.pedestrian_output_trips, scaling, demand_type="pedestrian")
 
         self.use_gui = args.gui
         self.step_length = args.step_length
@@ -103,10 +116,6 @@ class CraverRoadEnv(gym.Env):
         self.tl_lane_dict = {}
         self.tl_pedestrian_status = {} # For pedestrians related to crosswalks attached to TLS.
 
-        self.vehicle_input_trips = args.vehicle_input_trips
-        self.vehicle_output_trips = args.vehicle_output_trips
-        self.pedestrian_input_trips = args.pedestrian_input_trips
-        self.pedestrian_output_trips = args.pedestrian_output_trips
         self.demand_scale_min = args.demand_scale_min
         self.demand_scale_max = args.demand_scale_max
 
@@ -1164,6 +1173,7 @@ class CraverRoadEnv(gym.Env):
                         "--quit-on-end", 
                         "-c", "./SUMO_files/craver.sumocfg", 
                         "--step-length", str(self.step_length),
+                        "--route-files", f"{self.vehicle_output_trips},{self.pedestrian_output_trips}"
                         ]
                         
         else:
@@ -1172,6 +1182,7 @@ class CraverRoadEnv(gym.Env):
                         "--quit-on-end", 
                         "-c", "./SUMO_files/craver.sumocfg", 
                         "--step-length", str(self.step_length),
+                        "--route-files", f"{self.vehicle_output_trips},{self.pedestrian_output_trips}"
                         ]
                         
 

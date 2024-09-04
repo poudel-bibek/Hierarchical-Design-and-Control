@@ -254,7 +254,7 @@ def worker(rank, args, shared_policy_old, memory_queue, global_seed):
     np.random.seed(worker_seed)
     torch.manual_seed(worker_seed)
 
-    env = CraverRoadEnv(args)
+    env = CraverRoadEnv(args, worker_id=rank)
     worker_device = torch.device("cpu")
     memory_transfer_freq = 8
 
@@ -328,7 +328,7 @@ def train(train_args, is_sweep=False, config=None):
         torch.cuda.manual_seed_all(SEED)
 
     global_step = 0
-    env = CraverRoadEnv(train_args) # First environment instance. Required for setup.
+    env = CraverRoadEnv(train_args, worker_id=None) # First environment instance. Required for setup.
 
     device = torch.device("cuda:0" if torch.cuda.is_available() and train_args.gpu else "cpu")
     print(f"Using device: {device}")
@@ -555,7 +555,7 @@ if __name__ == "__main__":
     parser.add_argument('--ent_coef', type=float, default=0.01, help='Entropy coefficient (default: 0.01)')
     parser.add_argument('--vf_coef', type=float, default=0.5, help='Value function coefficient (default: 0.5)')
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size (default: 32)')
-    parser.add_argument('--num_processes', type=int, default=6, help='Number of parallel processes to use')
+    parser.add_argument('--num_processes', type=int, default=8, help='Number of parallel processes to use')
 
     # Evaluations
     parser.add_argument('--evaluate', choices=['tl', 'ppo'], help='Evaluation mode: traffic light (tl), PPO (ppo), or both')
