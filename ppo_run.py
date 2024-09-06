@@ -7,7 +7,6 @@ import traci
 import queue
 import torch
 import random
-import argparse
 import numpy as np
 import torch.multiprocessing as mp # wow we get this from torch itself
 
@@ -18,7 +17,8 @@ from models import MLPActorCritic
 
 from wandb_sweep import HyperParameterTuner
 from ppo_alg import PPO, Memory
-    
+from config import get_args
+
 def save_config(args, SEED, model, save_path):
     """
     Save hyperparameters and model architecture to a JSON file.
@@ -243,9 +243,6 @@ def worker(rank, args, shared_policy_old, memory_queue, global_seed):
     At every iteration, 1 worker will carry out one episode.
     memory_queue is used to store the memory of each worker and send it back to the main process.
     shared_policy_old is used for importance sampling.
-
-    How frequently should a parallel worker send a memory to the main process?
-    Lets set this to 8.
     """
 
     # Set seed for this worker
@@ -256,7 +253,7 @@ def worker(rank, args, shared_policy_old, memory_queue, global_seed):
 
     env = CraverRoadEnv(args, worker_id=rank)
     worker_device = torch.device("cpu")
-    memory_transfer_freq = 8
+    memory_transfer_freq = args.memory_transfer_freq  # Get from args
 
     # The central memory is a collection of memories from all processes.
     # A worker instance must have their own memory 
@@ -266,9 +263,6 @@ def worker(rank, args, shared_policy_old, memory_queue, global_seed):
     state, _ = env.reset()
     state = state.flatten()
 
-    # print(f"Worker {rank} started.")
-    # print(f"Initial observation (flattened): {state}")
-    # print(f"Initial observation (flattened) shape: {state.shape}\n")
     ep_reward = 0
     steps_since_update = 0
      
@@ -517,48 +511,5 @@ def main(args):
 
 
 if __name__ == "__main__":
-
-    parser = argparse.ArgumentParser(description='Run SUMO traffic simulation with PPO.')
-    parser.add_argument('--sweep', action='store_true', help='Use wandb sweeps for hyperparameter tuning')
-    # Simulation
-    parser.add_argument('--gui', action='store_true', help='Use SUMO GUI (default: False)')
-    parser.add_argument('--step_length', type=float, default=1.0, help='Simulation step length (default: 1.0)') # What is one unit of increment in the simulation?
-    parser.add_argument('--action_duration', type=float, default=10, help='Duration of each action (default: 10.0)') # How many simulation steps does each action occur for. 
-    parser.add_argument('--auto_start', action='store_true', default=True, help='Automatically start the simulation')
-    parser.add_argument('--vehicle_input_trips', type=str, default='./SUMO_files/original_vehtrips.xml', help='Original Input trips file')
-    parser.add_argument('--vehicle_output_trips', type=str, default='./SUMO_files/scaled_vehtrips.xml', help='Output trips file')
-    parser.add_argument('--pedestrian_input_trips', type=str, default='./SUMO_files/original_pedtrips.xml', help='Original Input pedestrian trips file')
-    parser.add_argument('--pedestrian_output_trips', type=str, default='./SUMO_files/scaled_pedtrips.xml', help='Output pedestrian trips file')
-
-    # If required to manually scale the demand (this happens automatically every episode as part of reset).
-    # The real-world demand captured in the original_vehtrips.xml and original_pedtrips.xml files is in 201.54 veh/hr and 2222.80 ped/hr respectively (correesponding to scaling of 1.0).
-    parser.add_argument('--manual_demand_veh', type=float, default=None, help='Manually scale vehicle demand before starting the simulation (veh/hr) ')
-    parser.add_argument('--manual_demand_ped', type=float, default=None, help='Manually scale pedestrian demand before starting the simulation (ped/hr)')
-    parser.add_argument('--demand_scale_min', type=float, default=1.0, help='Minimum demand scaling factor for automatic scaling (default: 0.5)')
-    parser.add_argument('--demand_scale_max', type=float, default=2.0, help='Maximum demand scaling factor for automatic scaling (default: 5.0)')
-
-    # PPO
-    parser.add_argument('--seed', type=int, default=None, help='Random seed (default: None)')
-    parser.add_argument('--gpu', action='store_true', default=True, help='Use GPU if available (default: use CPU)')
-    parser.add_argument('--total_timesteps', type=int, default=100000, help='Total number of timesteps the simulation will run (default: 300000)') #
-    parser.add_argument('--max_timesteps', type=int, default=1000, help='Maximum number of steps in one episode (default: 1500)') #
-    parser.add_argument('--anneal_lr', action='store_true', default=True, help='Anneal learning rate (default: False)')
-    parser.add_argument('--gae_lambda', type=float, default=0.95, help='GAE lambda (default: 0.95)')
-
-    # The default update freq in the PPO paper is 128 but in our case, the interval between actions itself is 10 timesteps.
-    parser.add_argument('--update_freq', type=int, default=128, help='Number of action timesteps between each policy update (default: 128)')
-    parser.add_argument('--lr', type=float, default=0.002, help='Learning rate (default: 0.002)')
-    parser.add_argument('--gamma', type=float, default=0.99, help='Discount factor (default: 0.99)')
-    parser.add_argument('--K_epochs', type=int, default=4, help='Number of epochs to update policy (default: 4)')
-    parser.add_argument('--eps_clip', type=float, default=0.2, help='Clip parameter for PPO (default: 0.2)')
-    parser.add_argument('--save_freq', type=int, default=2, help='Save model after every n updates (default: 2, 0 to disable)')
-    parser.add_argument('--ent_coef', type=float, default=0.01, help='Entropy coefficient (default: 0.01)')
-    parser.add_argument('--vf_coef', type=float, default=0.5, help='Value function coefficient (default: 0.5)')
-    parser.add_argument('--batch_size', type=int, default=32, help='Batch size (default: 32)')
-    parser.add_argument('--num_processes', type=int, default=8, help='Number of parallel processes to use')
-
-    # Evaluations
-    parser.add_argument('--evaluate', choices=['tl', 'ppo'], help='Evaluation mode: traffic light (tl), PPO (ppo), or both')
-    parser.add_argument('--model_path', type=str, help='Path to the saved PPO model for evaluation')
-    args = parser.parse_args()
+    args = get_args()
     main(args)

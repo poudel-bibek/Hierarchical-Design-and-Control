@@ -42,15 +42,15 @@ class HyperParameterTuner:
         # We do not want to get weird weights such as 0.192 for various params. Hence not using random search.
         #  For grid
         'parameters': {
-            'lr': {'values': [0.001, 0.002, 0.005] },
-            'gamma': {'values': [0.95, 0.99, 0.999]},
-            'K_epochs': {'values': [4, 8, 16] },
+            'lr': {'values': [0.001, 0.002, 0.005, 0.01] },
+            'gamma': {'values': [0.90, 0.95, 0.98, 0.999]},
+            'K_epochs': {'values': [2, 8, 16, 32] },
             'eps_clip': {'values': [0.1, 0.2, 0.3]},
             'gae_lambda': {'values': [0.9, 0.95, 0.99]},
             'ent_coef': {'values': [0.01, 0.05, 0.1]},
             'vf_coef': {'values': [0.5, 0.75, 1.0]},
-            'batch_size': {'values': [32, 64, 128]},
-            'update_freq': {'values': [128, 256, 512]},
+            'batch_size': {'values': [32, 64, 128, 256]},
+            'update_freq': {'values': [128, 256, 512, 1024]},
             }
         }
 
