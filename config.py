@@ -6,7 +6,7 @@ def get_args():
     # Simulation
     parser.add_argument('--sweep', action='store_true', help='Use wandb sweeps for hyperparameter tuning')
     parser.add_argument('--gui', action='store_true', help='Use SUMO GUI (default: False)')
-    parser.add_argument('--step_length', type=float, default=1.0, help='Simulation step length (default: 1.0)')
+    parser.add_argument('--step_length', type=float, default=1.0, help='Simulation step length (default: 1.0)') # Since we have pedestrians, who walk slow. A value too small is not required.
     parser.add_argument('--action_duration', type=float, default=10, help='Duration of each action (default: 10.0)')
     parser.add_argument('--auto_start', action='store_true', default=True, help='Automatically start the simulation')
     parser.add_argument('--vehicle_input_trips', type=str, default='./SUMO_files/original_vehtrips.xml', help='Original Input trips file')

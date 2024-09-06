@@ -321,6 +321,11 @@ def train(train_args, is_sweep=False, config=None):
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(SEED)
 
+    if is_sweep: #DO NOT MOVE THIS BELOW
+        # Update args with wandb config
+        for key, value in config.items():
+            setattr(train_args, key, value)
+        
     global_step = 0
     env = CraverRoadEnv(train_args, worker_id=None) # First environment instance. Required for setup.
 
@@ -335,11 +340,6 @@ def train(train_args, is_sweep=False, config=None):
     action_dim = len(env.action_space.nvec)
     print(f"State dimension: {state_dim}, Action dimension: {action_dim}\n")
     env.close() # We actually dont make use of this environment for any other stuff. Each worker will have their own environment.
-
-    if is_sweep:
-        # Update args with wandb config
-        for key, value in config.items():
-            setattr(train_args, key, value)
 
     ppo = PPO(state_dim, 
         action_dim, 

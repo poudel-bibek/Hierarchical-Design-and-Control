@@ -142,3 +142,34 @@ def scale_demand(input_file, output_file, scale_factor, demand_type):
     
     # Wait for the file writing operations to finish (it could be large)
     time.sleep(2)
+
+
+def find_connecting_edges(self, net, start_edge_id, end_edge_id):
+    """
+    Use a breadth-first search to find paths between two edges.
+    net = sumo network file.
+    """
+    start_edge = net.getEdge(start_edge_id)
+    end_edge = net.getEdge(end_edge_id)
+    
+    
+    queue = [(start_edge, [start_edge])]
+    visited = set()
+    
+    while queue:
+        current_edge, path = queue.pop(0)
+        
+        if current_edge == end_edge:
+            return path
+        
+        if current_edge in visited:
+            continue
+        
+        visited.add(current_edge)
+        
+        for next_edge in current_edge.getOutgoing():
+            if next_edge not in visited:
+                new_path = path + [next_edge]
+                queue.append((next_edge, new_path))
+    
+    return None  # No path found
