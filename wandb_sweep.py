@@ -52,7 +52,7 @@ class HyperParameterTuner:
             'batch_size': {'values': [32, 64, 128, 256]},
             'update_freq': {'values': [128, 256, 512, 1024]},
             'action_duration': {'values': [10, 16, 24, 32, 40]},
-            # TODO: Add model size related params 
+            # TODO: Add model size related and Conv kernel size related params 
             }
         }
 

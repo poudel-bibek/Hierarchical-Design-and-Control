@@ -63,8 +63,6 @@ class CraverRoadEnv(gym.Env):
         self.demand_scale_min = args.demand_scale_min
         self.demand_scale_max = args.demand_scale_max
 
-
-
         self.directions = ['north', 'east', 'south', 'west']
         self.turns = ['straight', 'right', 'left']
         self.single_obs_shape = (len(self.tl_ids)*(2 + 12 + 12 + 4 + 4 + 4), ) # TL related (both veh and ped) + crosswalks related (only ped)
@@ -79,7 +77,7 @@ class CraverRoadEnv(gym.Env):
         self.corrected_occupancy_map = None
 
         # Create a bunch of reverse lookup dictionaries which can be referenced in various ways
-        self.crosswalk_to_disabled_vicinity_walking_edges = {
+        self.crosswalk_to_vicinity_walking_edges = {
             crosswalk_id: data['vicinity_walking_edges']
             for _, data in self.controlled_crosswalks_dict.items()
             for crosswalk_id in data['ids']
@@ -127,7 +125,7 @@ class CraverRoadEnv(gym.Env):
         self.alternative_crosswalks_flat = []
         self.currently_rerouted = []
         self.alternative_crosswalks_num = []
-
+        self.crosswalks_to_disable = []
 
     def _get_vehicle_direction(self, signal_state):
         """
@@ -392,6 +390,53 @@ class CraverRoadEnv(gym.Env):
                                 else: 
                                     print("Only implemented to work with JunctionDomain. Not implemented yet for external lanes or edges")
 
+        # For the crosswalks related components
+        # For each crosswalk, get the occupancy in the upside, downside, inside, and rerouted.
+        # Do we get the pedestrian ids or do we just get the count? # For now, let's get the count.
+        # For observation, pressure = (upside + downside) - inside (outgoing)
+        # If they are being-rerouted, they should not be a part of upside, downside, and inside. 
+        occupancy_map['crosswalks'] = {}
+        for crosswalk_id in self.controlled_crosswalk_masked_ids:
+            # Special case: This id 'ids': [':9687187500_c0', ':9687187501_c0'] represents a single disjoint crosswalk. Do not repeat the counts twice.
+            # Just use the 9687187500_c0 once and skip the second part of the special case crosswalk (only for upside and downside) because it would have been counted in the first part.
+            
+            if crosswalk_id != ':9687187501_c0':
+                occupancy_map['crosswalks'][crosswalk_id] = {
+                    "upside": 0,
+                    "downside": 0,
+                    "inside": 0,
+                    "rerouted": 0
+                }
+
+                # These already contain internal edges
+                vicinity_walking_edges = self.crosswalk_to_vicinity_walking_edges[crosswalk_id]
+            
+                # For upside and downside
+                for edge in vicinity_walking_edges:
+                    pedestrians = traci.edge.getLastStepPersonIDs(edge)
+                    direction = self.edge_to_direction[edge]
+                    occupancy_map['crosswalks'][crosswalk_id][direction] += len(pedestrians) # Incase ids are wanted, use the list instead of the length
+
+                # For inside, use the crosswalk id itself.
+                pedestrians = traci.edge.getLastStepPersonIDs(crosswalk_id)
+                occupancy_map['crosswalks'][crosswalk_id]['inside'] += len(pedestrians)
+
+                # Add re-routed pedestrians
+                # If this crosswalk happens to be disabled, then add the upside and downside values to get the rerouted value. Setting upside, downside to 0.
+                # Inside may contain pessengers that are in the process of crossing when the new decision is made. Not setting that to 0.
+                if crosswalk_id in self.crosswalks_to_disable:
+                    occupancy_map['crosswalks'][crosswalk_id]['rerouted'] = occupancy_map['crosswalks'][crosswalk_id]['upside'] + occupancy_map['crosswalks'][crosswalk_id]['downside']
+                    occupancy_map['crosswalks'][crosswalk_id]['upside'] = 0
+                    occupancy_map['crosswalks'][crosswalk_id]['downside'] = 0
+
+                print(f"\nStep:{self.step_count}\n\nCrosswalk: {crosswalk_id}\nUpside: {occupancy_map['crosswalks'][crosswalk_id]['upside']}\nDownside: {occupancy_map['crosswalks'][crosswalk_id]['downside']}\nInside: {occupancy_map['crosswalks'][crosswalk_id]['inside']}\nRerouted: {occupancy_map['crosswalks'][crosswalk_id]['rerouted']}")
+
+            else: 
+                # This is the special case crosswalk # Since this is updating for inside (it is not affected by re-routing)
+                # Also not affected by other possible problems beacuse of the order [500 comes before 501 inthe crosswalks list]
+                pedestrians = traci.edge.getLastStepPersonIDs(crosswalk_id)
+                occupancy_map['crosswalks'][':9687187500_c0']['inside'] += len(pedestrians) # Use ':9687187500_c0'
+
         return occupancy_map
     
     @property
@@ -588,7 +633,7 @@ class CraverRoadEnv(gym.Env):
             self.related_junction_edges_to_lookup_from = []
             self.alternative_crosswalks_flat = []
             self.currently_rerouted = []
-            crosswalks_to_disable = []
+            self.crosswalks_to_disable = []
             self.alternative_crosswalks_num = []
             
             current_crosswalk_action = action[1:].tolist() # The first element is the TL action
@@ -599,7 +644,7 @@ class CraverRoadEnv(gym.Env):
                     j = self.controlled_crosswalk_mask[i] # Get the actual crosswalk number (key), excludes 1 and 2
                     crosswalks_list = self.controlled_crosswalks_masked_dict[j]['ids'] # Get the crosswalks that are controlled by this action
                     for item in crosswalks_list: # Need a for loop because of them contains multiple crosswalks in a list
-                        crosswalks_to_disable.append(item)
+                        self.crosswalks_to_disable.append(item)
 
             ######################################
             # For testing purposes.
@@ -612,22 +657,22 @@ class CraverRoadEnv(gym.Env):
             # ]
 
             # # Determine which crosswalks to disable based on current step
-            # crosswalks_to_disable = [] 
+            # self.crosswalks_to_disable = [] 
             # for start, end, crosswalks in time_ranges:
             #     if start < self.step_count <= end:
             #         #print(f"\nTime range: {start} - {end}, Disabled Crosswalks: {crosswalks}")
-            #         crosswalks_to_disable = crosswalks
+            #         self.crosswalks_to_disable = crosswalks
             #         break
             
             # End of testing purposes code
             ######################################
 
             # self.all_crosswalks contains 1 and 2, controlled_crosswalks_masked_dict does not
-            #print(f"All crosswalks: {self.controlled_crosswalk_masked_ids}\nCrosswalks to disable: {crosswalks_to_disable}")
+            #print(f"All crosswalks: {self.controlled_crosswalk_masked_ids}\nCrosswalks to disable: {self.crosswalks_to_disable}")
 
-            for crosswalk_id in crosswalks_to_disable:
+            for crosswalk_id in self.crosswalks_to_disable:
 
-                edges = self.crosswalk_to_disabled_vicinity_walking_edges[crosswalk_id] # Does not contain the crosswalk itself, just the vicinity walking edges list
+                edges = self.crosswalk_to_vicinity_walking_edges[crosswalk_id] # Does not contain the crosswalk itself, just the vicinity walking edges list
                 self.walking_edges_to_reroute_from.extend(edges)
 
                 lookup_edges = self.crosswalk_to_related_junction_edges[crosswalk_id] # Just the lookup edges i.e., related_junction_edges
@@ -635,21 +680,15 @@ class CraverRoadEnv(gym.Env):
                 
             # Find alternative crosswalks ids (they should include crosswalk 1 and 2, because 1 and 2 are present in the sim. we are controlling them as part of TL) and flatten
             for crosswalk_data in self.controlled_crosswalks_dict.values():
-                if not any(cw in crosswalks_to_disable for cw in crosswalk_data['ids']):
+                if not any(cw in self.crosswalks_to_disable for cw in crosswalk_data['ids']):
                     self.alternative_crosswalks_flat.extend(crosswalk_data['ids'])
 
             # Get the numerical crosswalk ids
             self.alternative_crosswalks_num = [self.edge_to_numerical_crosswalk_id[crosswalk_id] for crosswalk_id in self.alternative_crosswalks_flat]
 
-            #print(f"\nAlternative crosswalks flattened: {self.alternative_crosswalks_flat}\n")
-
         # Although the crosswalks to disable are gotten every 10 timesteps, the enforcement of the action (i.e., re-routing pedestrians) is done every step.
         # This is going to be severely computationally taxing on the simulation.
-
-        self._disallow_pedestrians(self.walking_edges_to_reroute_from,
-                                                         self.related_junction_edges_to_lookup_from,
-                                                        self.alternative_crosswalks_flat,)
-        
+        self._disallow_pedestrians(self.walking_edges_to_reroute_from, self.related_junction_edges_to_lookup_from)
         #print(f"\nDisabled crosswalks: {disabled_crosswalks}\n")
 
     def _get_reward(self, current_tl_action):
@@ -713,7 +752,7 @@ class CraverRoadEnv(gym.Env):
 
         tree.write('./SUMO_files/modified_craver_road.net.xml')
 
-    def _disallow_pedestrians(self, walking_edges_to_reroute_from, related_junction_edges_to_lookup_from, alternate_crosswalks):
+    def _disallow_pedestrians(self, walking_edges_to_reroute_from, related_junction_edges_to_lookup_from):
         """ 
         Disallow pedestrians means reroute pedestrians from the nearest possible crosswalk.
         This is called once per action i.e., after 10 actual simulation steps. 
@@ -725,14 +764,9 @@ class CraverRoadEnv(gym.Env):
 
         # We cannot check if a pedestrian far away has a crosswalk in their route (which they reach sometime in the future) and then re-route them immediately.
         # If the pedestrian in already in the crosswalk itself at the time of action, they dont need to be re-routed.
-        """
 
-        """
         Pedestrian current edge can be the crosswalk id itself.. or the walking areas associated. Both begin with :, Both will be invisible in the route but can be obtained by current edge.  
         Pedestrian can be in the internal edge (related to the junction) which will be _w0 or _w1 attached to the junction name. This can also be obtained using current edge.
-
-        9.  Change pedestrian icon size
-        
         # Done.
          10. Only route if they have already not been re-routed or something like that?
          3. Why are the re-routed pedestrians actually not going to the other side of crosswalk?

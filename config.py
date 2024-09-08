@@ -44,3 +44,17 @@ def get_args():
     parser.add_argument('--model_path', type=str, help='Path to the saved PPO model for evaluation')
 
     return parser.parse_args()
+
+"""
+Best found hyperparameters from the sweep:
+    lr: 
+    gamma: 
+    K_epochs: 
+    eps_clip: 
+    gae_lambda: 
+    ent_coef: 
+    vf_coef: 
+    batch_size: 
+    update_freq: 
+    action_duration: 
+"""
