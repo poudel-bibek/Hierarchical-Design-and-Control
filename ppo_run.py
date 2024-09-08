@@ -13,7 +13,7 @@ import torch.multiprocessing as mp # wow we get this from torch itself
 from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
 from sim_run import CraverRoadEnv
-from models import MLPActorCritic
+from models import MLPActorCritic, CNNActorCritic
 
 from wandb_sweep import HyperParameterTuner
 from ppo_alg import PPO, Memory
@@ -103,14 +103,17 @@ def evaluate_controller(args, env):
 
     elif args.evaluate == 'ppo':
         if args.model_path:
-
             # device = torch.device("cuda:0" if torch.cuda.is_available() and args.gpu else "cpu")
             # Maybe we should use only CPU during evaluation
             device = torch.device("cpu")
-
+            model_choice_functions = {
+                'cnn': CNNActorCritic,
+                'mlp': MLPActorCritic,
+            }
+            
             state_dim = env.observation_space.shape[0] * env.observation_space.shape[1]
             action_dim = env.action_space.n
-            ppo_model = MLPActorCritic(state_dim, action_dim, device).to(device)
+            ppo_model = model_choice_functions[args.model_choice](state_dim, action_dim, device).to(device)
             ppo_model.load_state_dict(torch.load(args.model_path, map_location=device)) 
 
             state, _ = env.reset()
@@ -321,10 +324,10 @@ def train(train_args, is_sweep=False, config=None):
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(SEED)
 
-    if is_sweep: #DO NOT MOVE THIS BELOW
-        # Update args with wandb config
+    if is_sweep: #DO NOT MOVE THIS BELOW. # Update args with wandb config
         for key, value in config.items():
-            setattr(train_args, key, value)
+            if hasattr(train_args, key):
+                setattr(train_args, key, value)
         
     global_step = 0
     env = CraverRoadEnv(train_args, worker_id=None) # First environment instance. Required for setup.
@@ -336,12 +339,18 @@ def train(train_args, is_sweep=False, config=None):
     print(f"\nDefined action space: {env.action_space}")
     print(f"Options per action dimension: {env.action_space.nvec}")
 
-    state_dim = env.observation_space.shape[0] * env.observation_space.shape[1]
+    # If model choice is mlp, the input is flat. However, if model choice is cnn, the input is single channel 2d
+    if train_args.model_choice == 'mlp':
+        state_dim = env.observation_space.shape[0] * env.observation_space.shape[1]
+    else: # cnn
+        state_dim = env.observation_space.shape # (steps_per_action, 74)
+        n_channels = 1
+
     action_dim = len(env.action_space.nvec)
     print(f"State dimension: {state_dim}, Action dimension: {action_dim}\n")
     env.close() # We actually dont make use of this environment for any other stuff. Each worker will have their own environment.
 
-    ppo = PPO(state_dim, 
+    ppo = PPO(state_dim if train_args.model_choice == 'mlp' else n_channels, 
         action_dim, 
         train_args.lr, 
         train_args.gamma, 
@@ -352,7 +361,9 @@ def train(train_args, is_sweep=False, config=None):
         device, 
         train_args.batch_size,
         train_args.num_processes, 
-        train_args.gae_lambda)
+        train_args.gae_lambda,
+        train_args.model_choice,
+        )
         
     if not is_sweep: 
         # TensorBoard setup

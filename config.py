@@ -38,7 +38,12 @@ def get_args():
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size (default: 32)')
     parser.add_argument('--num_processes', type=int, default=6, help='Number of parallel processes to use')
     parser.add_argument('--memory_transfer_freq', type=int, default=16,help='Frequency of memory transfer from worker to main process')
-    parser.add_argument('--total_sweep_trials', type=int, default=64, help='Total number of trials for the sweep')
+    parser.add_argument('--total_sweep_trials', type=int, default=128, help='Total number of trials for the sweep')
+
+    # Related to policy
+    parser.add_argument('--model_choice', choices=['cnn', 'mlp'], default='cnn', help='Model choice: cnn (default) or mlp')
+    parser.add_argument('--kernel_size', type=int, default=3, help='Kernel size for CNN (default: 3)')
+    parser.add_argument('--model_size', choices=['small', 'medium'], default='medium', help='Model size for CNN: small or medium (default)')
 
     # Evaluations
     parser.add_argument('--evaluate', choices=['tl', 'ppo'], help='Evaluation mode: traffic light (tl), PPO (ppo), or both')

@@ -12,19 +12,15 @@ from craver_config import (PHASES, DIRECTIONS_AND_EDGES, CONTROLLED_CROSSWALKS_D
 class CraverRoadEnv(gym.Env):
     def __init__(self, args, worker_id=None):
         super().__init__()
-
         self.vehicle_input_trips = args.vehicle_input_trips
         self.pedestrian_input_trips = args.pedestrian_input_trips
 
+        # Modify file paths to include the unique suffix. Each worker has their own environment and hence their own copy of the trips file.
         self.worker_id = worker_id
         self.unique_suffix = f"_{worker_id}" if worker_id is not None else ""
-        
-        # Modify file paths to include the unique suffix. Each worker has their own environment and hence their own copy of the trips file.
         self.vehicle_output_trips = args.vehicle_output_trips.replace('.xml', f'{self.unique_suffix}.xml')
         self.pedestrian_output_trips = args.pedestrian_output_trips.replace('.xml', f'{self.unique_suffix}.xml')
-        
-        # print(f"Vehicle trips file: {self.vehicle_output_trips}")
-        # print(f"Pedestrian trips file: {self.pedestrian_output_trips}")
+        self.original_net_file = './SUMO_files/original_craver_road.net.xml'
 
         if args.manual_demand_veh is not None :
             # Convert the demand to scaling factor first
@@ -63,13 +59,6 @@ class CraverRoadEnv(gym.Env):
         self.demand_scale_min = args.demand_scale_min
         self.demand_scale_max = args.demand_scale_max
 
-        self.directions = ['north', 'east', 'south', 'west']
-        self.turns = ['straight', 'right', 'left']
-        self.single_obs_shape = (len(self.tl_ids)*(2 + 12 + 12 + 4 + 4 + 4), ) # TL related (both veh and ped) + crosswalks related (only ped)
-
-        self.pressure_dict = {tl_id: {'vehicle': {}, 'pedestrian': {}} for tl_id in self.tl_ids}
-        self.original_net_file = './SUMO_files/original_craver_road.net.xml'
-
         self.current_crosswalk_selection = None 
         self.current_phase_group = None
         self.current_state_index = None 
@@ -82,7 +71,6 @@ class CraverRoadEnv(gym.Env):
             for crosswalk_id in data['ids']
         }
 
-        # 
         self.crosswalk_to_related_junction_edges = {
             crosswalk_id: data['related_junction_edges']
             for _, data in self.controlled_crosswalks_dict.items()
@@ -113,10 +101,19 @@ class CraverRoadEnv(gym.Env):
 
         # Get the ids of all crosswalks. This includes 1 and 2 as well.
         self.all_crosswalk_ids = [crosswalk_id for _, data in self.controlled_crosswalks_dict.items() for crosswalk_id in data['ids']]
-
         self.controlled_crosswalk_mask = [0, 3, 4, 5, 6, 7, 8, 9, 10] # The crosswalks that can be disabled. 1 and 2 are not controlled. 
         self.controlled_crosswalks_masked_dict = {k: self.controlled_crosswalks_dict[k] for k in self.controlled_crosswalk_mask if k in self.controlled_crosswalks_dict}
         self.controlled_crosswalk_masked_ids = [crosswalk_id for _, data in self.controlled_crosswalks_masked_dict.items() for crosswalk_id in data['ids']]
+        # Do these lists that are gotten from dict always maintain the same order (Yes/ No)? Answer: Yes, they do.
+        #print(f"\n\nControlled crosswalk masked ids: {self.controlled_crosswalk_masked_ids}\n\n")
+
+        self.pressure_dict = {tl_id: {'vehicle': {}, 'pedestrian': {}} for tl_id in self.tl_ids}
+        self.pressure_dict['crosswalks'] = {c: 0 for c in self.controlled_crosswalk_masked_ids}
+
+        self.directions = ['north', 'east', 'south', 'west']
+        self.turns = ['straight', 'right', 'left']
+        # The multiplier 4 is incoming, outgoing, inside, rerouted. The -1 because the crosswalk with 500 and 501 are the same. 
+        self.single_obs_shape = (len(self.tl_ids)*(2 + 12 + 12 + 4 + 4 + 4) + (len(self.controlled_crosswalk_masked_ids) - 1)*4, ) # TL related (both veh and ped) + crosswalks related (only ped). 
 
         # For crosswalk control 
         self.walking_edges_to_reroute_from = []
@@ -237,10 +234,14 @@ class CraverRoadEnv(gym.Env):
             print(f"Error calculating distance: {e}")
             return None
     
-    def _update_outgoing_pressure_dict(self, corrected_occupancy_map):
+    def _update_pressure_dict(self, corrected_occupancy_map):
         """
         Update the data structure that holds info about pressure in outgoing directions.
         For both vehicles and pedestrians.
+
+        For crosswalks, If the pedestrians are being rerouted, that means there is pressure that is not being addressed.
+        Pressure = incoming (upside + downside) - outgoing (inside)
+        However, if rerouted, then Pressure = -ve (rerouted)
         """
 
         for tl_id in self.tl_ids:
@@ -252,7 +253,7 @@ class CraverRoadEnv(gym.Env):
             for outgoing_direction in self.directions:
                 # Calculate incoming traffic towards this direction
                 incoming = 0
-                if outgoing_direction == 'north':
+                if outgoing_direction == 'north': # These four are outgoing directions
                     incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['south-straight'])
                     incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['east-right'])
                     incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['west-left'])
@@ -260,7 +261,7 @@ class CraverRoadEnv(gym.Env):
                     incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['east-right'])
                     incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['west-left'])
 
-                elif outgoing_direction == 'south':
+                elif outgoing_direction == 'south': # These four are outgoing directions
                     incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['north-straight'])
                     incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['east-left'])
                     incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['west-right'])
@@ -268,7 +269,7 @@ class CraverRoadEnv(gym.Env):
                     incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['east-left'])
                     incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['west-right'])
 
-                elif outgoing_direction == 'east':
+                elif outgoing_direction == 'east': # These four are outgoing directions
                     incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['west-straight'])
                     incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['north-left'])
                     incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['south-right'])
@@ -276,7 +277,7 @@ class CraverRoadEnv(gym.Env):
                     incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['north-left'])
                     incoming += len(corrected_occupancy_map[tl_id]['vehicle']['inside']['south-right'])
 
-                elif outgoing_direction == 'west':
+                elif outgoing_direction == 'west': # These four are outgoing directions
                     incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['east-straight'])
                     incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['north-right'])
                     incoming += len(corrected_occupancy_map[tl_id]['vehicle']['incoming']['south-left'])
@@ -291,7 +292,7 @@ class CraverRoadEnv(gym.Env):
                 vehicle_pressure[outgoing_direction] = incoming - outgoing
                 self.pressure_dict[tl_id]['vehicle'][outgoing_direction] = vehicle_pressure[outgoing_direction]
 
-            #### PEDESTRIANS ####
+            #### PEDESTRIANS (In this TL crossings) ####
             pedestrian_pressure = {d: 0 for d in self.directions}
 
             for outgoing_direction in self.directions:
@@ -305,6 +306,17 @@ class CraverRoadEnv(gym.Env):
                 pedestrian_pressure[outgoing_direction] = incoming - outgoing
                 self.pressure_dict[tl_id]['pedestrian'][outgoing_direction] = pedestrian_pressure[outgoing_direction]
 
+        #### CROSSWALKS ####  
+        for crosswalk_id in self.controlled_crosswalk_masked_ids:
+            if crosswalk_id != ':9687187501_c0': # Special case crosswalk
+                incoming = len(corrected_occupancy_map['crosswalks'][crosswalk_id]['upside']) + len(corrected_occupancy_map['crosswalks'][crosswalk_id]['downside'])
+                outgoing = len(corrected_occupancy_map['crosswalks'][crosswalk_id]['inside'])
+                rerouted = len(corrected_occupancy_map['crosswalks'][crosswalk_id]['rerouted'])
+
+                if rerouted > 0:
+                    self.pressure_dict['crosswalks'][crosswalk_id] = -rerouted
+                else:
+                    self.pressure_dict['crosswalks'][crosswalk_id] = incoming - outgoing
 
     def _get_occupancy_map(self, ):
         """
@@ -387,16 +399,15 @@ class CraverRoadEnv(gym.Env):
 
         # For the crosswalks related components
         # For each crosswalk, get the occupancy in the upside, downside, inside, and rerouted.
-        # Do we get the pedestrian ids or do we just get the count? # For now, let's get the count.
-        # For observation, pressure = (upside + downside) - inside (outgoing)
+        # Do we get the pedestrian ids or do we just get the count? # For now, let's get the ids.
         # If they are being-rerouted, they should not be a part of upside, downside, and inside. 
         occupancy_map['crosswalks'] = {}
         for crosswalk_id in self.controlled_crosswalk_masked_ids:
             occupancy_map['crosswalks'][crosswalk_id] = {
-                "upside": 0,
-                "downside": 0,
-                "inside": 0,
-                "rerouted": 0 }
+                "upside": [],
+                "downside": [],
+                "inside": [],
+                "rerouted": [] }
 
             # These already contain internal edges
             vicinity_walking_edges = self.crosswalk_to_vicinity_walking_edges[crosswalk_id]
@@ -405,26 +416,26 @@ class CraverRoadEnv(gym.Env):
             for edge in vicinity_walking_edges:
                 pedestrians = traci.edge.getLastStepPersonIDs(edge)
                 direction = self.edge_to_direction[edge]
-                occupancy_map['crosswalks'][crosswalk_id][direction] += len(pedestrians) # Incase ids are wanted, use the list instead of the length
+                occupancy_map['crosswalks'][crosswalk_id][direction].extend(pedestrians) # Incase ids are wanted, use the list instead of the length
 
             # For inside, use the crosswalk id itself.
             pedestrians = traci.edge.getLastStepPersonIDs(crosswalk_id)
-            occupancy_map['crosswalks'][crosswalk_id]['inside'] += len(pedestrians)
+            occupancy_map['crosswalks'][crosswalk_id]['inside'].extend(pedestrians)
 
             # Add re-routed pedestrians
             # If this crosswalk happens to be disabled, then add the upside and downside values to get the rerouted value. Setting upside, downside to 0.
             # Inside may contain pessengers that are in the process of crossing when the new decision is made. Not setting that to 0.
             if crosswalk_id in self.crosswalks_to_disable:
                 occupancy_map['crosswalks'][crosswalk_id]['rerouted'] = occupancy_map['crosswalks'][crosswalk_id]['upside'] + occupancy_map['crosswalks'][crosswalk_id]['downside']
-                occupancy_map['crosswalks'][crosswalk_id]['upside'] = 0
-                occupancy_map['crosswalks'][crosswalk_id]['downside'] = 0
+                occupancy_map['crosswalks'][crosswalk_id]['upside'] = []
+                occupancy_map['crosswalks'][crosswalk_id]['downside'] = []
 
         # Special case: This id 'ids': [':9687187500_c0', ':9687187501_c0'] represents a single disjoint crosswalk. Do not repeat the counts twice.
         # Just use the 9687187500_c0 once and skip the second part of the special case crosswalk (only for upside and downside) because it would have been counted in the first part.
         # This is the special case crosswalk # Since this is updating for inside (it is not affected by re-routing)
         # Also not affected by other possible problems beacuse of the order [500 comes before 501 inthe crosswalks list]
         pedestrians = traci.edge.getLastStepPersonIDs(crosswalk_id)
-        occupancy_map['crosswalks'][':9687187500_c0']['inside'] += occupancy_map['crosswalks'][':9687187501_c0']['inside'] # Use ':9687187500_c0'
+        occupancy_map['crosswalks'][':9687187500_c0']['inside'].extend(occupancy_map['crosswalks'][':9687187501_c0']['inside']) # Use ':9687187500_c0'
         del occupancy_map['crosswalks'][':9687187501_c0'] # Delete the second part of the special case crosswalk
 
         # for crosswalk_id in self.controlled_crosswalk_masked_ids:
@@ -479,11 +490,11 @@ class CraverRoadEnv(gym.Env):
             self.current_action_step = (self.current_action_step + 1) % self.steps_per_action # Wrapped around some modulo arithmetic
 
             # Collect observation at each substep
-            obs = self._get_observation(print_map=True)
+            obs = self._get_observation(print_map=False)
             #print(f"\nObservation: {obs}")
             observation_buffer.append(obs)
 
-            self._update_outgoing_pressure_dict(self.corrected_occupancy_map)
+            self._update_pressure_dict(self.corrected_occupancy_map)
 
             # Accumulate reward
             reward += self._get_reward(current_tl_action)
@@ -497,9 +508,9 @@ class CraverRoadEnv(gym.Env):
         # print(f"\nAccumulated Observation:\n{formatted_buffer}")
         # print(f"\nCurrent Action: {action}")
         #print(f"\nAccumulated Reward: {reward}")
-
         self.previous_tl_action = current_tl_action
-        observation = np.asarray(observation_buffer)
+        observation = np.asarray(observation_buffer) # shape (steps_per_action, 74); e.g. (10, 74) with 10 items each of size 74 
+        print(f"\nAccumulated Observation:\n{observation}, shape: {observation.shape}")
         info = {}
 
         return observation, reward, done, False, info
@@ -507,8 +518,12 @@ class CraverRoadEnv(gym.Env):
     def _get_observation(self, print_map=False):
         """
         This is per step observation.
-        Previous Approach: Pressure(outgoing direction) = (Incoming traffic towards this direction including inside directions) - (Actual outgoing traffic in this direction)
-        observation also includes the previous action.
+        About including previous action in the observation:
+            - Each action persists for a number of timesteps and the observation is collected at each timestep.
+            - Therefore, the previous action is the same for a number of timesteps. This adds too much extra computational overhead for the model. 
+            - It would have been fine if model was MLP (we can just attach the previous action at the end)
+            But for CNN, it breaks the grid structure.
+        Pressure itself is not a part of the observation. It is only used for reward calculation.
         """
         
         # Get the occupancy map and print it
@@ -518,11 +533,11 @@ class CraverRoadEnv(gym.Env):
         observation = []
         # Traffic lights
         for tl_id in self.tl_ids:
-            #### Previous action: PHASE GROUP INFO ####
-            previous_action = []
-            previous_action.append(self.current_phase_group)
-            previous_action.append(self.current_state_index/1) # To prevent a value of 2 [0, 1, 2] -> [0, 0.5, 1]
-            observation.extend(previous_action)
+            #### Current phase group info (This changes even within the action timesteps) ####
+            current_phase_group = []
+            current_phase_group.append(self.current_phase_group)
+            current_phase_group.append(self.current_state_index/1) # To prevent a value of 2 [0, 1, 2] -> [0, 0.5, 1]
+            observation.extend(current_phase_group)
 
             #### VEHICLES INFO ####
             # Incoming
@@ -555,14 +570,25 @@ class CraverRoadEnv(gym.Env):
 
         observation = np.asarray(observation, dtype=np.float32)
         # Create a mask for part of observations that do not need normalization i.e., a bunch of elements at the beginning (which do not need a normalization)
-        mask = np.tile([False] * (len(self.tl_ids)*len(previous_action)) + [True] * (self.single_obs_shape[0] - len(self.tl_ids)*len(previous_action)), len(self.tl_ids)) # This seems overly complicated but isnt
+        mask = np.tile([False] * (len(self.tl_ids)*len(current_phase_group)) + \
+                       [True] * (len(observation) - len(self.tl_ids)*len(current_phase_group)), len(self.tl_ids)) # This seems overly complicated but isnt
         # Normalize the items other than the masked ones
         normalizer = 10.0 # TODO: A better normalization scheme?
         observation[mask] /= normalizer
 
-        # Concatenate the crosswalk info
-        # Crosswalks
+        # Concatenate the crosswalk info (4 obs for each crosswalk)
+        crosswalk_info = []
+        for crosswalk_id in self.controlled_crosswalk_masked_ids: # ':9687187501_c0' and ':9687187500_c0' are same special case crosswalk
+            if crosswalk_id != ':9687187501_c0': # This if condition is a huge tax to the system.
+                crosswalk_info.append(len(self.corrected_occupancy_map['crosswalks'][crosswalk_id]['upside']))
+                crosswalk_info.append(len(self.corrected_occupancy_map['crosswalks'][crosswalk_id]['downside']))
+                crosswalk_info.append(len(self.corrected_occupancy_map['crosswalks'][crosswalk_id]['inside']))
+                crosswalk_info.append(len(self.corrected_occupancy_map['crosswalks'][crosswalk_id]['rerouted']))
 
+        # Normalize the crosswalk info
+        crosswalk_info = np.asarray(crosswalk_info, dtype=np.float32)
+        crosswalk_info /= normalizer # TODO: A better normalization scheme? 
+        observation = np.concatenate((observation, crosswalk_info))
         return observation
     
     def _apply_action(self, action, current_action_step, previous_tl_action=None):
@@ -603,12 +629,11 @@ class CraverRoadEnv(gym.Env):
         else: # No switch. Just continue with the green in this phase group.
             # print("Continuing with the same phase group")
             self.current_state_index = 2
-
             for tl_id in self.tl_ids:
-                    state = self.phase_groups[current_tl_action][2]["state"] # Index is always 2
-                    # print(f"Setting phase: {state}")
-                    # Skip the first two phases, they are for buffering the transition.
-                    traci.trafficlight.setRedYellowGreenState(tl_id, state)
+                state = self.phase_groups[current_tl_action][2]["state"] # Index is always 2
+                # print(f"Setting phase: {state}")
+                # Skip the first two phases, they are for buffering the transition.
+                traci.trafficlight.setRedYellowGreenState(tl_id, state)
 
         # For the same action, what choice is performed remains same within the action timesteps
         # Only update the corsswalk control lists when current_action_step is 0 i.e., when a new action is gotten
@@ -679,7 +704,6 @@ class CraverRoadEnv(gym.Env):
         """
         - Consider both Vehicles and Pedestrians
         - Penalize frequent changes of action
-        
         - Since pressure is calculated as incoming - outgoing. Pressure being high is not good.
         - To penalize high pressure, we make pressure negative.
         """
@@ -687,7 +711,9 @@ class CraverRoadEnv(gym.Env):
         reward = 0
         vehicle_pressure = 0
         pedestrian_pressure = 0
+        crosswalks_pressure = 0
 
+        # Related to Traffic Light (vehicle and pedestrian crossings)
         for tl_id in self.tl_ids:
             # Use stored pressures for reward calculation
             for agent_type in ['vehicle', 'pedestrian']:
@@ -699,12 +725,26 @@ class CraverRoadEnv(gym.Env):
                     else:
                         pedestrian_pressure += pressure
 
-        reward = -0.5*vehicle_pressure - 0.5*pedestrian_pressure  
+        # Related to Pedestrian crosswalks (If the pedestrians are re-routed, pressure is negative else it is incoming (upside + downside) - outgoing (inside crosswalk))
+        controlled_crosswalk_pressures = []
+        for crosswalk_id in self.controlled_crosswalk_masked_ids:
+            if crosswalk_id != '9687187501_c0':
+                controlled_crosswalk_pressures.append(self.pressure_dict['crosswalks'][crosswalk_id]) 
+
+        # Only collect the positive pressure values
+        crosswalks_pressure = sum(pressure for pressure in controlled_crosswalk_pressures if pressure > 0)
+                
+        # Pressure is bad. So we make it negative. Get the values from wandb config.
+        reward = -0.33*vehicle_pressure - 0.33*pedestrian_pressure - 0.33*crosswalks_pressure
 
         # Frequency penalty
         if self.previous_tl_action is not None and current_tl_action != self.previous_tl_action:
             reward -= 0.5  # Penalty for changing tl actions. Since this is per step reward. Action change is reflected multiplied by action steps.
-            
+        
+        # Re-route penalty (because any re-route increases travel time). Only collect the negative pressure values
+        reroute_pressure = sum(pressure for pressure in controlled_crosswalk_pressures if pressure < 0) # This is already negative.
+        reward -= reroute_pressure
+
         #print(f"\nStep Reward: {reward}")
         return reward
 
@@ -926,7 +966,6 @@ class CraverRoadEnv(gym.Env):
 
         self.sumo_running = True
         self.step_count = 0 # This counts the timesteps in an episode. Needs reset.
-
         self.current_action_step = 0
         self.tl_lane_dict = {}
         self.tl_lane_dict['cluster_172228464_482708521_9687148201_9687148202_#5more'] = initialize_lanes()
@@ -941,7 +980,6 @@ class CraverRoadEnv(gym.Env):
         for step in range(self.steps_per_action):
             # Apply the current phase group using _apply_action
             self._apply_action(initial_action, step, None)
-
             traci.simulationStep()
             obs = self._get_observation()
             observation_buffer.append(obs)

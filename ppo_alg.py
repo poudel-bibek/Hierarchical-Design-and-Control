@@ -1,6 +1,6 @@
 import torch
 import torch.optim as optim
-from models import MLPActorCritic
+from models import MLPActorCritic, CNNActorCritic
 
 class Memory:
     """
@@ -43,7 +43,7 @@ class PPO:
     - However, multiprocessing has higher overhead than multithreading due to the need to create separate processes and manage inter-process communication.
     - In Multiprocessing, we create separate processes, each with its own Python interpreter and memory space
     """
-    def __init__(self, state_dim, action_dim, lr, gamma, K_epochs, eps_clip, ent_coef, vf_coef, device, batch_size, num_processes, gae_lambda):
+    def __init__(self, model_dim, action_dim, lr, gamma, K_epochs, eps_clip, ent_coef, vf_coef, device, batch_size, num_processes, gae_lambda, model_choice):
         
         self.device = device
         self.gamma = gamma
@@ -54,12 +54,20 @@ class PPO:
         self.batch_size = batch_size
         self.num_processes = num_processes
         self.gae_lambda = gae_lambda
-
+        self.model_choice_functions = {
+            'cnn': CNNActorCritic,
+            'mlp': MLPActorCritic,
+        }
         # Initialize the current policy network
-        self.policy = MLPActorCritic(state_dim, action_dim, device).to(device)
+        self.policy = self.model_choice_functions[model_choice](model_dim, action_dim, device).to(device)
 
         # Initialize the old policy network (used for importance sampling)
-        self.policy_old = MLPActorCritic(state_dim, action_dim, device).to(device)
+        self.policy_old = self.model_choice_functions[model_choice](model_dim, action_dim, device).to(device)
+
+        param_counts = self.policy.param_count()
+        print(f"\nTotal number of parameters in the policy: {param_counts['total']}")
+        print(f"Actor parameters: {param_counts['actor_total']}")
+        print(f"Critic parameters: {param_counts['critic_total']}\n")
 
         # Copy the parameters from the current policy to the old policy
         self.policy_old.load_state_dict(self.policy.state_dict())
@@ -196,7 +204,6 @@ class PPO:
         avg_policy_loss /= num_batches
         avg_value_loss /= num_batches
         avg_entropy_loss /= num_batches
-
 
         # Copy new weights into old policy
         self.policy_old.load_state_dict(self.policy.state_dict())
