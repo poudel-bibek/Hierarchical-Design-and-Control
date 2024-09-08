@@ -66,7 +66,7 @@ PHASES = {
 CONTROLLED_CROSSWALKS_DICT = {
     0: { # This one is special case of a crosswalk (because of the double structure), the ones in the  middle should be excluded
         'ids': [':9687187500_c0', ':9687187501_c0'],
-        'vicinity_walking_edges': [':9687187501_w1', '1054121747#2', ':9687187495_w0', '1058666192',':9687187500_w0', ':9687187501_w0'], # To re-route from
+        'vicinity_walking_edges': [':9687187501_w1', '1054121747#2', ':9687187495_w0', '1058666192',':9687187500_w0', ':9687187501_w0', ':9687187500_w1'], # To re-route from # ':9687187500_w1' lies in the middle
         'related_junction_edges': [':9727816658_w0', ':9687187526_w0'], # For forward lookup
         'connected_edges': ['1054121752#1', '1054121752#0', '1058666191#4', '1058666191#5'],
         'reroute_edges': {'upside': '1054121747#2' , 'downside': '1058666192' }, # Used as a fulcrum
@@ -149,7 +149,7 @@ CONTROLLED_CROSSWALKS_DICT = {
 # Does not contain connected_edges
 DIRECTIONS_AND_EDGES = {
     'upside': [ 
-        '1054121747#2', ':9687187501_w1', ':9687187526_w0', ':9687187501_w0',
+        '1054121747#2', ':9687187501_w1', ':9687187526_w0', ':9687187501_w0', ':9687187500_w1',
         '1054116929#4', ':9687148199_w0','1054116933_0',':cluster_172228464_482708521_9687148201_9687148202_#5more_w6',
         '1054116929#0', ':9687148197_w0',':9666242268_w0', '1054116930',
         ':9727816851_w0', '1058666207#1', ':9727816850_w1',

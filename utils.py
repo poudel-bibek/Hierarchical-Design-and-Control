@@ -144,7 +144,7 @@ def scale_demand(input_file, output_file, scale_factor, demand_type):
     time.sleep(2)
 
 
-def find_connecting_edges(self, net, start_edge_id, end_edge_id):
+def find_connecting_edges(net, start_edge_id, end_edge_id):
     """
     Use a breadth-first search to find paths between two edges.
     net = sumo network file.

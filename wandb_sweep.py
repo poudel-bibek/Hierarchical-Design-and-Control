@@ -8,7 +8,7 @@ class HyperParameterTuner:
 
     def start(self):
         sweep_id = self.create_sweep_config()
-        wandb.agent(sweep_id, function= self.hyperparameter_tune_main, count= 32) # 32 is the total number of trials
+        wandb.agent(sweep_id, function= self.hyperparameter_tune_main, count= self.args.total_sweep_trials) 
 
     def hyperparameter_tune_main(self):
         wandb.init(project=self.project) 

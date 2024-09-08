@@ -17,8 +17,8 @@ def get_args():
     # Demand scaling
     parser.add_argument('--manual_demand_veh', type=float, default=None, help='Manually scale vehicle demand before starting the simulation (veh/hr) ')
     parser.add_argument('--manual_demand_ped', type=float, default=None, help='Manually scale pedestrian demand before starting the simulation (ped/hr)')
-    parser.add_argument('--demand_scale_min', type=float, default=1.0, help='Minimum demand scaling factor for automatic scaling (default: 0.5)')
-    parser.add_argument('--demand_scale_max', type=float, default=2.0, help='Maximum demand scaling factor for automatic scaling (default: 5.0)')
+    parser.add_argument('--demand_scale_min', type=float, default=0.5, help='Minimum demand scaling factor for automatic scaling (default: 0.5)')
+    parser.add_argument('--demand_scale_max', type=float, default=4.0, help='Maximum demand scaling factor for automatic scaling (default: 5.0)')
     
     # PPO
     parser.add_argument('--seed', type=int, default=None, help='Random seed (default: None)')
@@ -38,6 +38,7 @@ def get_args():
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size (default: 32)')
     parser.add_argument('--num_processes', type=int, default=6, help='Number of parallel processes to use')
     parser.add_argument('--memory_transfer_freq', type=int, default=16,help='Frequency of memory transfer from worker to main process')
+    parser.add_argument('--total_sweep_trials', type=int, default=64, help='Total number of trials for the sweep')
 
     # Evaluations
     parser.add_argument('--evaluate', choices=['tl', 'ppo'], help='Evaluation mode: traffic light (tl), PPO (ppo), or both')
