@@ -51,7 +51,7 @@ class HyperParameterTuner:
             'vf_coef': {'values': [0.5, 0.75, 1.0]},
             'batch_size': {'values': [32, 64, 128, 256]},
             'update_freq': {'values': [128, 256, 512, 1024]},
-            'action_duration': {'values': [10, 16, 24, 32, 40]},
+            'action_duration': {'values': [10, 16, 24, 32, 40]}, # 40 is the max action duration.
             # 'size': {'values': ['small', 'medium']},
             # 'kernel_size': {'values': [3, 5]},
             # reward related lambda values.

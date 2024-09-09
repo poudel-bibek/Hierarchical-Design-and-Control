@@ -44,7 +44,7 @@ def get_args():
     parser.add_argument('--model_choice', choices=['cnn', 'mlp'], default='cnn', help='Model choice: cnn (default) or mlp')
     parser.add_argument('--kernel_size', type=int, default=3, help='Kernel size for CNN (default: 3)')
     parser.add_argument('--model_size', choices=['small', 'medium'], default='medium', help='Model size for CNN: small or medium (default)')
-
+    parser.add_argument('--max_action_duration', type=int, default=40, help='Maximum possible action duration for CNN (default: 40)')
     # Evaluations
     parser.add_argument('--evaluate', choices=['tl', 'ppo'], help='Evaluation mode: traffic light (tl), PPO (ppo), or both')
     parser.add_argument('--model_path', type=str, help='Path to the saved PPO model for evaluation')

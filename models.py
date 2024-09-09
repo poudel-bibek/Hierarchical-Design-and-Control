@@ -5,7 +5,7 @@ import math
 
 ######## MLP model ########
 class MLPActorCritic(nn.Module):
-    def __init__(self, state_dim, action_dim, device):
+    def __init__(self, state_dim, action_dim, device, **kwargs):
         """
         A simple MLP Actor-Critic network 
         Since negative values can sparingly occur, use leaky ReLU.
@@ -18,6 +18,8 @@ class MLPActorCritic(nn.Module):
         """
         super(MLPActorCritic, self).__init__()
         self.device = device
+        
+        # hidden_dim = kwargs.get('hidden_dim', 256) #If not specified, default to 256
         
         # Shared layers
         self.shared_layers = nn.Sequential(
@@ -89,7 +91,7 @@ class MLPActorCritic(nn.Module):
 
 ######## CNN model ########
 class CNNActorCritic(nn.Module):
-    def __init__(self, in_channels, action_dim, device, size='medium', kernel_size=3):
+    def __init__(self, in_channels, action_dim, device, **kwargs):
         """
         CNN Actor-Critic network with configurable size (designed to be compatible with hyper-parameter tuning)
         we are applying conv2d, the state should be 2d with a bunch of channels.
@@ -101,48 +103,52 @@ class CNNActorCritic(nn.Module):
         self.device = device
         self.in_channels = in_channels
         
+        # action_duration = kwargs.get('action_duration') # Use this to try variable model size
+        per_timestep_state_dim = kwargs.get('per_timestep_state_dim')
+        model_size = kwargs.get('model_size', 'medium')
+        kernel_size = kwargs.get('kernel_size', 3)
+        max_action_duration = kwargs.get('max_action_duration') # Fix the model size
+
         padding = kernel_size // 2  # Ensures output size remains the same
         
-        if size == 'small':
+        if model_size == 'small':
             self.shared_cnn = nn.Sequential(
-                nn.Conv2d(in_channels, 16, kernel_size=kernel_size, stride=1, padding=padding),
+                nn.Conv2d(in_channels, 8, kernel_size=kernel_size, stride=1, padding=padding),
                 nn.LeakyReLU(),
-                nn.Conv2d(16, 32, kernel_size=kernel_size, stride=1, padding=padding),
+                nn.Conv2d(8, 16, kernel_size=kernel_size, stride=1, padding=padding),
                 nn.LeakyReLU(),
-                nn.Flatten()
+                nn.Flatten() # Since in the end, we flatten, based on the action_duration, we may end up with a different size/ shape.
             ).to(device)
-            
-            hidden_dim = 128
+            hidden_dim = 64
 
-        else:  # medium
+        else:  # medium, 3 conv layers
             self.shared_cnn = nn.Sequential(
-                nn.Conv2d(in_channels, 32, kernel_size=kernel_size, stride=1, padding=padding),
+                nn.Conv2d(in_channels, 8, kernel_size=kernel_size, stride=1, padding=padding),
                 nn.LeakyReLU(),
-                nn.Conv2d(32, 64, kernel_size=kernel_size, stride=1, padding=padding),
+                nn.Conv2d(8, 16, kernel_size=kernel_size, stride=1, padding=padding),
                 nn.LeakyReLU(),
-                nn.Conv2d(64, 64, kernel_size=kernel_size, stride=1, padding=padding),
+                nn.Conv2d(16, 16, kernel_size=kernel_size, stride=1, padding=padding),
                 nn.LeakyReLU(),
                 nn.Flatten()
             ).to(device)
-            
-            hidden_dim = 256
+            hidden_dim = 128
         
         # Calculate the size of the flattened CNN output
         with torch.no_grad():
-            sample_input = torch.zeros(1, in_channels).to(device) 
-            cnn_output_size = self.shared_cnn(sample_input).shape[1]
+            sample_input = torch.zeros(1, in_channels, max_action_duration, per_timestep_state_dim).to(device) # E.g., (1,1,10,74) batch size of 1, 1 channel, 10 timesteps, 74 state dims
+            cnn_output_size = self.shared_cnn(sample_input).shape 
             print(f"\n\nCNN output size: {cnn_output_size}\n\n")
 
         # Actor-specific layers
         self.actor_layers = nn.Sequential(
-            nn.Linear(cnn_output_size, hidden_dim),
+            nn.Linear(cnn_output_size[1], hidden_dim), # First dimension is batch size
             nn.LeakyReLU(),
             nn.Linear(hidden_dim, action_dim)
         ).to(device)
         
         # Critic-specific layers
         self.critic_layers = nn.Sequential(
-            nn.Linear(cnn_output_size, hidden_dim),
+            nn.Linear(cnn_output_size[1], hidden_dim), # First dimension is batch size
             nn.LeakyReLU(),
             nn.Linear(hidden_dim, 1)
         ).to(device)

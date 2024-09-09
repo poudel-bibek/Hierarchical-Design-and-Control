@@ -111,9 +111,21 @@ def evaluate_controller(args, env):
                 'mlp': MLPActorCritic,
             }
             
-            state_dim = env.observation_space.shape[0] * env.observation_space.shape[1]
-            action_dim = env.action_space.n
-            ppo_model = model_choice_functions[args.model_choice](state_dim, action_dim, device).to(device)
+            if args.model_choice == 'mlp':
+                model_kwargs = {
+                    'hidden_dim': 256, 
+                }
+            else: 
+                action_dim = env.action_space.n
+                n_channels = 1 
+                model_kwargs = {
+                    'action_duration': env.observation_space.shape[0],  
+                    'per_timestep_state_dim': env.observation_space.shape[1], 
+                    'model_size': args.model_size,  
+                    'kernel_size': args.kernel_size  
+                }
+
+            ppo_model = model_choice_functions[args.model_choice](n_channels, action_dim, device, **model_kwargs).to(device) 
             ppo_model.load_state_dict(torch.load(args.model_path, map_location=device)) 
 
             state, _ = env.reset()
@@ -341,29 +353,41 @@ def train(train_args, is_sweep=False, config=None):
 
     # If model choice is mlp, the input is flat. However, if model choice is cnn, the input is single channel 2d
     if train_args.model_choice == 'mlp':
-        state_dim = env.observation_space.shape[0] * env.observation_space.shape[1]
+        state_dim_flat = env.observation_space.shape[0] * env.observation_space.shape[1]
+        model_kwargs = {
+            'hidden_dim': 256,  # For MLP
+        }
     else: # cnn
-        state_dim = env.observation_space.shape # (steps_per_action, 74)
+        state_dim = env.observation_space.shape # e.g., (10, 74) = (action_duration, per_timestep_state_dim)
         n_channels = 1
+        model_kwargs = {
+            'action_duration': train_args.action_duration,  
+            'per_timestep_state_dim': env.observation_space.shape[1],  
+            'model_size': train_args.model_size,  
+            'kernel_size': train_args.kernel_size,
+            'max_action_duration': train_args.max_action_duration  
+        }
 
     action_dim = len(env.action_space.nvec)
     print(f"State dimension: {state_dim}, Action dimension: {action_dim}\n")
     env.close() # We actually dont make use of this environment for any other stuff. Each worker will have their own environment.
 
-    ppo = PPO(state_dim if train_args.model_choice == 'mlp' else n_channels, 
+
+    ppo = PPO(state_dim_flat if train_args.model_choice == 'mlp' else n_channels, 
         action_dim, 
+        device, 
         train_args.lr, 
         train_args.gamma, 
         train_args.K_epochs, 
         train_args.eps_clip, 
         train_args.ent_coef, 
         train_args.vf_coef, 
-        device, 
         train_args.batch_size,
         train_args.num_processes, 
         train_args.gae_lambda,
         train_args.model_choice,
-        )
+        **model_kwargs
+    )
         
     if not is_sweep: 
         # TensorBoard setup

@@ -985,8 +985,8 @@ class CraverRoadEnv(gym.Env):
             observation_buffer.append(obs)
 
         observation = np.asarray(observation_buffer, dtype=np.float32)
-        # print(f"\nInitial observation inside: {observation}\n")
-        # print(f"\nInitial observation inside shape: {observation.shape}\n")
+        print(f"\nInitial observation inside: {observation}\n")
+        print(f"\nInitial observation inside shape: {observation.shape}\n")
         info = {}
         return observation, info
 
