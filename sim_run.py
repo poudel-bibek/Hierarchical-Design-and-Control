@@ -510,7 +510,7 @@ class CraverRoadEnv(gym.Env):
         #print(f"\nAccumulated Reward: {reward}")
         self.previous_tl_action = current_tl_action
         observation = np.asarray(observation_buffer) # shape (steps_per_action, 74); e.g. (10, 74) with 10 items each of size 74 
-        print(f"\nAccumulated Observation:\n{observation}, shape: {observation.shape}")
+        #print(f"\nAccumulated Observation:\n{observation}, shape: {observation.shape}")
         info = {}
 
         return observation, reward, done, False, info
@@ -985,8 +985,8 @@ class CraverRoadEnv(gym.Env):
             observation_buffer.append(obs)
 
         observation = np.asarray(observation_buffer, dtype=np.float32)
-        print(f"\nInitial observation inside: {observation}\n")
-        print(f"\nInitial observation inside shape: {observation.shape}\n")
+        #print(f"\nInitial observation inside: {observation}\n")
+        #print(f"\nInitial observation inside shape: {observation.shape}\n")
         info = {}
         return observation, info
 

@@ -5,7 +5,7 @@ def get_args():
     
     # Simulation
     parser.add_argument('--sweep', action='store_true', help='Use wandb sweeps for hyperparameter tuning')
-    parser.add_argument('--gui', action='store_true', help='Use SUMO GUI (default: False)')
+    parser.add_argument('--gui', action='store_true', default=True, help='Use SUMO GUI (default: False)')
     parser.add_argument('--step_length', type=float, default=1.0, help='Simulation step length (default: 1.0)') # Since we have pedestrians, who walk slow. A value too small is not required.
     parser.add_argument('--action_duration', type=float, default=10, help='Duration of each action (default: 10.0)')
     parser.add_argument('--auto_start', action='store_true', default=True, help='Automatically start the simulation')
@@ -44,7 +44,9 @@ def get_args():
     parser.add_argument('--model_choice', choices=['cnn', 'mlp'], default='cnn', help='Model choice: cnn (default) or mlp')
     parser.add_argument('--kernel_size', type=int, default=3, help='Kernel size for CNN (default: 3)')
     parser.add_argument('--model_size', choices=['small', 'medium'], default='medium', help='Model size for CNN: small or medium (default)')
-    parser.add_argument('--max_action_duration', type=int, default=40, help='Maximum possible action duration for CNN (default: 40)')
+    parser.add_argument('--use_dilation', action='store_true', default=False, help='Use dilation for CNN (default: False)')
+    parser.add_argument('--dropout_rate', type=float, default=0.2, help='Dropout rate for CNN (default: 0.2)')
+
     # Evaluations
     parser.add_argument('--evaluate', choices=['tl', 'ppo'], help='Evaluation mode: traffic light (tl), PPO (ppo), or both')
     parser.add_argument('--model_path', type=str, help='Path to the saved PPO model for evaluation')

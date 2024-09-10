@@ -15,6 +15,7 @@ class MLPActorCritic(nn.Module):
         The network needs to understand that the 10 choices are binary. (Done in the act function)
 
         The input is flat
+        TODO: Regularization: Apply Dropout and Batch Normalization after the shared layers.
         """
         super(MLPActorCritic, self).__init__()
         self.device = device
@@ -57,7 +58,9 @@ class MLPActorCritic(nn.Module):
         """
         Select an action based on the current state
         """
-        action_logits = self.actor(state)  # outputs logits for each binary decision
+
+        state_tensor = torch.FloatTensor(state.flatten()).to(self.device) # Because MLP receives a flattened input.
+        action_logits = self.actor(state_tensor)  # outputs logits for each binary decision
         action_probs = torch.sigmoid(action_logits) # convert these logits to probabilities
         dist = Bernoulli(action_probs) # create a Bernoulli distribution using these probabilities
         action = dist.sample() # sample from this distribution to get our binary actions.
@@ -96,64 +99,113 @@ class CNNActorCritic(nn.Module):
         CNN Actor-Critic network with configurable size (designed to be compatible with hyper-parameter tuning)
         we are applying conv2d, the state should be 2d with a bunch of channels.
         Choices: 
-            size: 'small' or 'medium' (default)
-            kernel_size: 3 (default) or 5
+            Config: Small: 
+                4 Conv layers
+                3 Linear layers
+
+            Config: Medium:
+                6 Conv layers
+                4 Linear layers
+
+        Regularization: Dropout and Batch Norm (mitigation of internal covariate shift)
+        Conservatively using pooling layers. Every piece of information is important, however we also want to avoid overfitting and keep parameters modest. 
+        Dilation: For the first layer, experiment with dilation. (Disabled for now)
+
+        During hyper-param sweep, the model size changes based on one of the dimension of the input (action_duration). 
+        Even at high action durations, the model size is around 4.1M parameters. 
         """
         super(CNNActorCritic, self).__init__()
-        self.device = device
+        self.device = torch.device(device)
         self.in_channels = in_channels
         
-        # action_duration = kwargs.get('action_duration') # Use this to try variable model size
-        per_timestep_state_dim = kwargs.get('per_timestep_state_dim')
+        self.action_duration = kwargs.get('action_duration')
+        self.per_timestep_state_dim = kwargs.get('per_timestep_state_dim')
         model_size = kwargs.get('model_size', 'medium')
         kernel_size = kwargs.get('kernel_size', 3)
-        max_action_duration = kwargs.get('max_action_duration') # Fix the model size
+        dropout_rate = kwargs.get('dropout_rate', 0.2)
+        padding = kernel_size // 2
 
-        padding = kernel_size // 2  # Ensures output size remains the same
-        
+        # use_dilation = kwargs.get('use_dilation', False)
+        dilation = 1 #2 if use_dilation else 1 #1 means no dilation
+
         if model_size == 'small':
             self.shared_cnn = nn.Sequential(
-                nn.Conv2d(in_channels, 8, kernel_size=kernel_size, stride=1, padding=padding),
+                nn.Conv2d(in_channels, 16, kernel_size=kernel_size, stride=1, padding=padding, dilation=dilation),
+                nn.BatchNorm2d(16),
                 nn.LeakyReLU(),
-                nn.Conv2d(8, 16, kernel_size=kernel_size, stride=1, padding=padding),
+                nn.MaxPool2d(kernel_size=2, stride=2),  # Added pooling layer
+                nn.Conv2d(16, 32, kernel_size=kernel_size, stride=1, padding=padding),
+                nn.BatchNorm2d(32),
                 nn.LeakyReLU(),
-                nn.Flatten() # Since in the end, we flatten, based on the action_duration, we may end up with a different size/ shape.
-            ).to(device)
-            hidden_dim = 64
-
-        else:  # medium, 3 conv layers
-            self.shared_cnn = nn.Sequential(
-                nn.Conv2d(in_channels, 8, kernel_size=kernel_size, stride=1, padding=padding),
+                nn.Conv2d(32, 64, kernel_size=kernel_size, stride=1, padding=padding),
+                nn.BatchNorm2d(64),
                 nn.LeakyReLU(),
-                nn.Conv2d(8, 16, kernel_size=kernel_size, stride=1, padding=padding),
+                nn.MaxPool2d(kernel_size=2, stride=2),  # Added pooling layer
+                nn.Conv2d(64, 64, kernel_size=kernel_size, stride=1, padding=padding),
+                nn.BatchNorm2d(64),
                 nn.LeakyReLU(),
-                nn.Conv2d(16, 16, kernel_size=kernel_size, stride=1, padding=padding),
-                nn.LeakyReLU(),
-                nn.Flatten()
-            ).to(device)
+                nn.Flatten(),
+                nn.Dropout(dropout_rate)
+            ).to(self.device)
             hidden_dim = 128
-        
+
+        else:  # medium
+            self.shared_cnn = nn.Sequential(
+                nn.Conv2d(in_channels, 16, kernel_size=kernel_size, stride=1, padding=padding, dilation=dilation),
+                nn.BatchNorm2d(16),
+                nn.LeakyReLU(),
+                nn.MaxPool2d(kernel_size=2, stride=2),  # Added pooling layer
+                nn.Conv2d(16, 32, kernel_size=kernel_size, stride=1, padding=padding),
+                nn.BatchNorm2d(32),
+                nn.LeakyReLU(),
+                nn.Conv2d(32, 64, kernel_size=kernel_size, stride=1, padding=padding),
+                nn.BatchNorm2d(64),
+                nn.LeakyReLU(),
+                nn.MaxPool2d(kernel_size=2, stride=2),  # Added pooling layer
+                nn.Conv2d(64, 128, kernel_size=kernel_size, stride=1, padding=padding),
+                nn.BatchNorm2d(128),
+                nn.LeakyReLU(),
+                nn.Conv2d(128, 128, kernel_size=kernel_size, stride=1, padding=padding),
+                nn.BatchNorm2d(128),
+                nn.LeakyReLU(),
+                nn.MaxPool2d(kernel_size=2, stride=2),  # Added pooling layer
+                nn.Conv2d(128, 128, kernel_size=kernel_size, stride=1, padding=padding),
+                nn.BatchNorm2d(128),
+                nn.LeakyReLU(),
+                nn.Flatten(),
+                nn.Dropout(dropout_rate)
+            ).to(self.device)
+            hidden_dim = 256
+
         # Calculate the size of the flattened CNN output
         with torch.no_grad():
-            sample_input = torch.zeros(1, in_channels, max_action_duration, per_timestep_state_dim).to(device) # E.g., (1,1,10,74) batch size of 1, 1 channel, 10 timesteps, 74 state dims
-            cnn_output_size = self.shared_cnn(sample_input).shape 
-            print(f"\n\nCNN output size: {cnn_output_size}\n\n")
+            sample_input = torch.zeros(1, in_channels, self.action_duration, self.per_timestep_state_dim).to(self.device) # E.g., (1,1,10,74) batch size of 1, 1 channel, 10 timesteps, 74 state dims
+            cnn_output_size = self.shared_cnn(sample_input).shape[1]
+            #print(f"\n\nCNN output size: {cnn_output_size}\n\n")
 
         # Actor-specific layers
         self.actor_layers = nn.Sequential(
-            nn.Linear(cnn_output_size[1], hidden_dim), # First dimension is batch size
+            nn.Linear(cnn_output_size, hidden_dim),
             nn.LeakyReLU(),
-            nn.Linear(hidden_dim, action_dim)
+            nn.Dropout(dropout_rate),
+            nn.Linear(hidden_dim, hidden_dim // 2),
+            nn.LeakyReLU(),
+            nn.Dropout(dropout_rate),
+            nn.Linear(hidden_dim // 2, action_dim)
         ).to(device)
         
         # Critic-specific layers
         self.critic_layers = nn.Sequential(
-            nn.Linear(cnn_output_size[1], hidden_dim), # First dimension is batch size
+            nn.Linear(cnn_output_size, hidden_dim),
             nn.LeakyReLU(),
-            nn.Linear(hidden_dim, 1)
+            nn.Dropout(dropout_rate),
+            nn.Linear(hidden_dim, hidden_dim // 2),
+            nn.LeakyReLU(),
+            nn.Dropout(dropout_rate),
+            nn.Linear(hidden_dim // 2, 1)
         ).to(device)
-    
-    def actor(self, state):
+
+    def actor(self, state,):
         shared_features = self.shared_cnn(state)
         return self.actor_layers(shared_features)
     
@@ -165,13 +217,12 @@ class CNNActorCritic(nn.Module):
         """
         Select an action based on the current state
         """
-        print(f"\n\nState shape: {state.shape}\n\n")
-        
-        state = state.view(1, self.in_channels)
-        action_logits = self.actor(state)
+        state_tensor = state.to(self.device).reshape(1, self.in_channels, self.action_duration, self.per_timestep_state_dim)
+        action_logits = self.actor(state_tensor)
         action_probs = torch.sigmoid(action_logits)
         dist = Bernoulli(action_probs)
-        action = dist.sample()
+        action = dist.sample().squeeze(0)
+        #print(f"\n\nAction: {action}\n\n")
         return action.long(), dist.log_prob(action).sum(-1)
 
     def evaluate(self, states, actions):

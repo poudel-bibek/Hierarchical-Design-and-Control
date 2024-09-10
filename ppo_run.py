@@ -122,7 +122,9 @@ def evaluate_controller(args, env):
                     'action_duration': env.observation_space.shape[0],  
                     'per_timestep_state_dim': env.observation_space.shape[1], 
                     'model_size': args.model_size,  
-                    'kernel_size': args.kernel_size  
+                    'kernel_size': args.kernel_size,
+                    'use_dilation': args.use_dilation,
+                    'dropout_rate': args.dropout_rate
                 }
 
             ppo_model = model_choice_functions[args.model_choice](n_channels, action_dim, device, **model_kwargs).to(device) 
@@ -130,8 +132,7 @@ def evaluate_controller(args, env):
 
             state, _ = env.reset()
             for t in range(args.max_timesteps):
-                state_tensor = torch.FloatTensor(state.flatten()).to(device)
-                action, _ = ppo_model.act(state_tensor)
+                action, _ = ppo_model.act(state)
                 state, reward, done, truncated, info = env.step(action)
                 
                 occupancy_map = env._get_occupancy_map()
@@ -258,6 +259,8 @@ def worker(rank, args, shared_policy_old, memory_queue, global_seed):
     At every iteration, 1 worker will carry out one episode.
     memory_queue is used to store the memory of each worker and send it back to the main process.
     shared_policy_old is used for importance sampling.
+
+    Although the worker runs simulation in CPU, the policy inference is done in GPU.
     """
 
     # Set seed for this worker
@@ -267,7 +270,7 @@ def worker(rank, args, shared_policy_old, memory_queue, global_seed):
     torch.manual_seed(worker_seed)
 
     env = CraverRoadEnv(args, worker_id=rank)
-    worker_device = torch.device("cpu")
+    worker_device = torch.device("cuda") if args.gpu and torch.cuda.is_available() else torch.device("cpu")
     memory_transfer_freq = args.memory_transfer_freq  # Get from args
 
     # The central memory is a collection of memories from all processes.
@@ -276,8 +279,6 @@ def worker(rank, args, shared_policy_old, memory_queue, global_seed):
     shared_policy_old = shared_policy_old.to(worker_device)
 
     state, _ = env.reset()
-    state = state.flatten()
-
     ep_reward = 0
     steps_since_update = 0
      
@@ -287,6 +288,8 @@ def worker(rank, args, shared_policy_old, memory_queue, global_seed):
         # Select action
         with torch.no_grad():
             action, logprob = shared_policy_old.act(state_tensor)
+            action = action.cpu()  # Explicitly Move to CPU, Incase they were on GPU
+            logprob = logprob.cpu() 
 
         # Perform action
         # These reward and next_state are for the action_duration timesteps.
@@ -365,13 +368,13 @@ def train(train_args, is_sweep=False, config=None):
             'per_timestep_state_dim': env.observation_space.shape[1],  
             'model_size': train_args.model_size,  
             'kernel_size': train_args.kernel_size,
-            'max_action_duration': train_args.max_action_duration  
+            'use_dilation': train_args.use_dilation,
+            'dropout_rate': train_args.dropout_rate
         }
 
     action_dim = len(env.action_space.nvec)
     print(f"State dimension: {state_dim}, Action dimension: {action_dim}\n")
     env.close() # We actually dont make use of this environment for any other stuff. Each worker will have their own environment.
-
 
     ppo = PPO(state_dim_flat if train_args.model_choice == 'mlp' else n_channels, 
         action_dim, 

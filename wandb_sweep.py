@@ -52,9 +52,14 @@ class HyperParameterTuner:
             'batch_size': {'values': [32, 64, 128, 256]},
             'update_freq': {'values': [128, 256, 512, 1024]},
             'action_duration': {'values': [10, 16, 24, 32, 40]}, # 40 is the max action duration.
-            # 'size': {'values': ['small', 'medium']},
-            # 'kernel_size': {'values': [3, 5]},
-            # reward related lambda values.
+
+            # CNN specific parameters
+            'size': {'values': ['small', 'medium']},
+            'kernel_size': {'values': [3, 5]},
+            'dropout_rate': {'values': [0.1, 0.2, 0.3]},
+            
+            # Reward related lambda values.
+
             }
         }
 
