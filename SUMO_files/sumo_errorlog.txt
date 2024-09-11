@@ -1,0 +1,96 @@
+Warning: Invalid departPos 2.07 given for stopping at :9727816623_w1. Using edge end instead.
+Warning: Invalid departPos 0.96 given for person '409' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 1.49 given for person '2068' walking from edge '1054121747#1'. Using edge end instead.
+Warning: Invalid departPos 1.62 given for stopping at :9740157155_w0. Using edge end instead.
+Warning: Invalid departPos 2.06 given for stopping at :9727816623_w1. Using edge end instead.
+Warning: Invalid departPos 3.42 given for stopping at :9687187500_w0. Using edge end instead.
+Warning: Invalid departPos 0.63 given for person '103' walking from edge '1060112789#1'. Using edge end instead.
+Warning: Invalid departPos 0.66 given for person '1597' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 1.30 given for stopping at :9740157155_w1. Using edge end instead.
+Warning: Invalid departPos 1.30 given for person '1611' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 1.11 given for person '1649' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 0.41 given for person '1573' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 1.25 given for person '1860' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 0.50 given for person '1809' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 3.74 given for stopping at :9687187500_w0. Using edge end instead.
+Warning: Invalid departPos 3.50 given for stopping at :9687187500_w0. Using edge end instead.
+Warning: Person '558' is jammed on edge ':9740157142_w0', time=616.00.
+Warning: Person '787' is jammed on edge ':9740157142_w0', time=617.00.
+Warning: Person '923' is jammed on edge ':9740157142_w0', time=617.00.
+Warning: Person '1650' is jammed on edge ':9740157142_w0', time=629.00.
+Warning: Person '1280' is jammed on edge ':9740157142_w0', time=630.00.
+Warning: Person '2113' is jammed on edge ':9740157142_w0', time=633.00.
+Warning: Person '552' is jammed on edge ':9740157142_w0', time=636.00.
+Warning: Person '644' is jammed on edge ':9740157142_w0', time=654.00.
+Warning: Person '912' is jammed on edge ':9740157142_w0', time=655.00.
+Warning: Person '800' is jammed on edge ':9740157142_w0', time=657.00.
+Warning: Person '583' is jammed on edge ':9740157142_w0', time=659.00.
+Warning: Person '595' is jammed on edge ':9740157142_w0', time=660.00.
+Warning: Person '1185' is jammed on edge ':9740157142_w0', time=672.00.
+Warning: Person '544' is jammed on edge ':9740157142_w0', time=674.00.
+Warning: Person '626' is jammed on edge ':9740157142_w0', time=684.00.
+Warning: Person '842' is jammed on edge '1058666187#1', time=695.00.
+Warning: Invalid departPos 1.88 given for person '1531' walking from edge '1060131406'. Using edge end instead.
+Warning: Person '1166' is jammed on edge ':9740157142_w0', time=738.00.
+Warning: Invalid departPos 0.98 given for person '1830' walking from edge '1058666207#0'. Using edge end instead.
+Warning: Person '638' is jammed on edge ':9740157211_w0', time=762.00.
+Warning: Person '424' is jammed on edge ':9740157211_w0', time=763.00.
+Warning: Person '167' is jammed on edge ':9740157211_w0', time=769.00.
+Warning: Person '255' is jammed on edge '1058666187#1', time=785.00.
+Warning: Invalid departPos 0.84 given for person '1016' walking from edge '1058666207#0'. Using edge end instead.
+Warning: Invalid departPos 1.06 given for person '1355' walking from edge '1058666206#0'. Using edge end instead.
+Warning: Invalid departPos 0.97 given for person '1620' walking from edge '1058666207#0'. Using edge end instead.
+Warning: Person '571' is jammed on edge '1058666187#1', time=803.00.
+Warning: Person '370' is jammed on edge ':9740157211_w0', time=804.00.
+Warning: Person '1140' is jammed on edge ':9740157211_w0', time=805.00.
+Warning: Person '1153' is jammed on edge ':9740157142_w0', time=814.00.
+Warning: Person '137' is jammed on edge ':9740157211_w0', time=814.00.
+Warning: Person '396' is jammed on edge ':9740157211_w0', time=815.00.
+Warning: Person '149' is jammed on edge '1060131404#3', time=820.00.
+Warning: Person '447' is jammed on edge '1060131404#3', time=837.00.
+Warning: Invalid departPos 6.56 given for person '1527' walking from edge '1060112789#2'. Using edge end instead.
+Warning: Invalid departPos 0.56 given for person '1722' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 0.98 given for person '827' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 1.05 given for person '1691' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Person '660' is jammed on edge ':9740157211_w0', time=873.00.
+Warning: Person '1154' is jammed on edge ':9740157142_w0', time=875.00.
+Warning: Person '2093' is jammed on edge '1060131404#2', time=882.00.
+Warning: Invalid departPos 1.66 given for stopping at :9727816623_w0. Using edge end instead.
+Warning: Person '1152' is jammed on edge '1060131404#2', time=901.00.
+Warning: Person '808' is jammed on edge ':9740157142_w0', time=919.00.
+Warning: Person '633' is jammed on edge ':9740157142_w0', time=920.00.
+Warning: Person '1276' is jammed on edge ':9740157142_w0', time=920.00.
+Warning: Person '1129' is jammed on edge ':9740157142_w0', time=922.00.
+Warning: Person '2131' is jammed on edge '1058666187#2', time=922.00.
+Warning: Person '934' is jammed on edge '1058666187#2', time=922.00.
+Warning: Invalid departPos 1.00 given for person '1667' walking from edge '1058666207#0'. Using edge end instead.
+Warning: Person '1180' is jammed on edge ':9740157142_w0', time=928.00.
+Warning: Person '900' is jammed on edge ':9740157142_w0', time=934.00.
+Warning: Person '909' is jammed on edge ':9740157142_w0', time=934.00.
+Warning: Person '2097' is jammed on edge '1058666187#2', time=936.00.
+Warning: Person '1658' is jammed on edge '1058666187#2', time=936.00.
+Warning: Person '2122' is jammed on edge ':9740157142_w0', time=937.00.
+Warning: Person '2101' is jammed on edge ':9740157142_w0', time=939.00.
+Warning: Invalid departPos 3.64 given for stopping at :9687187500_w0. Using edge end instead.
+Warning: Person '449' is jammed on edge '1060131404#3', time=944.00.
+Warning: Person '688' is jammed on edge ':9740484420_w0', time=945.00.
+Warning: Person '604' is jammed on edge ':9740157142_w0', time=956.00.
+Warning: Person '539' is jammed on edge '1058666187#1', time=956.00.
+Warning: Person '817' is jammed on edge '1058666187#1', time=957.00.
+Warning: Person '870' is jammed on edge ':9740157142_w0', time=957.00.
+Warning: Person '5' is jammed on edge ':9740157142_w0', time=957.00.
+Warning: Person '891' is jammed on edge ':9740157142_w0', time=957.00.
+Warning: Person '649' is jammed on edge ':9740157142_w0', time=963.00.
+Warning: Person '358' is jammed on edge '1058666187#1', time=965.00.
+Warning: Person '1194' is jammed on edge ':9740157142_w0', time=974.00.
+Warning: Person '1137' is jammed on edge ':9740157142_w0', time=976.00.
+Warning: Person '647' is jammed on edge '1058666187#1', time=977.00.
+Warning: Person '461' is jammed on edge '1058666187#1', time=980.00.
+Warning: Person '2110' is jammed on edge ':9740157142_w0', time=986.00.
+Warning: Person '838' is jammed on edge ':9740157142_w0', time=987.00.
+Warning: Person '554' is jammed on edge ':9740157142_w0', time=987.00.
+Warning: Invalid departPos 1.59 given for stopping at :9740157155_w0. Using edge end instead.
+Warning: Invalid departPos 0.59 given for person '1557' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 1.27 given for person '1603' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Person '431' is jammed on edge '1058666187#1', time=997.00.
+Warning: Person '150' is jammed on edge ':9740484523_w0', time=1009.00.

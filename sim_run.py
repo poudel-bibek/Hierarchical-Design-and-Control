@@ -701,14 +701,35 @@ class CraverRoadEnv(gym.Env):
         #print(f"\nDisabled crosswalks: {disabled_crosswalks}\n")
 
     def _get_reward(self, current_tl_action):
-        """
-        - Consider both Vehicles and Pedestrians
-        - Penalize frequent changes of action
-        - Since pressure is calculated as incoming - outgoing. Pressure being high is not good.
-        - To penalize high pressure, we make pressure negative.
+        """ 
+                
+        Intersection:
+            - Traffic Signal control: 2 major choices: 
+                1. Pressure based:
+                Pressure = Incoming - Outgoing. Penalize high pressure. 
+
+                2. Maximum wait aggregated queue (mwaq)
+
+            - Crosswalk Signal Control (in the intersection)
+                1. Pressure based (similar to above)
+
+        Corridor:
+            - Control 9 crosswalks
+            Should each crosswalk act like a traffic light?
+
+        Other general components: 
+            - Penalty on frequent changes of action
+
+
+        # TODO: 
+        1. Reward centering?
+        2. Reward shaping?
         """
 
         reward = 0
+
+        # Intersection
+
         vehicle_pressure = 0
         pedestrian_pressure = 0
         crosswalks_pressure = 0
