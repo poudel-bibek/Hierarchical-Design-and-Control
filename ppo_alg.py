@@ -83,9 +83,9 @@ class PPO:
 
         param_counts = self.policy.param_count()
         print(f"\nTotal number of parameters in {self.agent_type}-level policy: {param_counts['total']}")
-        print(f"Actor parameters: {param_counts['actor_total']}")
-        print(f"Critic parameters: {param_counts['critic_total']}")
-        print(f"Shared parameters: {param_counts['shared']}\n")
+        print(f"\tActor parameters: {param_counts['actor_total']}")
+        print(f"\tCritic parameters: {param_counts['critic_total']}")
+        print(f"\tShared parameters: {param_counts['shared']}\n")
 
         # Copy the parameters from the current policy to the old policy
         self.policy_old.load_state_dict(self.policy.state_dict())

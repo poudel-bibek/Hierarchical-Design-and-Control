@@ -23,7 +23,7 @@ def get_args():
     # PPO (general params)
     parser.add_argument('--seed', type=int, default=None, help='Random seed (default: None)')
     parser.add_argument('--gpu', action='store_true', default=True, help='Use GPU if available (default: use CPU)')
-    parser.add_argument('--total_timesteps', type=int, default=500000, help='Total number of timesteps the simulation will run (default: 300000)')
+    parser.add_argument('--total_timesteps', type=int, default=1500000, help='Total number of timesteps the simulation will run (default: 1.5M)')
     parser.add_argument('--max_timesteps', type=int, default=720, help='Maximum number of steps in one episode (default: 720)')
     parser.add_argument('--total_sweep_trials', type=int, default=128, help='Total number of trials for the wandb sweep')
     parser.add_argument('--memory_transfer_freq', type=int, default=16,help='Frequency of memory transfer from worker to main process') # Only applicable for lower level agent.

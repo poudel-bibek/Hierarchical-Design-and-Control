@@ -13,6 +13,7 @@ import torch.multiprocessing as mp # wow we get this from torch itself
 from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
 from craver_control_env import CraverControlEnv
+from craver_design_env import CraverDesignEnv
 from models import MLPActorCritic, CNNActorCritic
 
 from wandb_sweep import HyperParameterTuner
@@ -348,59 +349,43 @@ def train(train_args, is_sweep=False, config=None):
                 setattr(train_args, key, value)
         
     global_step = 0
-    dymmy_lower_env = CraverControlEnv(train_args, worker_id=None) # First environment instance. Required for setup.
-
     device = torch.device("cuda:0" if torch.cuda.is_available() and train_args.gpu else "cpu")
     print(f"Using device: {device}")
-    print(f"\nDefined observation space: {dymmy_lower_env.observation_space}")
-    print(f"Observation space shape: {dymmy_lower_env.observation_space.shape}")
-    print(f"\nDefined action space: {dymmy_lower_env.action_space}")
-    print(f"Options per action dimension: {dymmy_lower_env.action_space.nvec}")
 
-    # Lower level agent
-    # If model choice is mlp, the input is flat. However, if model choice is cnn, the input is single channel 2d
-    if train_args.lower_model_choice == 'mlp':
-        state_dim_flat = dymmy_lower_env.observation_space.shape[0] * dymmy_lower_env.observation_space.shape[1]
-        model_kwargs_lower = {
-            'hidden_dim': 256,  # For MLP
-            }
-        
-    else: # cnn
-        state_dim = dymmy_lower_env.observation_space.shape # e.g., (10, 74) = (action_duration, per_timestep_state_dim)
-        n_channels = 1
-        model_kwargs_lower = {
-            'action_duration': train_args.action_duration,  
-            'per_timestep_state_dim': dymmy_lower_env.observation_space.shape[1],  
-            'model_size': train_args.lower_model_size,  
-            'kernel_size': train_args.lower_kernel_size,
-            'dropout_rate': train_args.lower_dropout_rate
-            }
+    # Dummy agents. Required for setup.
+    agents = {'lower' : CraverControlEnv(train_args, worker_id=None) , 
+              'higher':  CraverDesignEnv(train_args) }
     
+    for agent in agents.keys():
+        print(f"\nFor {agent} level agent:")
+        print(f"\tDefined observation space: {agents[agent].observation_space}")
+        print(f"\tObservation space shape: {agents[agent].observation_space.shape}")
+        print(f"\tDefined action space: {agents[agent].action_space}")
+        print(f"\tOptions per action dimension: {agents[agent].action_space.nvec}")
+
     # Higher level agent
     if train_args.higher_model_choice == 'mlp':
-        state_dim_flat = env.observation_space.shape[0] * env.observation_space.shape[1]
+        state_dim_flat = 40 # TODO: harcoded, change this
         model_kwargs_higher = {
             'hidden_dim': 256,  # For MLP
             }
     else: # cnn
-        state_dim = env.observation_space.shape # e.g., (10, 74) = (action_duration, per_timestep_state_dim)
+        state_dim = (10, 74) # TODO: hardcoded, change this
         n_channels = 1
         model_kwargs_higher = {
             'action_duration': train_args.action_duration,  
-            'per_timestep_state_dim': env.observation_space.shape[1],  
+            'per_timestep_state_dim': 40,  # TODO: hardcoded, change this
             'model_size': train_args.higher_model_size,  
             'kernel_size': train_args.higher_kernel_size,
             'dropout_rate': train_args.higher_dropout_rate
             }
     
+    higher_action_dim = 15 # TODO: hardcoded, change this
+    print(f"\nHigher level agent: \n\tState dimension: {state_dim}, Action dimension: {higher_action_dim}\n")
 
-    action_dim = len(dymmy_lower_env.action_space.nvec)
-    print(f"State dimension: {state_dim}, Action dimension: {action_dim}\n")
-    env.close() # We actually dont make use of this environment for any other stuff. Each worker will have their own environment.
-
-    # This is the higher level agent.
+    agents['higher'].close() # Dont need this anymore
     higher_ppo = PPO(state_dim_flat if train_args.higher_model_choice == 'mlp' else n_channels, 
-        action_dim, 
+        higher_action_dim, 
         device, 
         train_args.higher_lr, 
         train_args.higher_gamma, 
@@ -415,16 +400,30 @@ def train(train_args, is_sweep=False, config=None):
         agent_type="higher",
         **model_kwargs_higher
         )
+    
+    # Lower level agent
+    # If model choice is mlp, the input is flat. However, if model choice is cnn, the input is single channel 2d
+    if train_args.lower_model_choice == 'mlp':
+        state_dim_flat = agents['lower'].observation_space.shape[0] * agents['lower'].observation_space.shape[1]
+        model_kwargs_lower = {
+            'hidden_dim': 256,  # For MLP
+            }
+    else: # cnn
+        state_dim = agents['lower'].observation_space.shape # e.g., (10, 74) = (action_duration, per_timestep_state_dim)
+        n_channels = 1
+        model_kwargs_lower = {
+            'action_duration': train_args.action_duration,  
+            'per_timestep_state_dim': agents['lower'].observation_space.shape[1],  
+            'model_size': train_args.lower_model_size,  
+            'kernel_size': train_args.lower_kernel_size,
+            'dropout_rate': train_args.lower_dropout_rate
+            }
+    lower_action_dim = len(agents['lower'].action_space.nvec)
+    print(f"\nLower level agent: \n\tState dimension: {state_dim}, Action dimension: {lower_action_dim}")
 
-    # Higher level agent will modify the network file on a new design decision. Lower level agents will make use this network file.
-
-    higher_env = CraverRoadEnv(train_args, worker_id=None) # First environment instance. Required for setup.
-
-
-
-    # This is the lower level agent 
+    agents['lower'].close() # Dont need this anymore
     lower_ppo = PPO(state_dim_flat if train_args.lower_model_choice == 'mlp' else n_channels, 
-        action_dim, 
+        lower_action_dim, 
         device, 
         train_args.lower_lr, 
         train_args.lower_gamma, 

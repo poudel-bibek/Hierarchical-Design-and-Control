@@ -5,7 +5,6 @@ import torch
 import random
 import gymnasium as gym
 import numpy as np
-import xml.etree.ElementTree as ET
 from utils import convert_demand_to_scale_factor, scale_demand
 from craver_config import (PHASES, DIRECTIONS_AND_EDGES, CONTROLLED_CROSSWALKS_DICT, initialize_lanes, get_phase_groups )
 
@@ -766,21 +765,11 @@ class CraverControlEnv(gym.Env):
         # Only collect the positive pressure values. A negative value means re-routed i.e., the pressure was discarded.
         crosswalks_pressure = sum(pressure for pressure in controlled_crosswalk_pressures if pressure > 0)
                 
-
-
-
-
-
-
-
-
         reward = lambda1*vehicle_pressure + lambda2*pedestrian_pressure + lambda3*crosswalks_pressure
 
 
         # Corridor
         # Crosswalk control
-
-
 
         # Other general components
         # Frequency penalty
@@ -801,23 +790,7 @@ class CraverControlEnv(gym.Env):
         """
         return self.step_count >= self.max_timesteps
 
-    def _modify_net_file(self, crosswalks_to_disable):
-        """
-        Just for changing the appearence of disallowed crosswalks. Not used right now.
-        """
-        tree = ET.parse(self.original_net_file)
-        root = tree.getroot()
 
-        for crosswalk_id in crosswalks_to_disable:
-            # Find the edge element corresponding to this crosswalk
-            edge = root.find(f".//edge[@id='{crosswalk_id}']")
-            if edge is not None:
-                # Find the lane within the crosswalk
-                lane = edge.find('lane')
-                if lane is not None:
-                    lane.set('width', '0.1')
-
-        tree.write('./SUMO_files/modified_craver_road.net.xml')
 
     def _disallow_pedestrians(self, walking_edges_to_reroute_from, related_junction_edges_to_lookup_from):
         """ 
@@ -962,12 +935,6 @@ class CraverControlEnv(gym.Env):
 
         scale_demand(self.vehicle_input_trips, self.vehicle_output_trips, scale_factor_vehicle, demand_type="vehicle")
         scale_demand(self.pedestrian_input_trips, self.pedestrian_output_trips, scale_factor_pedestrian, demand_type="pedestrian")
-
-        # This should be done here before the SUMO call. This can disallow pedestrians before the simulation run.
-        # Randomly select crosswalks to disable
-        # to_disable = random.sample(self.controlled_crosswalks, min(5, len(self.controlled_crosswalks)))
-        # Before sumo call 
-        # self._modify_net_file(to_disable)
 
         if self.auto_start:
             sumo_cmd = ["sumo-gui" if self.use_gui else "sumo", 
