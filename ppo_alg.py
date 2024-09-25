@@ -57,6 +57,7 @@ class PPO:
                  num_processes, 
                  gae_lambda, 
                  model_choice,
+                 agent_type, # higher or lower
                  **model_kwargs):
         
         self.device = device
@@ -68,6 +69,7 @@ class PPO:
         self.batch_size = batch_size
         self.num_processes = num_processes
         self.gae_lambda = gae_lambda
+        self.agent_type = agent_type
         self.model_choice_functions = {
             'cnn': CNNActorCritic,
             'mlp': MLPActorCritic,
@@ -80,9 +82,10 @@ class PPO:
         self.policy_old = self.model_choice_functions[model_choice](model_dim, action_dim, device, **model_kwargs).to(device)
 
         param_counts = self.policy.param_count()
-        print(f"\nTotal number of parameters in the policy: {param_counts['total']}")
+        print(f"\nTotal number of parameters in {self.agent_type}-level policy: {param_counts['total']}")
         print(f"Actor parameters: {param_counts['actor_total']}")
-        print(f"Critic parameters: {param_counts['critic_total']}\n")
+        print(f"Critic parameters: {param_counts['critic_total']}")
+        print(f"Shared parameters: {param_counts['shared']}\n")
 
         # Copy the parameters from the current policy to the old policy
         self.policy_old.load_state_dict(self.policy.state_dict())

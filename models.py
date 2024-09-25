@@ -89,7 +89,8 @@ class MLPActorCritic(nn.Module):
         return {
             "actor_total": actor_params + shared_params,
             "critic_total": critic_params + shared_params,
-            "total": actor_params + critic_params + shared_params
+            "total": actor_params + critic_params + shared_params,
+            "shared": shared_params
         }
 
 ######## CNN model ########
@@ -125,12 +126,9 @@ class CNNActorCritic(nn.Module):
         dropout_rate = kwargs.get('dropout_rate', 0.2)
         padding = kernel_size // 2
 
-        # use_dilation = kwargs.get('use_dilation', False)
-        dilation = 1 #2 if use_dilation else 1 #1 means no dilation
-
         if model_size == 'small':
             self.shared_cnn = nn.Sequential(
-                nn.Conv2d(in_channels, 16, kernel_size=kernel_size, stride=1, padding=padding, dilation=dilation),
+                nn.Conv2d(in_channels, 16, kernel_size=kernel_size, stride=1, padding=padding),
                 nn.BatchNorm2d(16),
                 nn.LeakyReLU(),
                 nn.MaxPool2d(kernel_size=2, stride=2),  # Added pooling layer
@@ -151,7 +149,7 @@ class CNNActorCritic(nn.Module):
 
         else:  # medium
             self.shared_cnn = nn.Sequential(
-                nn.Conv2d(in_channels, 16, kernel_size=kernel_size, stride=1, padding=padding, dilation=dilation),
+                nn.Conv2d(in_channels, 16, kernel_size=kernel_size, stride=1, padding=padding),
                 nn.BatchNorm2d(16),
                 nn.LeakyReLU(),
                 nn.MaxPool2d(kernel_size=2, stride=2),  # Added pooling layer
@@ -247,7 +245,8 @@ class CNNActorCritic(nn.Module):
         return {
             "actor_total": actor_params + shared_params,
             "critic_total": critic_params + shared_params,
-            "total": actor_params + critic_params + shared_params
+            "total": actor_params + critic_params + shared_params,
+            "shared": shared_params
         }
 
 ######## Transformer model ########

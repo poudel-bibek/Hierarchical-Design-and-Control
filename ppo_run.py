@@ -12,7 +12,7 @@ import torch.multiprocessing as mp # wow we get this from torch itself
 
 from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
-from sim_run import CraverRoadEnv
+from craver_control_env import CraverControlEnv
 from models import MLPActorCritic, CNNActorCritic
 
 from wandb_sweep import HyperParameterTuner
@@ -123,7 +123,6 @@ def evaluate_controller(args, env):
                     'per_timestep_state_dim': env.observation_space.shape[1], 
                     'model_size': args.model_size,  
                     'kernel_size': args.kernel_size,
-                    'use_dilation': args.use_dilation,
                     'dropout_rate': args.dropout_rate
                 }
 
@@ -269,7 +268,7 @@ def worker(rank, args, shared_policy_old, memory_queue, global_seed):
     np.random.seed(worker_seed)
     torch.manual_seed(worker_seed)
 
-    env = CraverRoadEnv(args, worker_id=rank)
+    env = CraverControlEnv(args, worker_id=rank)
     worker_device = torch.device("cuda") if args.gpu and torch.cuda.is_available() else torch.device("cpu")
     memory_transfer_freq = args.memory_transfer_freq  # Get from args
 
@@ -327,6 +326,10 @@ def train(train_args, is_sweep=False, config=None):
 
     TODO: For evaluation of a sweep, currently we are looking at reward (and not the traffic related metrics). 
     In the future, evals can be added here. i.e., evaluate the policy and then calculate the waiting time, queue length, throughput etc. metrics
+
+    # Move towards two stage learning setup.
+    # 1. Higher-level agent makes the design decisions.
+    # 2. Lower-level agent makes the traffic control decisions.
     """
 
     SEED = train_args.seed if train_args.seed else random.randint(0, 1000000)
@@ -345,53 +348,98 @@ def train(train_args, is_sweep=False, config=None):
                 setattr(train_args, key, value)
         
     global_step = 0
-    env = CraverRoadEnv(train_args, worker_id=None) # First environment instance. Required for setup.
+    dymmy_lower_env = CraverControlEnv(train_args, worker_id=None) # First environment instance. Required for setup.
 
     device = torch.device("cuda:0" if torch.cuda.is_available() and train_args.gpu else "cpu")
     print(f"Using device: {device}")
-    print(f"\nDefined observation space: {env.observation_space}")
-    print(f"Observation space shape: {env.observation_space.shape}")
-    print(f"\nDefined action space: {env.action_space}")
-    print(f"Options per action dimension: {env.action_space.nvec}")
+    print(f"\nDefined observation space: {dymmy_lower_env.observation_space}")
+    print(f"Observation space shape: {dymmy_lower_env.observation_space.shape}")
+    print(f"\nDefined action space: {dymmy_lower_env.action_space}")
+    print(f"Options per action dimension: {dymmy_lower_env.action_space.nvec}")
 
+    # Lower level agent
     # If model choice is mlp, the input is flat. However, if model choice is cnn, the input is single channel 2d
-    if train_args.model_choice == 'mlp':
-        state_dim_flat = env.observation_space.shape[0] * env.observation_space.shape[1]
-        model_kwargs = {
+    if train_args.lower_model_choice == 'mlp':
+        state_dim_flat = dymmy_lower_env.observation_space.shape[0] * dymmy_lower_env.observation_space.shape[1]
+        model_kwargs_lower = {
             'hidden_dim': 256,  # For MLP
-        }
+            }
+        
+    else: # cnn
+        state_dim = dymmy_lower_env.observation_space.shape # e.g., (10, 74) = (action_duration, per_timestep_state_dim)
+        n_channels = 1
+        model_kwargs_lower = {
+            'action_duration': train_args.action_duration,  
+            'per_timestep_state_dim': dymmy_lower_env.observation_space.shape[1],  
+            'model_size': train_args.lower_model_size,  
+            'kernel_size': train_args.lower_kernel_size,
+            'dropout_rate': train_args.lower_dropout_rate
+            }
+    
+    # Higher level agent
+    if train_args.higher_model_choice == 'mlp':
+        state_dim_flat = env.observation_space.shape[0] * env.observation_space.shape[1]
+        model_kwargs_higher = {
+            'hidden_dim': 256,  # For MLP
+            }
     else: # cnn
         state_dim = env.observation_space.shape # e.g., (10, 74) = (action_duration, per_timestep_state_dim)
         n_channels = 1
-        model_kwargs = {
+        model_kwargs_higher = {
             'action_duration': train_args.action_duration,  
             'per_timestep_state_dim': env.observation_space.shape[1],  
-            'model_size': train_args.model_size,  
-            'kernel_size': train_args.kernel_size,
-            'use_dilation': train_args.use_dilation,
-            'dropout_rate': train_args.dropout_rate
-        }
+            'model_size': train_args.higher_model_size,  
+            'kernel_size': train_args.higher_kernel_size,
+            'dropout_rate': train_args.higher_dropout_rate
+            }
+    
 
-    action_dim = len(env.action_space.nvec)
+    action_dim = len(dymmy_lower_env.action_space.nvec)
     print(f"State dimension: {state_dim}, Action dimension: {action_dim}\n")
     env.close() # We actually dont make use of this environment for any other stuff. Each worker will have their own environment.
 
-    ppo = PPO(state_dim_flat if train_args.model_choice == 'mlp' else n_channels, 
+    # This is the higher level agent.
+    higher_ppo = PPO(state_dim_flat if train_args.higher_model_choice == 'mlp' else n_channels, 
         action_dim, 
         device, 
-        train_args.lr, 
-        train_args.gamma, 
-        train_args.K_epochs, 
-        train_args.eps_clip, 
-        train_args.ent_coef, 
-        train_args.vf_coef, 
-        train_args.batch_size,
-        train_args.num_processes, 
-        train_args.gae_lambda,
-        train_args.model_choice,
-        **model_kwargs
-    )
-        
+        train_args.higher_lr, 
+        train_args.higher_gamma, 
+        train_args.higher_K_epochs, 
+        train_args.higher_eps_clip, 
+        train_args.higher_ent_coef, 
+        train_args.higher_vf_coef, 
+        train_args.higher_batch_size,
+        train_args.higher_num_processes, # This agent has a single process
+        train_args.higher_gae_lambda,
+        train_args.higher_model_choice,
+        agent_type="higher",
+        **model_kwargs_higher
+        )
+
+    # Higher level agent will modify the network file on a new design decision. Lower level agents will make use this network file.
+
+    higher_env = CraverRoadEnv(train_args, worker_id=None) # First environment instance. Required for setup.
+
+
+
+    # This is the lower level agent 
+    lower_ppo = PPO(state_dim_flat if train_args.lower_model_choice == 'mlp' else n_channels, 
+        action_dim, 
+        device, 
+        train_args.lower_lr, 
+        train_args.lower_gamma, 
+        train_args.lower_K_epochs, 
+        train_args.lower_eps_clip, 
+        train_args.lower_ent_coef, 
+        train_args.lower_vf_coef, 
+        train_args.lower_batch_size,
+        train_args.lower_num_processes, # This agent has parallel processes (workers)
+        train_args.lower_gae_lambda,
+        train_args.lower_model_choice,
+        agent_type="lower",
+        **model_kwargs_lower
+        )
+
     if not is_sweep: 
         # TensorBoard setup
         # No need to save the model during sweep.
@@ -402,7 +450,7 @@ def train(train_args, is_sweep=False, config=None):
 
         # Save hyperparameters and model architecture
         config_path = os.path.join(log_dir, f'config_{current_time}.json')
-        save_config(train_args, SEED, ppo, config_path)
+        save_config(train_args, SEED, lower_ppo, config_path)
         print(f"Configuration saved to {config_path}")
 
         # Model saving setup
@@ -410,17 +458,18 @@ def train(train_args, is_sweep=False, config=None):
         os.makedirs(save_dir, exist_ok=True)
         best_reward = float('-inf')
 
-    # In a parallel setup, instead of using total_episodes, we will use total_iterations. 
-    # In each iteration, multiple actors interact with the environment for max_timesteps. i.e., each iteration will have num_processes episodes.
-    total_iterations = train_args.total_timesteps // (train_args.max_timesteps * train_args.num_processes)
-    ppo.total_iterations = total_iterations # For lr annealing
+    # Instead of using total_episodes, we will use total_iterations. 
+    # In each iteration, multiple lower level agent actors interact with the environment for max_timesteps. i.e., each iteration will have num_processes episodes.
+    # Each iteration is equivalent to a single timestep for the higher agent.
+    total_iterations = train_args.total_timesteps // (train_args.max_timesteps * train_args.lower_num_processes)
+    lower_ppo.total_iterations = total_iterations # For lr annealing
     train_args.total_action_timesteps_per_episode = train_args.max_timesteps // train_args.action_duration # Each actor will run for max_timesteps and each timestep will have action_duration steps.
     
     # Counter to keep track of how many times action has been taken 
     action_timesteps = 0
-
     for iteration in range(total_iterations):
-        global_step = iteration * train_args.num_processes + action_timesteps*train_args.action_duration
+
+        global_step = iteration * train_args.lower_num_processes + action_timesteps*train_args.action_duration
         print(f"\nStarting iteration: {iteration + 1}/{total_iterations} with {global_step} total steps so far\n")
 
         # Create a manager to handle shared objects
@@ -428,16 +477,16 @@ def train(train_args, is_sweep=False, config=None):
         memory_queue = manager.Queue()
 
         processes = []
-        for rank in range(train_args.num_processes):
-            p = mp.Process(target=worker, args=(rank, train_args, ppo.policy_old, memory_queue, SEED)) # Create a process to execute the worker function
+        for rank in range(train_args.lower_num_processes):
+            p = mp.Process(target=worker, args=(rank, train_args, lower_ppo.policy_old, memory_queue, SEED)) # Create a process to execute the worker function
             p.start()
             processes.append(p)
 
-        if train_args.anneal_lr:
-            current_lr = ppo.update_learning_rate(iteration)
+        if train_args.lower_anneal_lr:
+            current_lr = lower_ppo.update_learning_rate(iteration)
 
         all_memories = []
-        active_workers = set(range(train_args.num_processes))
+        active_workers = set(range(train_args.lower_num_processes))
 
         while active_workers:
             try:
@@ -452,12 +501,12 @@ def train(train_args, is_sweep=False, config=None):
                     # Look at the size of the memory and update action_timesteps
                     action_timesteps += len(memory.states)
 
-                    # Update PPO every n times action has been taken
-                    if action_timesteps % train_args.update_freq == 0:
-                        loss = ppo.update(all_memories)
+                    # Update lower level PPO every n times action has been taken
+                    if action_timesteps % train_args.lower_update_freq == 0:
+                        loss = lower_ppo.update(all_memories)
 
                         total_reward = sum(sum(memory.rewards) for memory in all_memories)
-                        avg_reward = total_reward / train_args.num_processes # Average reward per process in this iteration
+                        avg_reward = total_reward / train_args.lower_num_processes # Average reward per process in this iteration
                         print(f"\nAverage Reward per process: {avg_reward:.2f}\n")
                         
                         # clear memory to prevent memory growth (after the reward calculation)
@@ -478,12 +527,12 @@ def train(train_args, is_sweep=False, config=None):
                                                 "value_loss": loss['value_loss'],
                                                 "entropy_loss": loss['entropy_loss'],
                                                 "total_loss": loss['total_loss'],
-                                                "current_lr": current_lr if train_args.anneal_lr else train_args.lr,
+                                                "current_lr_lower": current_lr if train_args.lower_anneal_lr else train_args.lr,
                                                 "global_step": global_step          })
                             
                             else: # Tensorboard for regular training
                                 
-                                total_updates = int(action_timesteps / train_args.update_freq)
+                                total_updates = int(action_timesteps / train_args.lower_update_freq)
                                 writer.add_scalar('Rewards/Average_Reward', avg_reward, global_step)
                                 writer.add_scalar('Updates/Total_Policy_Updates', total_updates, global_step)
                                 writer.add_scalar('Losses/Policy_Loss', loss['policy_loss'], global_step)
@@ -495,12 +544,12 @@ def train(train_args, is_sweep=False, config=None):
 
                                 # Save model every n times it has been updated (Important: Not every iteration)
                                 if train_args.save_freq > 0 and total_updates % train_args.save_freq == 0:
-                                    torch.save(ppo.policy.state_dict(), os.path.join(save_dir, f'model_iteration_{iteration+1}.pth'))
+                                    torch.save(lower_ppo.policy.state_dict(), os.path.join(save_dir, f'model_iteration_{iteration+1}.pth'))
 
                                 # Save best model so far
                                 if avg_reward > best_reward:
                                     best_reward = avg_reward
-                                    torch.save(ppo.policy.state_dict(), os.path.join(save_dir, 'best_model.pth'))
+                                    torch.save(lower_ppo.policy.state_dict(), os.path.join(save_dir, 'best_model.pth'))
                                     
                         else: # For some reason..
                             print("Warning: loss is None")
@@ -535,7 +584,7 @@ def main(args):
             return None
         
         else: 
-            env = CraverRoadEnv(args)
+            env = CraverControlEnv(args)
             run_data, all_directions = evaluate_controller(args, env)
             calculate_performance(run_data, all_directions, args.step_length)
             env.close()
