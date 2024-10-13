@@ -7,7 +7,7 @@ import gymnasium as gym
 import numpy as np
 import xml.etree.ElementTree as ET
 from utils import convert_demand_to_scale_factor, scale_demand
-from craver_config import (PHASES, DIRECTIONS_AND_EDGES, CONTROLLED_CROSSWALKS_DICT, initialize_lanes, get_phase_groups )
+from craver_config import (PHASES, DIRECTIONS_AND_EDGES, CONTROLLED_CROSSWALKS_DICT, initialize_lanes, get_phase_groups)
 
 class CraverControlEnv(gym.Env):
     """
@@ -963,10 +963,11 @@ class CraverControlEnv(gym.Env):
         scale_demand(self.vehicle_input_trips, self.vehicle_output_trips, scale_factor_vehicle, demand_type="vehicle")
         scale_demand(self.pedestrian_input_trips, self.pedestrian_output_trips, scale_factor_pedestrian, demand_type="pedestrian")
 
-        # This should be done here before the SUMO call. This can disallow pedestrians before the simulation run.
-        # Randomly select crosswalks to disable
+        # # This should be done here before the SUMO call. This can disallow pedestrians before the simulation run.
+        # # Randomly select crosswalks to disable
         # to_disable = random.sample(self.controlled_crosswalks, min(5, len(self.controlled_crosswalks)))
-        # Before sumo call 
+        
+        # #Before sumo call 
         # self._modify_net_file(to_disable)
 
         if self.auto_start:
