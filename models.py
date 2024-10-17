@@ -344,13 +344,14 @@ class CNNActorCritic(nn.Module):
 from torch_geometric.nn import GATv2Conv
 import torch.nn.functional as F
 from torch_geometric.nn import global_mean_pool
+from torch.distributions import MixtureSameFamily, MultivariateNormal, Categorical
 
 class GATv2ActorCritic(nn.Module):
     """
     GATv2 with edge features.
     """
 
-    def __init__(self, in_channels, hidden_channels, out_channels, initial_heads, second_heads, edge_dim, action_hidden_channels, action_dim, actions_per_node=2, dropout_rate=0.2, min_thickness=0.1, max_thickness=10.0):
+    def __init__(self, in_channels, hidden_channels, out_channels, initial_heads, second_heads, edge_dim, action_hidden_channels, action_dim, gmm_hidden_dim, num_mixtures = 3, actions_per_node=2, dropout_rate=0.2, min_thickness=0.1, max_thickness=10.0):
         """
         in_channels: Number of input features per node (e.g., x and y coordinates)
         hidden_channels: Number of hidden features.
@@ -386,17 +387,24 @@ class GATv2ActorCritic(nn.Module):
         # Linear layer for predicting the number of proposals
         self.num_proposals_layer = torch.nn.Linear(out_channels * second_heads, action_dim)
 
-        # Linear layer for predicting location parameters (mean and log std)
-        self.location_layer = torch.nn.Linear(out_channels * second_heads, 2)
-        
-        # Linear layer for predicting thickness parameters (mean and log std)
-        self.thickness_layer = torch.nn.Linear(out_channels * second_heads, 2)
+        # To predict the GMM parameters that make the distribution of the actions.
+        # Stacked linear layers for GMM parameters (instead of separate layers for each)
+        # Output: num_mixtures * 5 values
+        #   - num_mixtures for mix logits (weights of each Gaussian), determines the weight of this Gaussian in the mixture
+        #   - num_mixtures * 2 for means (location and thickness), determines the center of the Gaussian 
+        #   - num_mixtures * 2 for covariances (diagonal, for simplicity), determines the spread of the Gaussian
+        # Using stacked linear layers for joint prediction of all GMM parameters
+        self.gmm_layers = nn.Sequential(
+            nn.Linear(out_channels * second_heads, gmm_hidden_dim),
+            nn.ReLU(),
+            nn.Linear(gmm_hidden_dim, num_mixtures * 5)  # 5 = 1 (mix_logit) + 2 (means) + 2 (covs)
+        )
 
         # Store initialization parameters as instance variables
         self.max_proposals = action_dim
         self.min_thickness = min_thickness
         self.max_thickness = max_thickness
-
+        self.num_mixtures = num_mixtures
         self.activation = F.elu
         self.dropout_rate = dropout_rate
 
@@ -422,7 +430,22 @@ class GATv2ActorCritic(nn.Module):
         # A lower temperature makes the distribution more peaked (more deterministic), while a higher temperature makes it more uniform (more random).
         self.temperature = nn.Parameter(torch.ones(1))
 
+    def get_gmm_distribution(self, node_embeddings):
+        """
+        Get the GMM distribution for the node embeddings.
+        """
+        gmm_params = self.gmm_layers(node_embeddings)
+        mix_logits, means, covs = gmm_params.split([self.num_mixtures, self.num_mixtures * 2, self.num_mixtures * 2], dim=-1)
         
+        means = means.view(-1, self.num_mixtures, 2)
+        covs = F.softplus(covs).view(-1, self.num_mixtures, 2) # Ensure positive covariance
+
+        mix = Categorical(logits=mix_logits) # Categorical distribution for the mixture probabilities
+        covariance_matrices = torch.diag_embed(covs) # Create diagonal covariance matrices
+        comp = MultivariateNormal(means, covariance_matrices) # Multivariate normal distributions for each component
+        gmm = MixtureSameFamily(mix, comp) # Mixture of Gaussians distribution
+        return gmm
+
     def forward(self, x, edge_index, edge_attr, batch):
         """
         x: (num_nodes, in_channels)
@@ -451,13 +474,62 @@ class GATv2ActorCritic(nn.Module):
         x = global_mean_pool(x, batch)
 
         return x  # Return the final node embeddings. Its still not pased through the linear layers here yet.
+    
+    def gmm_entropy(self, gmm):
+        """
+        The entropy measures the uncertainty or randomness in the action selection process given a state.
+        - High Entropy: If the policy is highly uncertain about which action to take (i.e., 
+        it assigns similar probabilities to multiple actions), the entropy will be high. 
+        This encourages exploration because the policy is not overly confident in selecting a single action.
 
+        - Low Entropy: f the policy is very certain about which action to take (i.e., it assigns a high probability to a specific action and low probabilities to others), 
+        the entropy will be low, which indicates more deterministic behavior.
+
+        Approximate the entropy of a Gaussian Mixture Model (GMM).
+        
+        This method uses a Monte Carlo approximation:
+        1. Sample a large number of points from the GMM
+        2. Compute the log probability of each sample
+        3. Take the negative mean of these log probabilities
+        
+        Args:
+        gmm (torch.distributions.MixtureSameFamily): The GMM distribution
+
+        Returns:
+        float: Approximated entropy of the GMM
+
+        This is a practical approach (avoids numerical integration)
+        """
+        
+        # Number of samples for Monte Carlo approximation
+        num_samples = 10000
+        
+        # Sample from the GMM
+        samples = gmm.sample((num_samples,))
+        
+        # Compute log probabilities
+        log_probs = gmm.log_prob(samples)
+        
+        # Approximate entropy
+        entropy = -log_probs.mean()
+        
+        return entropy
+
+    
     def act(self, x, edge_index, edge_attr, batch):
         """
         Propose up to max_proposals number of crosswalks.
         For use in policy gradient methods, the log probabilities of the actions are needed.
 
+        We are using reparameterization trick but is that a good assumption for the distribution of the actions?
+        problem with normal distribution is that it assumes a single mode. When sampling, likelihood of getting a sample far away from the mean is low (depends on std).
+        Instead, we use a mixture of Gaussians. 
+            - Can model more complex distributions
+            - Can capture multiple modes in the distribution
+            - Flexibility: Can be parameterized to have different means and variances for each component
 
+        - Should thickness and location be independent? No. Particular thickness for a specific location is what is needed. 
+        - The distribution model should jointly model the two (location and thickness). 
         """
 
         # Get node embeddings by passing input through GAT layers
@@ -469,51 +541,26 @@ class GATv2ActorCritic(nn.Module):
         # hidden_channels is the number of features for each node embedding. By taking the mean along dim=0, we're averaging across all nodes.
         num_proposals_logits = self.num_proposals_layer(node_embeddings.mean(dim=0)) # AVERAGED NODE EMBEDDINGS
         # Apply temperature to control exploration-exploitation trade-off
-        num_proposals_probs = F.softmax(num_proposals_logits / self.temperature, dim=0)  # Convert to probabilities for each index (total sum to 1) with temperature
+        num_proposals_probs = F.softmax(num_proposals_logits / self.temperature, dim=-1)  # Convert to probabilities for each index (total sum to 1) with temperature
 
         # multinomial distribution is used to model the outcome of selecting one option from a set of mutually exclusive options, where each option has a specific probability of being chosen.
         # Sample the number of proposals (add 1 to ensure at least 1 proposal)
         num_actual_proposals = torch.multinomial(num_proposals_probs, 1).item() + 1 # The inner 1 to the number of draws
         print(f"\nnum_actual_proposals: {num_actual_proposals}\n")
 
-        # location parameters
-        location_params = self.location_layer(node_embeddings)
-        # Split the output into means and log_stds
-        location_means, location_log_stds = location_params.chunk(2, dim=-1)
-        location_means = torch.sigmoid(location_means.squeeze(-1))  # Ensure means are between 0 and 1
-        # Std values are clamped between -20 and 2. 
-        # Very large values of log standard deviation can lead to extremely large gradients during backpropagation, which can destabilize training.
-        location_log_stds = location_log_stds.squeeze(-1).clamp(-20, 2)  # Clamp log stds for numerical stability
-        # exp(-20) ≈ 2.06e-9 (very small, but not zero), exp(2) ≈ 7.39 (reasonably large, but not enormous)
-        location_stds = torch.exp(location_log_stds)  # Convert log stds to stds
+        gmm = self.get_gmm_distribution(node_embeddings)
 
-        # thickness parameters
-        thickness_params = self.thickness_layer(node_embeddings)
+        # Sample the num_actual_proposals number of proposals directly from the distribution
+        samples = gmm.sample((num_actual_proposals,))
+        locations, thicknesses = samples.split(1, dim=-1)
 
-        # Split the output into means and log_stds
-        thickness_means, thickness_log_stds = thickness_params.chunk(2, dim=-1)
+        # Normalize locations to be between 0 and 1
+        locations = torch.sigmoid(locations)
+        
+        # Scale thicknesses to be between min_thickness and max_thickness
+        # First, sigmoid normalizes to [0, 1], then we scale and shift to [min_thickness, max_thickness]
+        thicknesses = self.min_thickness + torch.sigmoid(thicknesses) * (self.max_thickness - self.min_thickness)
 
-        # Scale thickness means to be between min_thickness and max_thickness
-        thickness_means = torch.sigmoid(thickness_means.squeeze(-1)) * (self.max_thickness - self.min_thickness) + self.min_thickness
-        # Std values are clamped between -20 and 2. 
-        # Very large values of log standard deviation can lead to extremely large gradients during backpropagation, which can destabilize training.
-
-        thickness_log_stds = thickness_log_stds.squeeze(-1).clamp(-20, 2)  # Clamp log stds for numerical stability
-
-        # exp(-20) ≈ 2.06e-9 (very small, but not zero), exp(2) ≈ 7.39 (reasonably large, but not enormous)
-        thickness_stds = torch.exp(thickness_log_stds)  # Convert log stds to stds
-
-        # Create Normal distributions for locations and thicknesses
-        # The model assumes that thicknesses and locations follow a Gaussian distribution (characterized by a mean and standard deviation)
-        # This also allows for uncertainty quantification i.e., the model can express how confident it is about each prediction.
-        # Instead of directly predicting fixed values for thicknesses and locations, use a probability distribution to model the uncertainty in these values.
-        location_dist = torch.distributions.Normal(location_means, location_stds) # the assumption is that these two are independent.
-        thickness_dist = torch.distributions.Normal(thickness_means, thickness_stds)
-
-        # sample from the distributions using the reparameterization trick
-        # Sample num_actual_proposals number of locations and thicknesses directly from the distributions.
-        locations = location_dist.sample((num_actual_proposals,))
-        thicknesses = thickness_dist.sample((num_actual_proposals,))
         print(f"\nlocations: {locations.shape}\n")
         print(f"\nthicknesses: {thicknesses.shape}\n")
 
@@ -523,10 +570,11 @@ class GATv2ActorCritic(nn.Module):
         output[:num_actual_proposals, 1] = thicknesses.squeeze()
 
         # Compute log probabilities of the chosen actions. Represents "the likelihood of the model choosing each specific proposal (location and thickness) for a crosswalk"
-        log_probs = location_dist.log_prob(locations) + thickness_dist.log_prob(thicknesses) # sum of log = log(a*b) = log(a) + log(b) i.e., assumes indepdenence of actions.
+        log_probs = gmm.log_prob(samples)
 
         # The algorithm expects a single total log probability for the entire batch of actions. 
-        total_log_prob = log_probs.sum() 
+        total_log_prob = log_probs.sum()
+
         print(f"\ntotal_log_prob: {total_log_prob}\n")
 
         return output, num_actual_proposals, total_log_prob
@@ -546,35 +594,15 @@ class GATv2ActorCritic(nn.Module):
         
         # Predict the number of proposals
         num_proposals_logits = self.num_proposals_layer(node_embeddings)
-        num_proposals_probs = F.softmax(num_proposals_logits / self.temperature, dim=0)
+        num_proposals_probs = F.softmax(num_proposals_logits / self.temperature, dim=-1)
         
-        # Compute location and thickness parameters
-        location_params = self.location_layer(node_embeddings)
-        location_means, location_log_stds = location_params.chunk(2, dim=-1)
-        location_means = torch.sigmoid(location_means.squeeze(-1))
-        location_log_stds = location_log_stds.squeeze(-1).clamp(-20, 2)
-        
-        thickness_params = self.thickness_layer(node_embeddings)
-        thickness_means, thickness_log_stds = thickness_params.chunk(2, dim=-1)
-        thickness_means = torch.sigmoid(thickness_means.squeeze(-1)) * (self.max_thickness - self.min_thickness) + self.min_thickness
-        thickness_log_stds = thickness_log_stds.squeeze(-1).clamp(-20, 2)
-        
-        # Create distributions
-        location_dist = torch.distributions.Normal(location_means, torch.exp(location_log_stds))
-        thickness_dist = torch.distributions.Normal(thickness_means, torch.exp(thickness_log_stds))
-        print(f"\nlocation_dist: {location_dist}\n")
-        print(f"\nthickness_dist: {thickness_dist}\n")
+        gmm = self.get_gmm_distribution(node_embeddings)
 
         # Compute log probabilities of the actions
-        location_log_probs = location_dist.log_prob(actions[:, 0])
-        thickness_log_probs = thickness_dist.log_prob(actions[:, 1])
-        action_log_probs = location_log_probs + thickness_log_probs
-        
-        # Compute entropy
-        location_entropy = location_dist.entropy()
-        thickness_entropy = thickness_dist.entropy()
-        total_entropy = location_entropy + thickness_entropy
-        entropy = total_entropy.mean()
+        action_log_probs = gmm.log_prob(actions)
+
+        # Compute entropy (how uncertain or random the actions selection is)
+        entropy = self.gmm_entropy(gmm) # already performs the mean.
         print(f"\nentropy: {entropy}\n")
 
         # Process actions while preserving structure
@@ -582,7 +610,7 @@ class GATv2ActorCritic(nn.Module):
         print(f"\naction_embedding: {action_embedding.shape}\n")
         
         # Concatenate graph embedding with the processed actions
-        state_action = torch.cat([node_embeddings.squeeze(0), action_embedding], dim=0)
+        state_action = torch.cat([node_embeddings.squeeze(0), action_embedding], dim=-1)
         print(f"\nstate_action: {state_action.shape}\n")
 
         # Compute state value
@@ -590,7 +618,7 @@ class GATv2ActorCritic(nn.Module):
         print(f"\nstate_value: {state_value.shape}\n")
         
         return action_log_probs, state_value, entropy, num_proposals_probs
-
+    
     def param_count(self):
         """
         Count the total number of parameters in the model.
@@ -600,20 +628,23 @@ class GATv2ActorCritic(nn.Module):
                         sum(p.numel() for p in self.conv2.parameters())
 
         # Actor-specific parameters
-        actor_params = sum(p.numel() for p in self.num_proposals_layer.parameters()) + \
-                    sum(p.numel() for p in self.location_layer.parameters()) + \
-                    sum(p.numel() for p in self.thickness_layer.parameters())
+        actor_params = sum(p.numel() for p in self.num_proposals_layer.parameters())
 
         # Critic-specific parameters
-        critic_params = sum(p.numel() for p in self.critic_layer.parameters())
+        critic_params = sum(p.numel() for p in self.critic_layer.parameters()) + \
+                        sum(p.numel() for p in self.action_encoder.parameters())
+
+        # GMM parameters (shared between actor and critic)
+        gmm_params = sum(p.numel() for p in self.gmm_layers.parameters())
 
         # Total parameters
-        total_params = shared_params + actor_params + critic_params
+        total_params = shared_params + actor_params + critic_params + gmm_params
 
         return {
             "shared": shared_params,
-            "actor_total": shared_params + actor_params,
-            "critic_total": shared_params + critic_params,
+            "actor_total": shared_params + actor_params + gmm_params,
+            "critic_total": shared_params + critic_params + gmm_params,
+            "gmm": gmm_params,
             "total": total_params
         }
 
@@ -621,18 +652,19 @@ class GATv2ActorCritic(nn.Module):
 ################ EXAMPLE USAGE #################
 
 # Set up parameters
-num_nodes = 10 
-num_edges = 20
+num_nodes = 50
+num_edges = 200
 edge_dim = 2  # Number of features per edge
 
 in_channels = 2  # Number of input features per node (e.g., x and y coordinates)
-hidden_channels = 64
-out_channels = 64
+hidden_channels = 8
+out_channels = 16
 
 action_hidden_channels = 32
+gmm_hidden_dim = 32 
 
-initial_heads = 4
-second_heads = 1
+initial_heads = 16 # initial number of attention heads in GAT layers
+second_heads = 4 # number of attention heads in the second GAT layer
 action_dim = 10  # Maximum number of crosswalk proposals
 
 batch = torch.zeros(num_nodes, dtype=torch.long)
@@ -646,7 +678,7 @@ model = GATv2ActorCritic(in_channels=in_channels,
                          edge_dim=edge_dim, 
                          action_hidden_channels=action_hidden_channels,
                          action_dim=action_dim,
-                         )
+                         gmm_hidden_dim=gmm_hidden_dim)
 
 # Generate dummy data
 print("\nGenerating dummy input data...")
