@@ -1,0 +1,26 @@
+Warning: Invalid departPos 1.97 given for stopping at :9727816623_w1. Using edge end instead.
+Warning: Invalid departPos 11.87 given for stopping at :cluster_9740157181_9740483933_w0. Using edge end instead.
+Warning: Invalid departPos 5.78 given for person '1120' walking from edge '-1060166174#4'. Using edge end instead.
+Warning: Invalid departPos 1.39 given for stopping at :9740157155_w1. Using edge end instead.
+Warning: Invalid departPos 1.30 given for person '1644' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 1.20 given for person '1725' walking from edge '1058666207#0'. Using edge end instead.
+Warning: Invalid departPos 0.93 given for person '1793' walking from edge '1058666206#0'. Using edge end instead.
+Warning: Invalid departPos 0.91 given for person '1914' walking from edge '1058666207#0'. Using edge end instead.
+Warning: Invalid departPos 1.19 given for person '1310' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 1.21 given for person '1548' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 1.01 given for person '796' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 0.30 given for person '1548' walking from edge '1060131401#3'. Using edge end instead.
+Warning: Invalid departPos 1.17 given for person '1023' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 0.27 given for person '409' walking from edge '1060131390'. Using edge end instead.
+Warning: Invalid departPos 1.04 given for person '1275' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 0.68 given for person '1097' walking from edge '1058666206#0'. Using edge end instead.
+Warning: Invalid departPos 0.39 given for person '1567' walking from edge '1060131390'. Using edge end instead.
+Warning: Invalid departPos 1.10 given for person '1918' walking from edge '1058666206#0'. Using edge end instead.
+Warning: Invalid departPos 0.36 given for person '1654' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 0.53 given for person '1850' walking from edge '1058666207#0'. Using edge end instead.
+Warning: Invalid departPos 1.10 given for person '1358' walking from edge '1058666207#0'. Using edge end instead.
+Warning: Invalid departPos 1.08 given for person '1589' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 1.10 given for person '1548' walking from edge '1060131391#0'. Using edge end instead.
+Warning: Invalid departPos 0.79 given for person '1696' walking from edge '1058666207#0'. Using edge end instead.
+Error: tcpip::Socket::recvAndCheck @ recv: peer shutdown
+Quitting (on error).

@@ -57,26 +57,98 @@ class MLPActorCritic(nn.Module):
     def act(self, state):
         """
         Select an action based on the current state
+        The key idea is that actor outputs logits for each binary decision, then we convert these logits to probabilities and sample from this distribution to get our binary actions.
+        The choice of using Bernoulli distribution is because we want to model the probability of a binary event (e.g., turn ON and OFF).
+        We need to return the sum of log probabilities to be used in the PPO loss function. 
+
+        # TODO: check the validity of the sum operation. (Done)
+        The validity of the sum operation depends on the intended interpretation of the action space. Let's consider two scenarios:
+
+        a) Independent Binary Actions:
+        If each of the (e.g., 10) binary choices is truly independent (e.g., selecting multiple items from a list), then summing the log probabilities is valid. This sum represents the log probability of the entire action vector.
+        In this scenario, we can control traffic light for NS and EW independently. This means we can have all combinations: both red, both green, or one red and one green.
+        Actions:
+            Action 1: NS light (0 = red, 1 = green)
+            Action 2: EW light (0 = red, 1 = green)
+
+            Example:
+            Let's say our model predicts:
+
+            P(NS = green) = 0.7
+            P(NS = red) = 0.3
+            P(EW = green) = 0.4
+            P(EW = red) = 0.6
+
+            If we sample and get [1, 0] (NS green, EW red):
+            Log probability = log(0.7) + log(0.6) = -0.71
+            This sum of log probabilities is valid because the decisions for NS and EW are independent. The total log probability represents how likely the model was to choose this specific combination.
+
+        b) Mutually Exclusive Actions:
+        If the (e.g., 10) binary choices are meant to be mutually exclusive (e.g., selecting one out of 10 options), then summing the log probabilities isn't the correct approach. In this case, we'd typically use a Categorical distribution instead of multiple Bernoulli distributions.
+        Instead that we could only choose one direction to be green at a time, and the other must be red.
+        Actions:
+
+            0: NS green, EW red
+            1: NS red, EW green
+
+            In this case, we'd use a Categorical distribution:
+            P(NS green, EW red) = 0.6
+            P(NS red, EW green) = 0.4
+
+            If we choose NS green, EW red:
+            Log probability = log(0.6) = -0.51
+            Here, summing log probabilities wouldn't make sense because we're making a single choice between mutually exclusive options.
+
+        In our actual traffic light scenario:
+
+        We have multiple independent binary decisions (one for each traffic light and crosswalk).
+        Each decision (turn a light ON or OFF) doesn't affect the others directly.
+        We can have any combination of lights ON or OFF.
+
+        The actions for different traffic lights and crosswalks are separate decisions, so treating them as independent. 
+        Given that the actions are independent binary decisions, summing the log probabilities is a valid operation.
         """
 
         state_tensor = torch.FloatTensor(state.flatten()).to(self.device) # Because MLP receives a flattened input.
         action_logits = self.actor(state_tensor)  # outputs logits for each binary decision
         action_probs = torch.sigmoid(action_logits) # convert these logits to probabilities
-        dist = Bernoulli(action_probs) # create a Bernoulli distribution using these probabilities
+
+        # Option a)
+        # dist = Bernoulli(action_probs) # create a Bernoulli distribution using these probabilities
+        # action = dist.sample() # sample from this distribution to get our binary actions.
+        # return action.long(), dist.log_prob(action).sum(-1) #  return the actions and the sum of their log probabilities (sum along the last dimension)
+        
+        # Option b) 
+        dist = Categorical(action_probs) # create a Categorical distribution using these probabilities
         action = dist.sample() # sample from this distribution to get our binary actions.
-        return action.long(), dist.log_prob(action).sum(-1) #  return the actions and the sum of their log probabilities (sum along the last dimension)
-        # TODO: check the validity of the sum operation. 
+        return action.long(), dist.log_prob(action) #  return the actions and the sum of their log probabilities (no sum)
+
 
     def evaluate(self, states, actions):
+        """
+        Evaluates a batch of states and actions.
+        States are passed to actor to get action logits, using which we get the probabilities and then the distribution. similar to act function.
+        Then using the sampled actions, we get the log probabilities and the entropy. 
+        Finally, we pass the states to critic to get the state values. (used to compute the value function component of the PPO loss)
+        The entropy is used as a regularization term to encourage exploration.
+        """
         action_logits = self.actor(states)
         action_probs = torch.sigmoid(action_logits)
-        dist = Bernoulli(action_probs)
-        
-        action_logprobs = dist.log_prob(actions.float())
+
+        # Option a)
+        # dist = Bernoulli(action_probs)
+        # action_logprobs = dist.log_prob(actions.float())
+        # dist_entropy = dist.entropy()
+        # state_values = self.critic(states)
+        # return action_logprobs.sum(-1), state_values, dist_entropy
+
+        # Option b)
+        dist = Categorical(action_probs)
+        action_logprobs = dist.log_prob(actions)
         dist_entropy = dist.entropy()
         state_values = self.critic(states)
-        
-        return action_logprobs.sum(-1), state_values, dist_entropy
+        return action_logprobs, state_values, dist_entropy
+    
 
     def param_count(self, ):
         """
@@ -218,21 +290,38 @@ class CNNActorCritic(nn.Module):
         state_tensor = state.to(self.device).reshape(1, self.in_channels, self.action_duration, self.per_timestep_state_dim)
         action_logits = self.actor(state_tensor)
         action_probs = torch.sigmoid(action_logits)
-        dist = Bernoulli(action_probs)
+
+        # Option a)
+        # dist = Bernoulli(action_probs)
+        # action = dist.sample().squeeze(0)
+        # #print(f"\n\nAction: {action}\n\n")
+        # return action.long(), dist.log_prob(action).sum(-1)
+
+        # Option b)
+        dist = Categorical(action_probs)
         action = dist.sample().squeeze(0)
-        #print(f"\n\nAction: {action}\n\n")
-        return action.long(), dist.log_prob(action).sum(-1)
+        return action.long(), dist.log_prob(action)
 
     def evaluate(self, states, actions):
+        """
+        
+        """
         action_logits = self.actor(states)
         action_probs = torch.sigmoid(action_logits)
-        dist = Bernoulli(action_probs)
-        
-        action_logprobs = dist.log_prob(actions.float())
+
+        # Option a)
+        # dist = Bernoulli(action_probs)
+        # action_logprobs = dist.log_prob(actions.float())
+        # dist_entropy = dist.entropy()
+        # state_values = self.critic(states)
+        # return action_logprobs.sum(-1), state_values, dist_entropy
+
+        # Option b)
+        dist = Categorical(action_probs)
+        action_logprobs = dist.log_prob(actions)
         dist_entropy = dist.entropy()
         state_values = self.critic(states)
-        
-        return action_logprobs.sum(-1), state_values, dist_entropy
+        return action_logprobs, state_values, dist_entropy  
 
     def param_count(self, ):
         """
@@ -344,6 +433,7 @@ class GATv2ActorCritic(nn.Module):
     def act(self, x, edge_index, edge_attr):
         """
         Propose upto max_proposals number of crosswalks.
+        For use in policy gradient methonds, the log probabilities of the actions are needed.
         """
 
         # Get node embeddings by passing input through GAT layers
@@ -443,7 +533,7 @@ class GATv2ActorCritic(nn.Module):
         }
 
 
-
+################ EXAMPLE USAGE #################
 num_nodes = 10 
 num_edges = 20
 in_channels = 2 # Number of input features per node (e.g., x and y coordinates)
@@ -465,9 +555,9 @@ edge_attr = torch.rand((num_edges, edge_dim))
 # Dummy input (x, edge_index, edge_attr).
 dummy_input = (x, edge_index, edge_attr)
 print("Input data: ")
-print(f"Node features: {x}")
-print(f"Edge indices: {edge_index}")
-print(f"Edge features: {edge_attr}")
+print(f"Node features: {x}\n")
+print(f"Edge indices: {edge_index}\n")
+print(f"Edge features: {edge_attr}\n")
 
 # print the number of parameters in the model
 print(model.param_count())
@@ -478,7 +568,7 @@ print(model)
 # Generate crosswalk proposals using the model
 proposed_crosswalks, num_actual_proposals = model.act(x, edge_index, edge_attr)
 
-print(f"Proposed crosswalks: {proposed_crosswalks}")
+print(f"Proposed crosswalks: {proposed_crosswalks}\n")
 for i, (location, thickness) in enumerate(proposed_crosswalks):
     if i < num_actual_proposals:
         print(f"Location: {location:.4f}, Thickness: {thickness:.2f}")

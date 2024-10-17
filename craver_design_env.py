@@ -77,7 +77,7 @@ class CraverDesignEnv(gym.Env):
         """
         Step 2: Based on the current action representation, add number_of_crosswalks with a thickness_of_crosswalks.
         """
-        number_of_crosswalks, thickness_of_crosswalks  = # some function call/
+        #number_of_crosswalks, thickness_of_crosswalks  = # some function call/
         pass
 
 
