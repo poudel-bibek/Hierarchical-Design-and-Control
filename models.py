@@ -343,49 +343,54 @@ class CNNActorCritic(nn.Module):
 
 from torch_geometric.nn import GATv2Conv
 import torch.nn.functional as F
+from torch_geometric.nn import global_mean_pool
 
 class GATv2ActorCritic(nn.Module):
     """
     GATv2 with edge features.
     """
 
-    def __init__(self, in_channels, hidden_channels, heads, edge_dim, device, action_dim, actions_per_node=2, dropout_rate=0.2, min_thickness=0.1, max_thickness=10.0):
+    def __init__(self, in_channels, hidden_channels, out_channels, initial_heads, second_heads, edge_dim, action_hidden_channels, action_dim, actions_per_node=2, dropout_rate=0.2, min_thickness=0.1, max_thickness=10.0):
         """
         in_channels: Number of input features per node (e.g., x and y coordinates)
         hidden_channels: Number of hidden features.
-        heads: Number of attention heads.
+        out_channels: Number of output features.
+        initial_heads: Number of attention heads for the first GAT layer.
+        second_heads: Number of attention heads for the second GAT layer.
         edge_dim: Number of features per edge
-        min_thickness: Minimum thickness of a corsswalk.
-        max_thickness: Maximum thickness of a corsswalk.
+        min_thickness: Minimum thickness of a crosswalk.
+        max_thickness: Maximum thickness of a crosswalk.
         action_dim is the max number of proposals. 
         actions_per_node: number of things to propose per node. Each proposal has 2 features: [location, thickness]
 
-        TODO: Why would you apply dropout to the input features?
-        # Does it make sense to average node embeddins across the nodes?
+        TODO: 
         # At every timestep, the actions is a whole bunch of things of max size. Critic has to evaluate all that.
         """
 
         super(GATv2ActorCritic, self).__init__()
 
-        # First Graph Attention Layer
-        self.conv1 = GATv2Conv(in_channels, hidden_channels, edge_dim=edge_dim, heads=heads, dropout=dropout_rate)
+        # First Graph Attention Layer. # conv1 should output [num_nodes, hidden_channels * initial_heads]
+        self.conv1 = GATv2Conv(in_channels, hidden_channels, edge_dim=edge_dim, heads=initial_heads, concat=True, dropout=dropout_rate)# concat=True by default
 
-        # Second Graph Attention Layer
-        # Why is concat=False?  When True, the outputs from different attention heads are concatenated resulting in an output of size out_channels * heads.
-        # When concat=False, the outputs from different heads are averaged, resulting in an output of size out_channels. This reduces the dimensionality of the output
+        # Second Graph Attention Layer Why ever set concat=False?  
+        # When True, the outputs from different attention heads are concatenated resulting in an output of size hidden_channels * initial_heads.
+        # When concat=False, the outputs from different heads are averaged, resulting in an output of size hidden_channels. This reduces the dimensionality of the output
 
-        # Why heads=1? 
-        # Often, multi-head attention is used in earlier layers to capture different aspects of the graph, but the final layer consolidates this information.
-        self.conv2 = GATv2Conv(hidden_channels * heads, hidden_channels, edge_dim=edge_dim, heads=1, concat=False, dropout=dropout_rate)
+        # Why heads=1? Often, multi-head attention is used in earlier layers to capture different aspects of the graph, but the final layer consolidates this information.
+        # conv2 should output [num_nodes, out_channels * second_heads] (when concat = True)
+        # conv2 should output [num_nodes, out_channels] (when concat = False) This loses too much information.
+        self.conv2 = GATv2Conv(hidden_channels * initial_heads, out_channels, edge_dim=edge_dim, heads=second_heads, concat=True, dropout=dropout_rate)
 
+        # These layers are passed through the readout layer. 
+        #(without the readout layer, the expected input shape here is num_nodes * out_channels * second_heads and num_nodes can be different for each graph and cannot be pre-determined)
         # Linear layer for predicting the number of proposals
-        self.num_proposals_layer = torch.nn.Linear(hidden_channels, action_dim)
+        self.num_proposals_layer = torch.nn.Linear(out_channels * second_heads, action_dim)
 
         # Linear layer for predicting location parameters (mean and log std)
-        self.location_layer = torch.nn.Linear(hidden_channels, 2)
+        self.location_layer = torch.nn.Linear(out_channels * second_heads, 2)
         
         # Linear layer for predicting thickness parameters (mean and log std)
-        self.thickness_layer = torch.nn.Linear(hidden_channels, 2)
+        self.thickness_layer = torch.nn.Linear(out_channels * second_heads, 2)
 
         # Store initialization parameters as instance variables
         self.max_proposals = action_dim
@@ -395,17 +400,30 @@ class GATv2ActorCritic(nn.Module):
         self.activation = F.elu
         self.dropout_rate = dropout_rate
 
-        # Add a critic layer
-        self.critic_layer = nn.Sequential(
-            # node embedding output is shaped (num_nodes, hidden_channels)
-            # mean of the node embeddings is shaped (hidden_channels,)
-            # Graph embedding + action dim * 2 (location and thickness for each proposal) to 64
-            nn.Linear(hidden_channels + action_dim*actions_per_node, 64),
+        # Encoder for processing actions while preserving their structure
+        # The raw actions (of shape (max_proposals, 2)) may not be in the most informative format for the critic to evaluate
+        # This encoder allows for a richer representation of actions. Since we have max_proposals with padding, we need to make sure the critic focuses on the relevant part of the total actions.
+        self.action_encoder = nn.Sequential(
+            nn.Linear(self.max_proposals * actions_per_node, action_hidden_channels), # max_proposals * 2
             nn.ReLU(),
-            nn.Linear(64, 1)
+            nn.Linear(action_hidden_channels, action_hidden_channels)
         )
 
-    def forward(self, x, edge_index, edge_attr):
+        # This layer gets input the graph embedding and the action embedding. 
+        self.critic_layer = nn.Sequential(
+            # graph/ node embedding output is shaped (out_channels * second_heads) (1D output of the readout layer)
+            # Graph embedding + hidden_channels (output of the action encoder) to 64
+            nn.Linear(out_channels * second_heads + action_hidden_channels, 64),
+            nn.ReLU(),
+            nn.Linear(64, 1) # output a single value
+        )
+
+        # Temperature parameter (of the softmax function) for controlling exploration in action selection
+        # A lower temperature makes the distribution more peaked (more deterministic), while a higher temperature makes it more uniform (more random).
+        self.temperature = nn.Parameter(torch.ones(1))
+
+        
+    def forward(self, x, edge_index, edge_attr, batch):
         """
         x: (num_nodes, in_channels)
         edge_index: Edge indices (2, num_edges). Denotes the connections between nodes. # e.g., edge_index = torch.tensor([[0, 1, 2, 3], [1, 0, 1, 1]])
@@ -428,83 +446,150 @@ class GATv2ActorCritic(nn.Module):
         # The output is going to be shaped (num_nodes, hidden_channels)
         print(f"\nx: {x.shape}\n")
 
+        # Add a readout layer. Use global_mean_pool to agerage across the nodes for each graph in a batch.
+        # Consistent way to handle variable-sized graphs.
+        x = global_mean_pool(x, batch)
+
         return x  # Return the final node embeddings. Its still not pased through the linear layers here yet.
 
-    def act(self, x, edge_index, edge_attr):
+    def act(self, x, edge_index, edge_attr, batch):
         """
-        Propose upto max_proposals number of crosswalks.
-        For use in policy gradient methonds, the log probabilities of the actions are needed.
+        Propose up to max_proposals number of crosswalks.
+        For use in policy gradient methods, the log probabilities of the actions are needed.
+
+
         """
 
         # Get node embeddings by passing input through GAT layers
-        node_embeddings = self.forward(x, edge_index, edge_attr)
+        node_embeddings = self.forward(x, edge_index, edge_attr, batch)
+        print(f"\ngraph/node embeddings: {node_embeddings.shape}\n")
 
         # Predict the number of proposals
         # dim=0 reduces the 2D tensor (num_nodes, hidden_channels) to a 1D tensor of size (hidden_channels,)
         # hidden_channels is the number of features for each node embedding. By taking the mean along dim=0, we're averaging across all nodes.
         num_proposals_logits = self.num_proposals_layer(node_embeddings.mean(dim=0)) # AVERAGED NODE EMBEDDINGS
-        num_proposals_probs = F.softmax(num_proposals_logits, dim=0)  # Convert to probabilities
+        # Apply temperature to control exploration-exploitation trade-off
+        num_proposals_probs = F.softmax(num_proposals_logits / self.temperature, dim=0)  # Convert to probabilities for each index (total sum to 1) with temperature
+
+        # multinomial distribution is used to model the outcome of selecting one option from a set of mutually exclusive options, where each option has a specific probability of being chosen.
         # Sample the number of proposals (add 1 to ensure at least 1 proposal)
-        num_actual_proposals = torch.multinomial(num_proposals_probs, 1).item() + 1
+        num_actual_proposals = torch.multinomial(num_proposals_probs, 1).item() + 1 # The inner 1 to the number of draws
+        print(f"\nnum_actual_proposals: {num_actual_proposals}\n")
 
         # location parameters
         location_params = self.location_layer(node_embeddings)
-        location_means = torch.sigmoid(location_params[:, 0])  # Ensure means are between 0 and 1
+        # Split the output into means and log_stds
+        location_means, location_log_stds = location_params.chunk(2, dim=-1)
+        location_means = torch.sigmoid(location_means.squeeze(-1))  # Ensure means are between 0 and 1
         # Std values are clamped between -20 and 2. 
         # Very large values of log standard deviation can lead to extremely large gradients during backpropagation, which can destabilize training.
-        location_log_stds = location_params[:, 1].clamp(-20, 2)  # Clamp log stds for numerical stability
+        location_log_stds = location_log_stds.squeeze(-1).clamp(-20, 2)  # Clamp log stds for numerical stability
         # exp(-20) ≈ 2.06e-9 (very small, but not zero), exp(2) ≈ 7.39 (reasonably large, but not enormous)
         location_stds = torch.exp(location_log_stds)  # Convert log stds to stds
 
         # thickness parameters
         thickness_params = self.thickness_layer(node_embeddings)
+
+        # Split the output into means and log_stds
+        thickness_means, thickness_log_stds = thickness_params.chunk(2, dim=-1)
+
         # Scale thickness means to be between min_thickness and max_thickness
-        thickness_means = torch.sigmoid(thickness_params[:, 0]) * (self.max_thickness - self.min_thickness) + self.min_thickness
+        thickness_means = torch.sigmoid(thickness_means.squeeze(-1)) * (self.max_thickness - self.min_thickness) + self.min_thickness
         # Std values are clamped between -20 and 2. 
         # Very large values of log standard deviation can lead to extremely large gradients during backpropagation, which can destabilize training.
-        thickness_log_stds = thickness_params[:, 1].clamp(-20, 2)  # Clamp log stds for numerical stability
+
+        thickness_log_stds = thickness_log_stds.squeeze(-1).clamp(-20, 2)  # Clamp log stds for numerical stability
+
         # exp(-20) ≈ 2.06e-9 (very small, but not zero), exp(2) ≈ 7.39 (reasonably large, but not enormous)
         thickness_stds = torch.exp(thickness_log_stds)  # Convert log stds to stds
 
-        # sample from the distributions using the reparameterization trick
-        # Instead of directly predicting fixed values for thicknesses and locations, use a probability distribution to model the uncertainty in these values.
+        # Create Normal distributions for locations and thicknesses
         # The model assumes that thicknesses and locations follow a Gaussian distribution (characterized by a mean and standard deviation)
         # This also allows for uncertainty quantification i.e., the model can express how confident it is about each prediction.
-        thicknesses = torch.normal(thickness_means, thickness_stds)
-        locations = torch.normal(location_means, location_stds)
+        # Instead of directly predicting fixed values for thicknesses and locations, use a probability distribution to model the uncertainty in these values.
+        location_dist = torch.distributions.Normal(location_means, location_stds) # the assumption is that these two are independent.
+        thickness_dist = torch.distributions.Normal(thickness_means, thickness_stds)
+
+        # sample from the distributions using the reparameterization trick
+        # Sample num_actual_proposals number of locations and thicknesses directly from the distributions.
+        locations = location_dist.sample((num_actual_proposals,))
+        thicknesses = thickness_dist.sample((num_actual_proposals,))
+        print(f"\nlocations: {locations.shape}\n")
+        print(f"\nthicknesses: {thicknesses.shape}\n")
 
         # Create a padded fixed-sized output. 
         output = torch.full((self.max_proposals, 2), -1.0)
-        indices = torch.randperm(x.size(0))[:num_actual_proposals]
-        output[:num_actual_proposals, 0] = locations[indices]
-        output[:num_actual_proposals, 1] = thicknesses[indices]
+        output[:num_actual_proposals, 0] = locations.squeeze()
+        output[:num_actual_proposals, 1] = thicknesses.squeeze()
 
-        return output, num_actual_proposals 
+        # Compute log probabilities of the chosen actions. Represents "the likelihood of the model choosing each specific proposal (location and thickness) for a crosswalk"
+        log_probs = location_dist.log_prob(locations) + thickness_dist.log_prob(thicknesses) # sum of log = log(a*b) = log(a) + log(b) i.e., assumes indepdenence of actions.
+
+        # The algorithm expects a single total log probability for the entire batch of actions. 
+        total_log_prob = log_probs.sum() 
+        print(f"\ntotal_log_prob: {total_log_prob}\n")
+
+        return output, num_actual_proposals, total_log_prob
 
     def evaluate(self, state, actions):
         """
-        Evaluate thevalue of the state-action pair.
-        actions is the full action
+        Evaluate the state-action pair for PPO.
+        Returns action log probabilities, state values, and entropy.
+        state is the full state (x, edge_index, edge_attr, batch)
+        actions is the full action (max_proposals, 2)
         """
-        x, edge_index, edge_attr = state
+        x, edge_index, edge_attr, batch = state
 
         # Get node embeddings
-        node_embeddings = self.forward(x, edge_index, edge_attr)
-        print(f"\n\nnode_embeddings: {node_embeddings.shape}\n\n")
-
-        # Aggregate node embeddings to get a graph-level embedding
-        node_embeddings_mean = node_embeddings.mean(dim=0)
-        print(f"\n\nnode_embeddings_mean: {node_embeddings_mean.shape}\n\n")
+        node_embeddings = self.forward(x, edge_index, edge_attr, batch)
+        print(f"\ngraph/node embeddings: {node_embeddings.shape}\n")
         
-        # Concatenate graph embedding with the actions
-        state_action = torch.cat([node_embeddings_mean, actions.flatten()])
-        print(f"\n\nstate_action: {state_action.shape}\n\n")
-
-        # Pass through critic layers to get the value
-        value = self.critic_layer(state_action)
-        print(f"\n\nvalue: {value.shape}\n\n")
+        # Predict the number of proposals
+        num_proposals_logits = self.num_proposals_layer(node_embeddings)
+        num_proposals_probs = F.softmax(num_proposals_logits / self.temperature, dim=0)
         
-        return value
+        # Compute location and thickness parameters
+        location_params = self.location_layer(node_embeddings)
+        location_means, location_log_stds = location_params.chunk(2, dim=-1)
+        location_means = torch.sigmoid(location_means.squeeze(-1))
+        location_log_stds = location_log_stds.squeeze(-1).clamp(-20, 2)
+        
+        thickness_params = self.thickness_layer(node_embeddings)
+        thickness_means, thickness_log_stds = thickness_params.chunk(2, dim=-1)
+        thickness_means = torch.sigmoid(thickness_means.squeeze(-1)) * (self.max_thickness - self.min_thickness) + self.min_thickness
+        thickness_log_stds = thickness_log_stds.squeeze(-1).clamp(-20, 2)
+        
+        # Create distributions
+        location_dist = torch.distributions.Normal(location_means, torch.exp(location_log_stds))
+        thickness_dist = torch.distributions.Normal(thickness_means, torch.exp(thickness_log_stds))
+        print(f"\nlocation_dist: {location_dist}\n")
+        print(f"\nthickness_dist: {thickness_dist}\n")
+
+        # Compute log probabilities of the actions
+        location_log_probs = location_dist.log_prob(actions[:, 0])
+        thickness_log_probs = thickness_dist.log_prob(actions[:, 1])
+        action_log_probs = location_log_probs + thickness_log_probs
+        
+        # Compute entropy
+        location_entropy = location_dist.entropy()
+        thickness_entropy = thickness_dist.entropy()
+        total_entropy = location_entropy + thickness_entropy
+        entropy = total_entropy.mean()
+        print(f"\nentropy: {entropy}\n")
+
+        # Process actions while preserving structure
+        action_embedding = self.action_encoder(actions.flatten())
+        print(f"\naction_embedding: {action_embedding.shape}\n")
+        
+        # Concatenate graph embedding with the processed actions
+        state_action = torch.cat([node_embeddings.squeeze(0), action_embedding], dim=0)
+        print(f"\nstate_action: {state_action.shape}\n")
+
+        # Compute state value
+        state_value = self.critic_layer(state_action)
+        print(f"\nstate_value: {state_value.shape}\n")
+        
+        return action_log_probs, state_value, entropy, num_proposals_probs
 
     def param_count(self):
         """
@@ -534,55 +619,83 @@ class GATv2ActorCritic(nn.Module):
 
 
 ################ EXAMPLE USAGE #################
+
+# Set up parameters
 num_nodes = 10 
 num_edges = 20
-in_channels = 2 # Number of input features per node (e.g., x and y coordinates)
-edge_dim = 2 # Number of features per edge
+edge_dim = 2  # Number of features per edge
 
-# Test the GATv2 model with edge features. 
+in_channels = 2  # Number of input features per node (e.g., x and y coordinates)
+hidden_channels = 64
+out_channels = 64
+
+action_hidden_channels = 32
+
+initial_heads = 4
+second_heads = 1
+action_dim = 10  # Maximum number of crosswalk proposals
+
+batch = torch.zeros(num_nodes, dtype=torch.long)
+
+print("Initializing GATv2ActorCritic model...") 
 model = GATv2ActorCritic(in_channels=in_channels, 
-                         hidden_channels=64, 
-                         heads=4, 
+                         hidden_channels=hidden_channels, 
+                         out_channels=out_channels, 
+                         initial_heads=initial_heads, 
+                         second_heads=second_heads, 
                          edge_dim=edge_dim, 
-                         device='cpu', 
-                         action_dim=10)
+                         action_hidden_channels=action_hidden_channels,
+                         action_dim=action_dim,
+                         )
 
-# Dummy data
+# Generate dummy data
+print("\nGenerating dummy input data...")
 x = torch.rand((num_nodes, in_channels))  
 edge_index = torch.randint(0, num_nodes, (2, num_edges))  
 edge_attr = torch.rand((num_edges, edge_dim))  
 
-# Dummy input (x, edge_index, edge_attr).
-dummy_input = (x, edge_index, edge_attr)
-print("Input data: ")
-print(f"Node features: {x}\n")
-print(f"Edge indices: {edge_index}\n")
-print(f"Edge features: {edge_attr}\n")
+print(f"Node features shape: {x.shape}")
+print(f"Edge index shape: {edge_index.shape}")
+print(f"Edge attributes shape: {edge_attr.shape}")
 
-# print the number of parameters in the model
-print(model.param_count())
-
-# print the model's architecture
+# Print model information
+print("\nModel architecture:")
 print(model)
 
-# Generate crosswalk proposals using the model
-proposed_crosswalks, num_actual_proposals = model.act(x, edge_index, edge_attr)
+print("\nModel parameter count:")
+param_count = model.param_count()
+for key, value in param_count.items():
+    print(f"{key}: {value}")
 
-print(f"Proposed crosswalks: {proposed_crosswalks}\n")
+# Generate crosswalk proposals using the model
+print("\nGenerating crosswalk proposals...")
+proposed_crosswalks, num_actual_proposals, total_log_prob = model.act(x, edge_index, edge_attr, batch)
+
+print(f"\nNumber of actual proposals: {num_actual_proposals}")
+print(f"Total log probability of the action: {total_log_prob.item()}")
+print("\nProposed crosswalks:")
 for i, (location, thickness) in enumerate(proposed_crosswalks):
     if i < num_actual_proposals:
-        print(f"Location: {location:.4f}, Thickness: {thickness:.2f}")
+        print(f"  Proposal {i+1}: Location: {location:.4f}, Thickness: {thickness:.2f}")
     else:
-        print(f"Padded proposal: {location:.4f}, {thickness:.2f}")
-print(f"\nNumber of actual proposals: {num_actual_proposals}")
-print(f"Total number of proposals (including padding): {len(proposed_crosswalks)}\n")
+        print(f"  Padding {i+1}: Location: {location:.4f}, Thickness: {thickness:.2f}")
 
 # Evaluate an action
-state = (x, edge_index, edge_attr)
-action = proposed_crosswalks  # Assuming the first proposed crosswalk is the one to evaluate
-print(f"Action: {action}")
+print("\nEvaluating the proposed action...")
+state = (x, edge_index, edge_attr, batch)
+action = proposed_crosswalks
 
-value = model.evaluate(state, action)
-print(f"Evaluated value of the action: {value.item()}")
+action_log_probs, state_value, entropy, num_proposals_probs = model.evaluate(state, action)
+
+print(f"Action log probabilities shape: {action_log_probs.shape}")
+print(f"State value: {state_value.item()}")
+print(f"Entropy: {entropy.item()}")
+print(f"Number of proposals probabilities shape: {num_proposals_probs.shape}")
+
+print("\nDetailed evaluation results:")
+print(f"  Action log probabilities: {action_log_probs}")
+print(f"  State value: {state_value.item()}")
+print(f"  Entropy: {entropy.item()}")
+print(f"  Number of proposals probabilities: {num_proposals_probs}")
 
 
