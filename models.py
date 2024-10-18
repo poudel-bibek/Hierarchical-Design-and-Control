@@ -353,8 +353,24 @@ class GATv2ActorCritic(nn.Module):
     GATv2 with edge features.
     """
 
-    def __init__(self, in_channels, hidden_channels, out_channels, initial_heads, second_heads, edge_dim, action_hidden_channels, action_dim, gmm_hidden_dim, num_mixtures = 3, actions_per_node=2, dropout_rate=0.2, min_thickness=0.1, max_thickness=10.0):
+    def __init__(self, in_channels, 
+                 action_dim,
+                 device,
+                 hidden_channels = None, 
+                 out_channels = None, 
+                 initial_heads = None, 
+                 second_heads = None, 
+                 edge_dim = None, 
+                 action_hidden_channels = None, 
+                 gmm_hidden_dim = None, 
+                 num_mixtures = 3, 
+                 actions_per_node=2, 
+                 dropout_rate=0.2, 
+                 min_thickness=0.1, 
+                 max_thickness=10.0):
+        
         """
+        receive all other than in_channels and action_dim as kwargs
         in_channels: Number of input features per node (e.g., x and y coordinates)
         hidden_channels: Number of hidden features.
         out_channels: Number of output features.
@@ -373,6 +389,9 @@ class GATv2ActorCritic(nn.Module):
 
         """
 
+        if hidden_channels is None:
+            print(f"\nGAT initial hidden channels not specified !!\n")
+        print(f"in channels: {in_channels}")
         super(GATv2ActorCritic, self).__init__()
 
         # First Graph Attention Layer. # conv1 should output [num_nodes, hidden_channels * initial_heads]

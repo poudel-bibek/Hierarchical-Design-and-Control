@@ -38,17 +38,16 @@ class CraverDesignEnv(gym.Env):
     For the higher level agent, modifies the net file based on the design decision.
     No need to connect or close this environment. Will be limited to network file modifications.
     """
-    def __init__(self, design_args):
+    def __init__(self, config):
         super().__init__()
-        self.design_args = design_args
-        self.original_net_file = './SUMO_files/original_craver_road.net.xml'
-
-        # Extract design parameters
-        self.min_thickness = design_args.get('min_thickness', 0.1)
-        self.max_thickness = design_args.get('max_thickness', 1.0)
-        self.min_coordinate = design_args.get('min_coordinate', 0.0)
-        self.max_coordinate = design_args.get('max_coordinate', 1.0)
-
+        self.config = config
+        self.max_proposals = config['max_proposals']
+        self.min_thickness = config['min_thickness']
+        self.max_thickness = config['max_thickness']
+        self.min_coordinate = config['min_coordinate']
+        self.max_coordinate = config['max_coordinate']
+        self.original_net_file = config['original_net_file']
+        
         # Clear existing folders and create new ones
         clear_folders()
 
@@ -58,7 +57,7 @@ class CraverDesignEnv(gym.Env):
         self.original_pedestrian_graph = self._extract_original_graph()
         self.pedestrian_graph = self.original_pedestrian_graph.copy()
         
-        if self.design_args.get('save_graph_images', False):
+        if self.config.get('save_graph_images', False):
             self._visualize_pedestrian_graph(save_path='graph_iterations/original_pedestrian_graph.png')
         
         # Initialize normalizer values
@@ -76,12 +75,11 @@ class CraverDesignEnv(gym.Env):
         """
         Defines the action space for the environment.
         """
-        max_proposals = self.design_args.get('max_proposals', 10)
         return spaces.Dict({
-            'num_proposals': spaces.Discrete(max_proposals + 1),  # 0 to max_proposals
+            'num_proposals': spaces.Discrete(self.max_proposals + 1),  # 0 to max_proposals
             'proposals': spaces.Box(
-                low=np.array([[self.min_coordinate, self.min_thickness]] * max_proposals),
-                high=np.array([[self.max_coordinate, self.max_thickness]] * max_proposals),
+                low=np.array([[self.min_coordinate, self.min_thickness]] * self.max_proposals),
+                high=np.array([[self.max_coordinate, self.max_thickness]] * self.max_proposals),
                 dtype=np.float32
             )
         })
@@ -184,10 +182,10 @@ class CraverDesignEnv(gym.Env):
         # After updating the graph, we need to update the PyTorch Geometric Data object
         self.torch_graph = self._convert_to_torch_geometric()
 
-        if self.design_args.get('save_network_xml', False):
+        if self.config.get('save_network_xml', False):
             self._save_graph_as_xml(f'updated_network_iteration_{self.iteration}.net.xml')
 
-        if self.design_args.get('save_graph_images', False):
+        if self.config.get('save_graph_images', False):
             self._save_graph_as_image(f'pedestrian_graph_iteration_{self.iteration}.png')
 
     def reset(self):

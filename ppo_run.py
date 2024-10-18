@@ -18,14 +18,14 @@ from models import MLPActorCritic, CNNActorCritic, GATv2ActorCritic
 
 from wandb_sweep import HyperParameterTuner
 from ppo_alg import PPO, Memory
-from config import get_args
+from config import get_config
 
-def save_config(args, SEED, model, save_path):
+def save_config(config, SEED, model, save_path):
     """
     Save hyperparameters and model architecture to a JSON file.
     """
-    config = {
-        "hyperparameters": vars(args),
+    config_to_save = {
+        "hyperparameters": config,
         "global_seed": SEED,
         "model_architecture": {
             "actor": str(model.policy.actor),
@@ -34,9 +34,9 @@ def save_config(args, SEED, model, save_path):
     }
     
     with open(save_path, 'w') as f:
-        json.dump(config, f, indent=4)
+        json.dump(config_to_save, f, indent=4)
 
-def evaluate_controller(args, env):
+def evaluate_controller(config, env):
     """
     For benchmarking.
     Evaluate either the traffic light or PPO as the controller.
@@ -45,7 +45,7 @@ def evaluate_controller(args, env):
 
     # Collect step data separated at each landmarks such as TL lights
     step_data = []
-    if args.evaluate == 'tl':
+    if config['evaluate'] == 'tl':
         tl_ids = env.tl_ids
         phases = env.phases
 
@@ -55,25 +55,25 @@ def evaluate_controller(args, env):
             phase = phases[tl_id]
             cycle_lengths[tl_id]  = sum([state['duration'] for state in phase])
         
-        if args.auto_start:
-            sumo_cmd = ["sumo-gui" if args.gui else "sumo", 
+        if config['auto_start']:
+            sumo_cmd = ["sumo-gui" if config['gui'] else "sumo", 
                         "--start" , 
                         "--quit-on-end", 
                         "-c", "./SUMO_files/craver.sumocfg", 
-                        '--step-length', str(args.step_length)]
+                        '--step-length', str(config['step_length'])]
                             
         else:
-            sumo_cmd = ["sumo-gui" if args.gui else "sumo", 
+            sumo_cmd = ["sumo-gui" if config['gui'] else "sumo", 
                         "--quit-on-end", 
                         "-c", "./SUMO_files/craver.sumocfg", 
-                        '--step-length', str(args.step_length)]
+                        '--step-length', str(config['step_length'])]
         
         traci.start(sumo_cmd)
         env.sumo_running = True
         env._initialize_lanes()
 
         # Now run the sim till the horizon
-        for t in range(args.max_timesteps):
+        for t in range(config['max_timesteps']):
             for tl_id in tl_ids:
 
                 # using t, determine where in the cycle we are
@@ -102,9 +102,9 @@ def evaluate_controller(args, env):
             print(f"Step: {t}, step info: {step_info}")
             step_data.append(step_info)
 
-    elif args.evaluate == 'ppo':
-        if args.model_path:
-            # device = torch.device("cuda:0" if torch.cuda.is_available() and args.gpu else "cpu")
+    elif config['evaluate'] == 'ppo':
+        if config['model_path']:
+            # device = torch.device("cuda:0" if torch.cuda.is_available() and config['gpu'] else "cpu")
             # Maybe we should use only CPU during evaluation
             device = torch.device("cpu")
             model_choice_functions = {
@@ -112,7 +112,7 @@ def evaluate_controller(args, env):
                 'mlp': MLPActorCritic,
             }
             
-            if args.model_choice == 'mlp':
+            if config['model_choice'] == 'mlp':
                 model_kwargs = {
                     'hidden_dim': 256, 
                 }
@@ -122,16 +122,16 @@ def evaluate_controller(args, env):
                 model_kwargs = {
                     'action_duration': env.observation_space.shape[0],  
                     'per_timestep_state_dim': env.observation_space.shape[1], 
-                    'model_size': args.model_size,  
-                    'kernel_size': args.kernel_size,
-                    'dropout_rate': args.dropout_rate
+                    'model_size': config['model_size'],  
+                    'kernel_size': config['kernel_size'],
+                    'dropout_rate': config['dropout_rate']
                 }
 
-            ppo_model = model_choice_functions[args.model_choice](n_channels, action_dim, device, **model_kwargs).to(device) 
-            ppo_model.load_state_dict(torch.load(args.model_path, map_location=device)) 
+            ppo_model = model_choice_functions[config['model_choice']](n_channels, action_dim, device, **model_kwargs).to(device) 
+            ppo_model.load_state_dict(torch.load(config['model_path'], map_location=device)) 
 
             state, _ = env.reset()
-            for t in range(args.max_timesteps):
+            for t in range(config['max_timesteps']):
                 action, _ = ppo_model.act(state)
                 state, reward, done, truncated, info = env.step(action)
                 
@@ -253,7 +253,7 @@ def calculate_performance(run_data, all_directions, step_length):
     for direction, avg_length in avg_queue_lengths.items():
         print(f"  {direction}: {avg_length:.2f}")
 
-def worker(rank, args, shared_policy_old, memory_queue, global_seed):
+def worker(rank, config, shared_policy_old, memory_queue, global_seed):
     """
     The device for each worker is always CPU.
     At every iteration, 1 worker will carry out one episode.
@@ -269,9 +269,9 @@ def worker(rank, args, shared_policy_old, memory_queue, global_seed):
     np.random.seed(worker_seed)
     torch.manual_seed(worker_seed)
 
-    env = CraverControlEnv(args, worker_id=rank)
-    worker_device = torch.device("cuda") if args.gpu and torch.cuda.is_available() else torch.device("cpu")
-    memory_transfer_freq = args.memory_transfer_freq  # Get from args
+    env = CraverControlEnv(config, worker_id=rank)
+    worker_device = torch.device("cuda") if config['gpu'] and torch.cuda.is_available() else torch.device("cpu")
+    memory_transfer_freq = config['memory_transfer_freq']  # Get from config
 
     # The central memory is a collection of memories from all processes.
     # A worker instance must have their own memory 
@@ -282,7 +282,7 @@ def worker(rank, args, shared_policy_old, memory_queue, global_seed):
     ep_reward = 0
     steps_since_update = 0
      
-    for _ in range(args.total_action_timesteps_per_episode):
+    for _ in range(config['total_action_timesteps_per_episode']):
         state_tensor = torch.FloatTensor(state).to(worker_device)
 
         # Select action
@@ -316,9 +316,9 @@ def worker(rank, args, shared_policy_old, memory_queue, global_seed):
     env.close()
     memory_queue.put((rank, None))  # Signal that this worker is done
 
-def train(train_args, is_sweep=False, config=None):
+def train(train_config, is_sweep=False, sweep_config=None):
     """
-    Actors are parallelized i.e., create their own instance of the envinronment and interact with it (perform policy rollout).
+    Actors are parallelized i.e., create their own instance of the environment and interact with it (perform policy rollout).
     All aspects of training are centralized.
     Auto tune hyperparameters using wandb sweeps.
 
@@ -333,7 +333,7 @@ def train(train_args, is_sweep=False, config=None):
     # 2. Lower-level agent makes the traffic control decisions.
     """
 
-    SEED = train_args.seed if train_args.seed else random.randint(0, 1000000)
+    SEED = train_config['seed'] if train_config['seed'] else random.randint(0, 1000000)
     print(f"Random seed: {SEED}")
 
     # Set global seed
@@ -343,29 +343,30 @@ def train(train_args, is_sweep=False, config=None):
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(SEED)
 
-    if is_sweep: #DO NOT MOVE THIS BELOW. # Update args with wandb config
-        for key, value in config.items():
-            if hasattr(train_args, key):
-                setattr(train_args, key, value)
+    if is_sweep: #DO NOT MOVE THIS BELOW. # Update train_config with wandb sweep_config
+        for key, value in sweep_config.items():
+            if key in train_config:
+                train_config[key] = value
         
     global_step = 0
-    device = torch.device("cuda:0" if torch.cuda.is_available() and train_args.gpu else "cpu")
+    device = torch.device("cuda:0" if torch.cuda.is_available() and train_config['gpu'] else "cpu")
     print(f"Using device: {device}")
 
     design_args = {
         'save_graph_images': True,
         'save_network_xml': True,
         'save_gmm_plots': True,
-        'max_proposals': train_args.max_proposals,
-        'min_thickness': train_args.min_thickness,
-        'max_thickness': train_args.max_thickness,
-        'min_coordinate': train_args.min_coordinate,
-        'max_coordinate': train_args.max_coordinate,
+        'max_proposals': train_config['max_proposals'],
+        'min_thickness': train_config['min_thickness'],
+        'max_thickness': train_config['max_thickness'],
+        'min_coordinate': train_config['min_coordinate'],
+        'max_coordinate': train_config['max_coordinate'],
+        'original_net_file': train_config['original_net_file'],
     }
     
     # Dummy environments. Required for setup.
     environments = {
-        'lower': CraverControlEnv(train_args, worker_id=None),
+        'lower': CraverControlEnv(train_config, worker_id=None),
         'higher': CraverDesignEnv(design_args)
     }
     
@@ -387,16 +388,14 @@ def train(train_args, is_sweep=False, config=None):
     higher_action_dim = design_args['max_proposals']
 
     higher_model_kwargs = {
-        'in_channels': higher_in_channels,
-        'hidden_channels': train_args.higher_hidden_channels,
-        'out_channels': train_args.higher_out_channels,
-        'initial_heads': train_args.higher_initial_heads,
-        'second_heads': train_args.higher_second_heads,
+        'hidden_channels': train_config['higher_hidden_channels'],
+        'out_channels': train_config['higher_out_channels'],
+        'initial_heads': train_config['higher_initial_heads'],
+        'second_heads': train_config['higher_second_heads'],
         'edge_dim': higher_edge_dim,
-        'action_hidden_channels': train_args.higher_action_hidden_channels,
-        'action_dim': higher_action_dim,
-        'gmm_hidden_dim': train_args.higher_gmm_hidden_dim,
-        'num_mixtures': train_args.higher_num_mixtures,
+        'action_hidden_channels': train_config['higher_action_hidden_channels'],
+        'gmm_hidden_dim': train_config['higher_gmm_hidden_dim'],
+        'num_mixtures': train_config['higher_num_mixtures'],
     }
 
     print(f"\nHigher level agent: \n\tIn channels: {higher_in_channels}, Action dimension: {higher_action_dim}\n")
@@ -404,12 +403,26 @@ def train(train_args, is_sweep=False, config=None):
     environments['higher'].close()  # Don't need this anymore
 
     higher_ppo = PPO(
+        higher_in_channels,
+        higher_action_dim,
+        device=device,
+        lr=train_config['higher_lr'],
+        gamma=train_config['higher_gamma'],
+        K_epochs=train_config['higher_K_epochs'],
+        eps_clip=train_config['higher_eps_clip'],
+        ent_coef=train_config['higher_ent_coef'],
+        vf_coef=train_config['higher_vf_coef'],
+        batch_size=train_config['higher_batch_size'],
+        num_processes=1,  # Higher-level agent only uses one process
+        gae_lambda=train_config['higher_gae_lambda'],
+        model_choice='gatv2',
+        agent_type="higher",
         **higher_model_kwargs
     )
 
     # Lower level agent
     # If model choice is mlp, the input is flat. However, if model choice is cnn, the input is single channel 2d
-    if train_args.lower_model_choice == 'mlp':
+    if train_config['lower_model_choice'] == 'mlp':
         state_dim_flat = environments['lower'].observation_space.shape[0] * environments['lower'].observation_space.shape[1]
         model_kwargs_lower = {
             'hidden_dim': 256,  # For MLP
@@ -418,30 +431,30 @@ def train(train_args, is_sweep=False, config=None):
         state_dim = environments['lower'].observation_space.shape # e.g., (10, 74) = (action_duration, per_timestep_state_dim)
         n_channels = 1
         model_kwargs_lower = {
-            'action_duration': train_args.action_duration,  
+            'action_duration': train_config['action_duration'],  
             'per_timestep_state_dim': environments['lower'].observation_space.shape[1],  
-            'model_size': train_args.lower_model_size,  
-            'kernel_size': train_args.lower_kernel_size,
-            'dropout_rate': train_args.lower_dropout_rate
+            'model_size': train_config['lower_model_size'],  
+            'kernel_size': train_config['lower_kernel_size'],
+            'dropout_rate': train_config['lower_dropout_rate']
             }
         
     lower_action_dim = len(environments['lower'].action_space.nvec)
     print(f"\nLower level agent: \n\tState dimension: {state_dim}, Action dimension: {lower_action_dim}")
 
     environments['lower'].close() # Dont need this anymore
-    lower_ppo = PPO(state_dim_flat if train_args.lower_model_choice == 'mlp' else n_channels, 
+    lower_ppo = PPO(state_dim_flat if train_config['lower_model_choice'] == 'mlp' else n_channels, 
         lower_action_dim, 
         device, 
-        train_args.lower_lr, 
-        train_args.lower_gamma, 
-        train_args.lower_K_epochs, 
-        train_args.lower_eps_clip, 
-        train_args.lower_ent_coef, 
-        train_args.lower_vf_coef, 
-        train_args.lower_batch_size,
-        train_args.lower_num_processes, # This agent has parallel processes (workers)
-        train_args.lower_gae_lambda,
-        train_args.lower_model_choice,
+        train_config['lower_lr'], 
+        train_config['lower_gamma'], 
+        train_config['lower_K_epochs'], 
+        train_config['lower_eps_clip'], 
+        train_config['lower_ent_coef'], 
+        train_config['lower_vf_coef'], 
+        train_config['lower_batch_size'],
+        train_config['lower_num_processes'], # This agent has parallel processes (workers)
+        train_config['lower_gae_lambda'],
+        train_config['lower_model_choice'],
         agent_type="lower",
         **model_kwargs_lower
         )
@@ -456,7 +469,7 @@ def train(train_args, is_sweep=False, config=None):
 
         # Save hyperparameters and model architecture
         config_path = os.path.join(log_dir, f'config_{current_time}.json')
-        save_config(train_args, SEED, lower_ppo, config_path)
+        save_config(train_config, SEED, lower_ppo, config_path)
         print(f"Configuration saved to {config_path}")
 
         # Model saving setup
@@ -467,15 +480,15 @@ def train(train_args, is_sweep=False, config=None):
     # Instead of using total_episodes, we will use total_iterations. 
     # In each iteration, multiple lower level agent actors interact with the environment for max_timesteps. i.e., each iteration will have num_processes episodes.
     # Each iteration is equivalent to a single timestep for the higher agent.
-    total_iterations = train_args.total_timesteps // (train_args.max_timesteps * train_args.lower_num_processes)
+    total_iterations = train_config['total_timesteps'] // (train_config['max_timesteps'] * train_config['lower_num_processes'])
     lower_ppo.total_iterations = total_iterations # For lr annealing
-    train_args.total_action_timesteps_per_episode = train_args.max_timesteps // train_args.action_duration # Each actor will run for max_timesteps and each timestep will have action_duration steps.
+    train_config['total_action_timesteps_per_episode'] = train_config['max_timesteps'] // train_config['action_duration'] # Each actor will run for max_timesteps and each timestep will have action_duration steps.
     
     # Counter to keep track of how many times action has been taken 
     action_timesteps = 0
     for iteration in range(total_iterations):
 
-        global_step = iteration * train_args.lower_num_processes + action_timesteps*train_args.action_duration
+        global_step = iteration * train_config['lower_num_processes'] + action_timesteps*train_config['action_duration']
         print(f"\nStarting iteration: {iteration + 1}/{total_iterations} with {global_step} total steps so far\n")
 
         # Create a manager to handle shared objects
@@ -483,16 +496,16 @@ def train(train_args, is_sweep=False, config=None):
         memory_queue = manager.Queue()
 
         processes = []
-        for rank in range(train_args.lower_num_processes):
-            p = mp.Process(target=worker, args=(rank, train_args, lower_ppo.policy_old, memory_queue, SEED)) # Create a process to execute the worker function
+        for rank in range(train_config['lower_num_processes']):
+            p = mp.Process(target=worker, args=(rank, train_config, lower_ppo.policy_old, memory_queue, SEED)) # Create a process to execute the worker function
             p.start()
             processes.append(p)
 
-        if train_args.lower_anneal_lr:
+        if train_config['lower_anneal_lr']:
             current_lr = lower_ppo.update_learning_rate(iteration)
 
         all_memories = []
-        active_workers = set(range(train_args.lower_num_processes))
+        active_workers = set(range(train_config['lower_num_processes']))
 
         while active_workers:
             try:
@@ -508,11 +521,11 @@ def train(train_args, is_sweep=False, config=None):
                     action_timesteps += len(memory.states)
 
                     # Update lower level PPO every n times action has been taken
-                    if action_timesteps % train_args.lower_update_freq == 0:
+                    if action_timesteps % train_config['lower_update_freq'] == 0:
                         loss = lower_ppo.update(all_memories)
 
                         total_reward = sum(sum(memory.rewards) for memory in all_memories)
-                        avg_reward = total_reward / train_args.lower_num_processes # Average reward per process in this iteration
+                        avg_reward = total_reward / train_config['lower_num_processes'] # Average reward per process in this iteration
                         print(f"\nAverage Reward per process: {avg_reward:.2f}\n")
                         
                         # clear memory to prevent memory growth (after the reward calculation)
@@ -533,12 +546,12 @@ def train(train_args, is_sweep=False, config=None):
                                                 "value_loss": loss['value_loss'],
                                                 "entropy_loss": loss['entropy_loss'],
                                                 "total_loss": loss['total_loss'],
-                                                "current_lr_lower": current_lr if train_args.lower_anneal_lr else train_args.lr,
+                                                "current_lr_lower": current_lr if train_config['lower_anneal_lr'] else train_config['lr'],
                                                 "global_step": global_step          })
                             
                             else: # Tensorboard for regular training
                                 
-                                total_updates = int(action_timesteps / train_args.lower_update_freq)
+                                total_updates = int(action_timesteps / train_config['lower_update_freq'])
                                 writer.add_scalar('Rewards/Average_Reward', avg_reward, global_step)
                                 writer.add_scalar('Updates/Total_Policy_Updates', total_updates, global_step)
                                 writer.add_scalar('Losses/Policy_Loss', loss['policy_loss'], global_step)
@@ -549,7 +562,7 @@ def train(train_args, is_sweep=False, config=None):
                                 print(f"Logged data at step {global_step}")
 
                                 # Save model every n times it has been updated (Important: Not every iteration)
-                                if train_args.save_freq > 0 and total_updates % train_args.save_freq == 0:
+                                if train_config['save_freq'] > 0 and total_updates % train_config['save_freq'] == 0:
                                     torch.save(lower_ppo.policy.state_dict(), os.path.join(save_dir, f'model_iteration_{iteration+1}.pth'))
 
                                 # Save best model so far
@@ -569,7 +582,7 @@ def train(train_args, is_sweep=False, config=None):
             p.join()
 
         # Higher-level agent update
-        if iteration % train_args.higher_update_freq == 0:
+        if iteration % train_config['higher_update_freq'] == 0:
             higher_env = CraverDesignEnv(design_args)
             higher_state = higher_env.reset()
             higher_done = False
@@ -601,7 +614,7 @@ def train(train_args, is_sweep=False, config=None):
     else:
         writer.close()
 
-def main(args):
+def main(config):
     """
     Keep main short.
     We cannot create a bunch of connections in main and then pass them around. Because each new worker needs a separate pedestrian and vehicle trips file.
@@ -612,25 +625,24 @@ def main(args):
     mp.set_start_method('spawn', force=True) 
     mp.set_sharing_strategy('file_system')
 
-    if args.evaluate:  # Eval TL or PPO
-        if args.manual_demand_veh is None or args.manual_demand_ped is None:
+    if config['evaluate']:  # Eval TL or PPO
+        if config['manual_demand_veh'] is None or config['manual_demand_ped'] is None:
             print("Manual demand is None. Please specify a demand for both vehicles and pedestrians.")
             return None
         
         else: 
-            env = CraverControlEnv(args)
-            run_data, all_directions = evaluate_controller(args, env)
-            calculate_performance(run_data, all_directions, args.step_length)
+            env = CraverControlEnv(config)
+            run_data, all_directions = evaluate_controller(config, env)
+            calculate_performance(run_data, all_directions, config['step_length'])
             env.close()
 
-    elif args.sweep:
-        tuner = HyperParameterTuner(args)
+    elif config['sweep']:
+        tuner = HyperParameterTuner(config)
         tuner.start()
 
     else:
-        train(args)
-
+        train(config)  # Pass the config as train_config
 
 if __name__ == "__main__":
-    args = get_args()
-    main(args)
+    config = get_config()
+    main(config)

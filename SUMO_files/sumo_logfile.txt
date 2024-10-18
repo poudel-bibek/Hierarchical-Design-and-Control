@@ -1,51 +1,27 @@
-***Starting server on port 54629 ***
-Loading net-file from './SUMO_files/original_craver_road.net.xml' ... done (18ms).
+***Starting server on port 55335 ***
+Loading net-file from './SUMO_files/original_craver_road.net.xml' ... done (33ms).
 Loading done.
 Simulation started with time: 0.00.
-Warning: Invalid departPos 1.97 given for stopping at :9727816623_w1. Using edge end instead.
-Warning: Invalid departPos 11.87 given for stopping at :cluster_9740157181_9740483933_w0. Using edge end instead.
-Warning: Invalid departPos 5.78 given for person '1120' walking from edge '-1060166174#4'. Using edge end instead.
-Warning: Invalid departPos 1.39 given for stopping at :9740157155_w1. Using edge end instead.
-Warning: Invalid departPos 1.30 given for person '1644' walking from edge '1060131391#0'. Using edge end instead.
-Warning: Invalid departPos 1.20 given for person '1725' walking from edge '1058666207#0'. Using edge end instead.
-Warning: Invalid departPos 0.93 given for person '1793' walking from edge '1058666206#0'. Using edge end instead.
-Warning: Invalid departPos 0.91 given for person '1914' walking from edge '1058666207#0'. Using edge end instead.
-Warning: Invalid departPos 1.19 given for person '1310' walking from edge '1060131391#0'. Using edge end instead.
-Warning: Invalid departPos 1.21 given for person '1548' walking from edge '1060131391#0'. Using edge end instead.
-Warning: Invalid departPos 1.01 given for person '796' walking from edge '1060131391#0'. Using edge end instead.
-Warning: Invalid departPos 0.30 given for person '1548' walking from edge '1060131401#3'. Using edge end instead.
-Warning: Invalid departPos 1.17 given for person '1023' walking from edge '1060131391#0'. Using edge end instead.
-Warning: Invalid departPos 0.27 given for person '409' walking from edge '1060131390'. Using edge end instead.
-Warning: Invalid departPos 1.04 given for person '1275' walking from edge '1060131391#0'. Using edge end instead.
-Warning: Invalid departPos 0.68 given for person '1097' walking from edge '1058666206#0'. Using edge end instead.
-Warning: Invalid departPos 0.39 given for person '1567' walking from edge '1060131390'. Using edge end instead.
-Warning: Invalid departPos 1.10 given for person '1918' walking from edge '1058666206#0'. Using edge end instead.
-Warning: Invalid departPos 0.36 given for person '1654' walking from edge '1060131391#0'. Using edge end instead.
-Warning: Invalid departPos 0.53 given for person '1850' walking from edge '1058666207#0'. Using edge end instead.
-Warning: Invalid departPos 1.10 given for person '1358' walking from edge '1058666207#0'. Using edge end instead.
-Warning: Invalid departPos 1.08 given for person '1589' walking from edge '1060131391#0'. Using edge end instead.
-Warning: Invalid departPos 1.10 given for person '1548' walking from edge '1060131391#0'. Using edge end instead.
-Warning: Invalid departPos 0.79 given for person '1696' walking from edge '1058666207#0'. Using edge end instead.
 Error: tcpip::Socket::recvAndCheck @ recv: peer shutdown
 Quitting (on error).
-Simulation ended at time: 490.00
+Simulation ended at time: 10.00
 Performance: 
- Duration: 76.56s
- TraCI-Duration: 68.88s
- Real time factor: 6.40013
- UPS: 30.589987
- UPS-Persons: 1273.259231
+ Duration: 1.35s
+ TraCI-Duration: 0.16s
+ Real time factor: 7.38552
+ UPS: 7.385524
+ UPS-Persons: 56.868538
 Vehicles: 
- Inserted: 18 (Loaded: 23)
- Running: 4
- Waiting: 0
+ Inserted: 2 (Loaded: 32)
+ Running: 2
+ Waiting: 1
 Persons: 
- Inserted: 604
- Running: 351
+ Inserted: 440
+ Running: 16
 
-DijkstraRouter answered 7080 queries and explored 5.27 edges on average.
-DijkstraRouter spent 0.01s answering queries (0.00ms on average).
-DijkstraRouter answered 1095 queries and explored 332.87 edges on average.
-DijkstraRouter spent 0.03s answering queries (0.02ms on average).
-DijkstraRouter answered 18 queries and explored 58.78 edges on average.
+DijkstraRouter answered 6 queries and explored 3.83 edges on average.
+DijkstraRouter spent 0.00s answering queries (0.00ms on average).
+DijkstraRouter answered 16 queries and explored 532.88 edges on average.
 DijkstraRouter spent 0.00s answering queries (0.06ms on average).
+DijkstraRouter answered 3 queries and explored 57.33 edges on average.
+DijkstraRouter spent 0.00s answering queries (0.00ms on average).

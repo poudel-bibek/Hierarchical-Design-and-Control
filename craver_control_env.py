@@ -12,38 +12,46 @@ class CraverControlEnv(gym.Env):
     """
     For the lower level agent, works on a net file that has been modified by the higher level agent.
     """
-    def __init__(self, args, worker_id=None):
+    def __init__(self, config, worker_id=None):
         super().__init__()
-        self.vehicle_input_trips = args.vehicle_input_trips
-        self.pedestrian_input_trips = args.pedestrian_input_trips
+        self.config = config  # Store the entire config dictionary
+        self.worker_id = worker_id
+
+        # Use dictionary access instead of attribute access
+        self.vehicle_input_trips = config['vehicle_input_trips']
+        self.vehicle_output_trips = config['vehicle_output_trips']
+        self.pedestrian_input_trips = config['pedestrian_input_trips']
+        self.pedestrian_output_trips = config['pedestrian_output_trips']
+        self.manual_demand_veh = config['manual_demand_veh']
+        self.manual_demand_ped = config['manual_demand_ped']
+        self.step_length = config['step_length']
+        self.action_duration = config['action_duration']
+        self.gui = config['gui']
+        self.auto_start = config['auto_start']
 
         # Modify file paths to include the unique suffix. Each worker has their own environment and hence their own copy of the trips file.
-        self.worker_id = worker_id
         self.unique_suffix = f"_{worker_id}" if worker_id is not None else ""
-        self.vehicle_output_trips = args.vehicle_output_trips.replace('.xml', f'{self.unique_suffix}.xml')
-        self.pedestrian_output_trips = args.pedestrian_output_trips.replace('.xml', f'{self.unique_suffix}.xml')
+        self.vehicle_output_trips = self.vehicle_output_trips.replace('.xml', f'{self.unique_suffix}.xml')
+        self.pedestrian_output_trips = self.pedestrian_output_trips.replace('.xml', f'{self.unique_suffix}.xml')
         self.original_net_file = './SUMO_files/original_craver_road.net.xml'
 
-        if args.manual_demand_veh is not None :
+        if self.manual_demand_veh is not None :
             # Convert the demand to scaling factor first
-            scaling = convert_demand_to_scale_factor(args.manual_demand_veh, "vehicle", self.vehicle_input_trips)
+            scaling = convert_demand_to_scale_factor(self.manual_demand_veh, "vehicle", self.vehicle_input_trips)
             scale_demand(self.vehicle_input_trips, self.vehicle_output_trips, scaling, demand_type="vehicle")
 
-        if args.manual_demand_ped is not None:
+        if self.manual_demand_ped is not None:
             # Convert the demand to scaling factor first
-            scaling = convert_demand_to_scale_factor(args.manual_demand_ped, "pedestrian", self.pedestrian_input_trips)
+            scaling = convert_demand_to_scale_factor(self.manual_demand_ped, "pedestrian", self.pedestrian_input_trips)
             scale_demand(self.pedestrian_input_trips, self.pedestrian_output_trips, scaling, demand_type="pedestrian")
 
-        self.use_gui = args.gui
-        self.step_length = args.step_length
-        self.max_timesteps = args.max_timesteps
+        self.use_gui = self.gui
+        self.max_timesteps = config['max_timesteps']
         self.sumo_running = False
         self.step_count = 0
-        self.auto_start = args.auto_start
         self.tl_ids = ['cluster_172228464_482708521_9687148201_9687148202_#5more'] # Only control this one for now
         
         self.previous_tl_action = None
-        self.action_duration = args.action_duration  # Duration of each action in seconds
         # Number of simulation steps that should occur for each action. trying to ajuust for any given step length
         self.steps_per_action = int(self.action_duration / self.step_length) # This is also the size of the observation buffer
         print(f"Steps per action: {self.steps_per_action}")
@@ -58,8 +66,8 @@ class CraverControlEnv(gym.Env):
         self.tl_lane_dict['cluster_172228464_482708521_9687148201_9687148202_#5more'] = initialize_lanes()
         self.tl_pedestrian_status = {} # For pedestrians related to crosswalks attached to TLS.
 
-        self.demand_scale_min = args.demand_scale_min
-        self.demand_scale_max = args.demand_scale_max
+        self.demand_scale_min = config['demand_scale_min']
+        self.demand_scale_max = config['demand_scale_max']
 
         self.current_crosswalk_selection = None 
         self.current_phase_group = None

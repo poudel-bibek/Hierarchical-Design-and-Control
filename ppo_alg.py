@@ -44,8 +44,8 @@ class PPO:
     - In Multiprocessing, we create separate processes, each with its own Python interpreter and memory space
     """
     def __init__(self, 
-                 model_dim, 
-                 action_dim, 
+                 model_dim, # could be state_dim for mlp, in_channels for cnn, in_channels for gatv2
+                 action_dim, # is max_proposals for gatv2
                  device, 
                  lr, 
                  gamma, 
@@ -57,9 +57,11 @@ class PPO:
                  num_processes, 
                  gae_lambda, 
                  model_choice,
-                 agent_type, # higher or lower
+                 agent_type,
                  **model_kwargs):
         
+        self.model_dim = model_dim
+        self.action_dim = action_dim
         self.device = device
         self.gamma = gamma
         self.eps_clip = eps_clip
@@ -76,11 +78,12 @@ class PPO:
             'gatv2': GATv2ActorCritic,
         }
         
+        
         # Initialize the current policy network
-        self.policy = self.model_choice_functions[model_choice](model_dim, action_dim, device, **model_kwargs).to(device)
+        self.policy = self.model_choice_functions[model_choice](self.model_dim, self.action_dim, device, **model_kwargs).to(device)
 
         # Initialize the old policy network (used for importance sampling)
-        self.policy_old = self.model_choice_functions[model_choice](model_dim, action_dim, device, **model_kwargs).to(device)
+        self.policy_old = self.model_choice_functions[model_choice](self.model_dim, self.action_dim, device, **model_kwargs).to(device)
 
         param_counts = self.policy.param_count()
         print(f"\nTotal number of parameters in {self.agent_type}-level policy: {param_counts['total']}")
