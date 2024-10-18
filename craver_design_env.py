@@ -9,6 +9,8 @@ from craver_config import (PHASES, DIRECTIONS_AND_EDGES, CONTROLLED_CROSSWALKS_D
 import torch
 from torch_geometric.data import Data
 from models import GATv2ActorCritic  # Import the GAT model
+import os
+import shutil
 
 def pairwise(iterable):
     """
@@ -17,6 +19,18 @@ def pairwise(iterable):
     a, b = tee(iterable)
     next(b, None)
     return zip(a, b)
+
+def clear_folders():
+    """
+    Clear existing folders (graph_iterations, network_iterations, gmm_plots) if they exist.
+    """
+    folders_to_clear = ['graph_iterations', 'network_iterations', 'gmm_plots']
+    for folder in folders_to_clear:
+        if os.path.exists(folder):
+            shutil.rmtree(folder)
+            print(f"Cleared existing {folder} folder.")
+        os.makedirs(folder)
+        print(f"Created new {folder} folder.")
 
 class CraverDesignEnv(gym.Env):
     """
@@ -28,11 +42,17 @@ class CraverDesignEnv(gym.Env):
         self.args = args
         self.original_net_file = './SUMO_files/original_craver_road.net.xml'
 
+        # Clear existing folders and create new ones
+        clear_folders()
+
         self.crosswalks_to_remove = [crosswalk_id for _, data in CONTROLLED_CROSSWALKS_DICT.items() for crosswalk_id in data['ids']]
         #self._clear_corridor(self.crosswalks_to_remove)
         
-        self.pedestrian_graph = self._extract_original_graph()
-        self._visualize_pedestrian_graph()
+        self.original_pedestrian_graph = self._extract_original_graph()
+        self.pedestrian_graph = self.original_pedestrian_graph.copy()
+        
+        if self.args.save_graph_images == 'True':
+            self._visualize_pedestrian_graph(save_path='graph_iterations/original_pedestrian_graph.png')
         
         # Initialize normalizer values
         self.normalizer_x = None
@@ -41,13 +61,23 @@ class CraverDesignEnv(gym.Env):
         
         # Convert the NetworkX graph to a PyTorch Geometric Data object
         self.torch_graph = self._convert_to_torch_geometric()
+        
+        self.iteration = 0
 
     @property
     def action_space(self):
+        """
+        
+        """
+        
         return gym.spaces.MultiDiscrete([2] * 15)
 
     @property
     def observation_space(self):
+        """
+        
+        """
+
         return gym.spaces.Box(low=0, high=1, shape=(10, 74), dtype=np.float32)
 
     def _extract_original_graph(self):
@@ -89,10 +119,25 @@ class CraverDesignEnv(gym.Env):
     def step(self, action):
         """
         Implement the environment step here.
-        You can use self.torch_graph as input to your GAT model.
         """
-        # Your step implementation
-        pass
+        # Update the graph based on the action
+        self._update_graph(action)
+
+        # Here you would typically:
+        # 1. Apply the action
+        # 2. Calculate the reward
+        # 3. Determine if the episode is done
+        # 4. Collect any additional info for the info dict
+
+        # For now, we'll just return placeholder values
+        observation = self.torch_graph
+        reward = 0  # You need to implement a proper reward function
+        done = False
+        info = {}
+
+        self.iteration += 1
+
+        return observation, reward, done, info
 
     def _apply_action(self, action):
         pass
@@ -102,10 +147,16 @@ class CraverDesignEnv(gym.Env):
 
     def reset(self):
         """
-        Implement the environment reset here.
-        You can reinitialize self.torch_graph if needed.
+        Reset the environment to its initial state.
         """
-        # Your reset implementation
+        # Reset the graph to its original state
+        self.pedestrian_graph = self.original_pedestrian_graph.copy()
+        
+        # Recreate the PyTorch Geometric Data object
+        self.torch_graph = self._convert_to_torch_geometric()
+
+        self.iteration = 0
+
         return self.torch_graph  # Return the initial state
 
     def close(self):
@@ -123,14 +174,52 @@ class CraverDesignEnv(gym.Env):
         print(f"Following crosswalks will be removed: {crosswalks_to_remove}.\n")
         pass
     
-    def _add_corridor_crosswalks(self):
+    def _update_graph(self, action):
         """
-        Step 2: Based on the current action representation, add number_of_crosswalks with a thickness_of_crosswalks.
+        Updates the graph based on the action.
+        The action is expected to be a list of tuples (location, thickness) for each proposed crosswalk.
         """
-        #number_of_crosswalks, thickness_of_crosswalks  = # some function call/
-        pass
+        for i, (location, thickness) in enumerate(action):
+            # Denormalize the location (x-coordinate) and thickness
+            denorm_location = self.normalizer_x['min'] + location * (self.normalizer_x['max'] - self.normalizer_x['min'])
+            denorm_thickness = self.normalizer_width['min'] + thickness * (self.normalizer_width['max'] - self.normalizer_width['min'])
 
-    def _visualize_pedestrian_graph(self, save_path='pedestrian_graph.png', show=True):
+            # Find the closest existing nodes (junctions) to place the new crosswalk
+            closest_nodes = self._find_closest_nodes(denorm_location)
+
+            if closest_nodes:
+                # Create a new node for the crosswalk
+                new_node_id = f"crosswalk_{self.iteration}_{i}"
+                y_coord = sum(self.pedestrian_graph.nodes[node]['pos'][1] for node in closest_nodes) / len(closest_nodes)
+                self.pedestrian_graph.add_node(new_node_id, pos=(denorm_location, y_coord), type='crosswalk', width=denorm_thickness)
+
+                # Connect the new node to the closest existing nodes
+                for node in closest_nodes:
+                    self.pedestrian_graph.add_edge(new_node_id, node, width=denorm_thickness)
+
+        # After updating the graph, we need to update the PyTorch Geometric Data object
+        self.torch_graph = self._convert_to_torch_geometric()
+
+        if self.args.save_network_xml:
+            self._save_graph_as_xml(f'updated_network_iteration_{self.iteration}.net.xml')
+
+        if self.args.save_graph_images:
+            self._save_graph(f'pedestrian_graph_iteration_{self.iteration}.png')
+
+    def _find_closest_nodes(self, x_location):
+        """
+        Finds the closest existing nodes (junctions) to the given x_location.
+        Returns a list of node IDs.
+        """
+        nodes = list(self.pedestrian_graph.nodes(data=True))
+        sorted_nodes = sorted(nodes, key=lambda n: abs(n[1]['pos'][0] - x_location))
+        
+        # Get the two closest nodes
+        closest_nodes = [sorted_nodes[0][0], sorted_nodes[1][0]]
+        
+        return closest_nodes
+
+    def _visualize_pedestrian_graph(self, save_path='pedestrian_graph.png'):
         """
         Visualizes the pedestrian graph of junctions.
         """
@@ -151,11 +240,8 @@ class CraverDesignEnv(gym.Env):
         if save_path:
             plt.savefig(save_path, dpi=300, bbox_inches='tight')
             print(f"Graph visualization saved to {save_path}")
-        
-        if show:
-            plt.show()
-        else:
-            plt.close()
+
+        plt.close()
 
     def _convert_to_torch_geometric(self):
         """
@@ -218,12 +304,82 @@ class CraverDesignEnv(gym.Env):
 
         return torch.stack([normalized_x, normalized_y, normalized_width], dim=1)
 
+    def _save_graph(self, filename):
+        """
+        Saves the current state of the graph as an image.
+        """
+        plt.figure(figsize=(20, 15))
+        
+        pos = nx.get_node_attributes(self.pedestrian_graph, 'pos')
+        
+        # Draw nodes
+        nx.draw_networkx_nodes(self.pedestrian_graph, pos, node_size=30, node_color='slateblue', alpha=0.8)
+        
+        # Draw edges
+        nx.draw_networkx_edges(self.pedestrian_graph, pos, edge_color='orange', width=2, alpha=0.2)
+        
+        plt.title(f"Pedestrian Graph - Iteration {self.iteration}", fontsize=16)
+        plt.axis('off')
+        plt.tight_layout()
+        
+        # Create a 'graph_iterations' directory if it doesn't exist
+        os.makedirs('graph_iterations', exist_ok=True)
+        
+        # Save the graph in the 'graph_iterations' directory
+        plt.savefig(os.path.join('graph_iterations', filename), dpi=300, bbox_inches='tight')
+        plt.close()
+
+    def _save_graph_as_xml(self, filename):
+        """
+        Saves the current state of the graph as a SUMO network XML file.
+        """
+        # Load the original XML file
+        tree = ET.parse(self.original_net_file)
+        root = tree.getroot()
+
+        # Remove existing crosswalks
+        for crosswalk in root.findall(".//crossing"):
+            root.remove(crosswalk)
+
+        # Add new crosswalks based on the updated graph
+        for node, data in self.pedestrian_graph.nodes(data=True):
+            if data['type'] == 'crosswalk':
+                # Find non-crosswalk neighbors
+                non_crosswalk_neighbors = [j for j in self.pedestrian_graph.neighbors(node) 
+                                           if self.pedestrian_graph.nodes[j]['type'] != 'crosswalk']
+                
+                if non_crosswalk_neighbors:
+                    # Find the nearest junction
+                    nearest_junction = min(
+                        non_crosswalk_neighbors,
+                        key=lambda j: ((data['pos'][0] - self.pedestrian_graph.nodes[j]['pos'][0])**2 +
+                                       (data['pos'][1] - self.pedestrian_graph.nodes[j]['pos'][1])**2)**0.5
+                    )
+
+                    # Create a new crossing element
+                    crossing = ET.SubElement(root, 'crossing')
+                    crossing.set('id', node)
+                    crossing.set('node', nearest_junction)
+                    crossing.set('width', str(data['width']))
+                    crossing.set('shape', f"{data['pos'][0]},{data['pos'][1]} {data['pos'][0]},{data['pos'][1]}")  # Simplified shape
+                else:
+                    print(f"Warning: Crosswalk {node} has no non-crosswalk neighbors. Skipping this crosswalk in XML output.")
+
+        # Create a 'network_iterations' directory if it doesn't exist
+        os.makedirs('network_iterations', exist_ok=True)
+
+        # Save the updated XML file
+        tree.write(os.path.join('network_iterations', filename))
+        print(f"Updated network saved to {os.path.join('network_iterations', filename)}")
+
 ############ EXAMPLE USAGE ############
 import argparse
 
-args = argparse.Namespace(
-    # Define your arguments here
-)
+parser = argparse.ArgumentParser(description="CraverDesignEnv arguments")
+parser.add_argument('--save_graph_images', type=str, choices=['True', 'False'], default='True', help='Save graph images')
+parser.add_argument('--save_network_xml', type=str, choices=['True', 'False'], default='True', help='Save network XML files')
+parser.add_argument('--save_gmm_plots', type=str, choices=['True', 'False'], default='True', help='Save GMM distribution plots')
+args = parser.parse_args()
 
 env = CraverDesignEnv(args)
 
@@ -259,40 +415,49 @@ gat_model = GATv2ActorCritic(
     num_mixtures=num_mixtures
 )
 
-# Use the GAT model to process the graph
-x, edge_index, edge_attr = env.torch_graph.x, env.torch_graph.edge_index, env.torch_graph.edge_attr
-batch = torch.zeros(env.torch_graph.num_nodes, dtype=torch.long)  # Assuming a single graph
+# Run through 5 iterations
+for iteration in range(5):
+    print(f"\n--- Iteration {iteration + 1} ---")
+    
+    # Use the GAT model to process the graph
+    x, edge_index, edge_attr = env.torch_graph.x, env.torch_graph.edge_index, env.torch_graph.edge_attr
+    batch = torch.zeros(env.torch_graph.num_nodes, dtype=torch.long)  # Assuming a single graph
 
-# Generate crosswalk proposals
-proposed_crosswalks, num_actual_proposals, total_log_prob = gat_model.act(x, edge_index, edge_attr, batch)
+    # Generate crosswalk proposals
+    proposed_crosswalks, num_actual_proposals, total_log_prob = gat_model.act(x, edge_index, edge_attr, batch)
 
-print(f"\nNumber of actual proposals: {num_actual_proposals}")
-print(f"Total log probability of the action: {total_log_prob.item()}")
-print("\nProposed crosswalks:")
-for i, (location, thickness) in enumerate(proposed_crosswalks):
-    if i < num_actual_proposals:
-        print(f"  Proposal {i+1}: Location: {location:.4f}, Thickness: {thickness:.2f}")
-    else:
-        print(f"  Padding {i+1}: Location: {location:.4f}, Thickness: {thickness:.2f}")
+    print(f"Number of actual proposals: {num_actual_proposals}")
+    print(f"Total log probability of the action: {total_log_prob.item()}")
+    print("Proposed crosswalks:")
+    for i, (location, thickness) in enumerate(proposed_crosswalks):
+        if i < num_actual_proposals:
+            print(f"  Proposal {i+1}: Location: {location:.4f}, Thickness: {thickness:.2f}")
 
-# Evaluate the proposed action
-state = (x, edge_index, edge_attr, batch)
-action = proposed_crosswalks
+    # Evaluate the proposed action
+    state = (x, edge_index, edge_attr, batch)
+    action = proposed_crosswalks
 
-action_log_probs, state_value, entropy, num_proposals_probs = gat_model.evaluate(state, action)
+    action_log_probs, state_value, entropy, num_proposals_probs = gat_model.evaluate(state, action)
 
-print(f"\nAction log probabilities shape: {action_log_probs.shape}")
-print(f"State value: {state_value.item()}")
-print(f"Entropy: {entropy.item()}")
-print(f"Number of proposals probabilities shape: {num_proposals_probs.shape}")
+    print(f"State value: {state_value.item()}")
+    print(f"Entropy: {entropy.item()}")
 
-# Visualize the GMM distribution
-print("\nVisualizing the GMM distribution...")
-gmm = gat_model.get_gmm_distribution(gat_model.forward(x, edge_index, edge_attr, batch))
-gat_model.visualize_gmm(gmm)
+    # Visualize and save the GMM distribution
+    if args.save_gmm_plots == 'True':
+        print("Saving GMM distribution plot...")
+        gmm = gat_model.get_gmm_distribution(gat_model.forward(x, edge_index, edge_attr, batch))
+        os.makedirs('gmm_plots', exist_ok=True)
+        gat_model.visualize_gmm(gmm, save_path=f'gmm_plots/gmm_distribution_iteration_{iteration}.png')
 
-# After initializing the environment, you can print the normalizer values:
-print("\nNormalizer values:")
+    # Update the environment
+    observation, reward, done, info = env.step(proposed_crosswalks)
+
+    if done:
+        print("Environment signaled done. Resetting...")
+        env.reset()
+
+# After running all iterations, print the final normalizer values:
+print("\nFinal Normalizer values:")
 print(f"X-coordinate: {env.normalizer_x}")
 print(f"Y-coordinate: {env.normalizer_y}")
 print(f"Width: {env.normalizer_width}")

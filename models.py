@@ -521,7 +521,7 @@ class GATv2ActorCritic(nn.Module):
         
         return entropy
 
-    def visualize_gmm(self, gmm, num_samples=20000):
+    def visualize_gmm(self, gmm, num_samples=20000, save_path=None):
         """
         Visualize the GMM distribution using Seaborn and Matplotlib.
         """
@@ -563,7 +563,12 @@ class GATv2ActorCritic(nn.Module):
         
         # Adjust layout and display the plot
         plt.tight_layout()
-        plt.show()
+        
+        if save_path:
+            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            print(f"GMM distribution plot saved to {save_path}")
+        
+        plt.close()
     
     def act(self, x, edge_index, edge_attr, batch):
         """
@@ -793,4 +798,3 @@ gmm = model.get_gmm_distribution(model.forward(x, edge_index, edge_attr, batch))
 model.visualize_gmm(gmm)
 
 """
-
