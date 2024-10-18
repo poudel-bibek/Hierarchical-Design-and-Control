@@ -340,7 +340,9 @@ class CNNActorCritic(nn.Module):
 
 ######## GATv2 model ########
 # Used excluisively for the design agent. 
-
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
 from torch_geometric.nn import GATv2Conv
 import torch.nn.functional as F
 from torch_geometric.nn import global_mean_pool
@@ -366,6 +368,9 @@ class GATv2ActorCritic(nn.Module):
 
         TODO: 
         # At every timestep, the actions is a whole bunch of things of max size. Critic has to evaluate all that.
+        # Thickness and location values that are not in the proposal are set to -1 (which is close to minimum of 0.1)
+        # model could potentially interpret these as meaningful values. 
+
         """
 
         super(GATv2ActorCritic, self).__init__()
@@ -427,8 +432,9 @@ class GATv2ActorCritic(nn.Module):
         )
 
         # Temperature parameter (of the softmax function) for controlling exploration in action selection
-        # A lower temperature makes the distribution more peaked (more deterministic), while a higher temperature makes it more uniform (more random).
-        self.temperature = nn.Parameter(torch.ones(1))
+        # A lower temperature (0.1) makes the distribution more peaked (more deterministic), while a higher temperature (2.0) makes it more uniform (more random).
+        #self.temperature = nn.Parameter(torch.ones(1)) # this is a learnable parameter. No need for this to be a learnable. Other mechanisms to control exploration.
+        self.temperature = 1.0 # fixed temperature
 
     def get_gmm_distribution(self, node_embeddings):
         """
@@ -515,6 +521,49 @@ class GATv2ActorCritic(nn.Module):
         
         return entropy
 
+    def visualize_gmm(self, gmm, num_samples=20000):
+        """
+        Visualize the GMM distribution using Seaborn and Matplotlib.
+        """
+        # Set the style for Seaborn
+        sns.set_style("whitegrid")
+        
+        # Create a figure and axis
+        fig, ax = plt.subplots(figsize=(10, 10))
+        
+        # Sample from the GMM
+        samples = gmm.sample((num_samples,))
+        print(f"\nsamples: {samples.shape}\n")
+
+        # Ensure samples are 2D
+        if samples.dim() == 3:
+            samples = samples.squeeze(1)
+        
+        # Create a scatter plot using Seaborn
+        sns.scatterplot(x=samples[:, 0], y=samples[:, 1], alpha=0.5, ax=ax)
+        
+        # Set labels and title
+        ax.set_xlabel("Location", fontsize=12)
+        ax.set_ylabel("Thickness", fontsize=12)
+        ax.set_title("Gaussian Mixture Model", fontsize=14)
+        
+        # Adjust x-axis
+        ax.set_xlim(-0.5, 1.5)
+        ax.set_xticks(np.arange(-0.5, 1.5, 0.1))
+        ax.set_xticklabels([f"{x:.1f}" for x in np.arange(-0.5, 1.5, 0.1)])
+        
+        # Adjust y-axis
+        ax.set_ylim(self.min_thickness, self.max_thickness)
+        y_ticks = np.linspace(self.min_thickness, self.max_thickness, 10)
+        ax.set_yticks(y_ticks)
+        ax.set_yticklabels([f"{y:.1f}" for y in y_ticks])
+        
+        # Add a colorbar to represent density
+        sns.kdeplot(x=samples[:, 0], y=samples[:, 1], cmap="YlOrRd", fill=True, cbar=True, ax=ax)
+        
+        # Adjust layout and display the plot
+        plt.tight_layout()
+        plt.show()
     
     def act(self, x, edge_index, edge_attr, batch):
         """
@@ -534,12 +583,12 @@ class GATv2ActorCritic(nn.Module):
 
         # Get node embeddings by passing input through GAT layers
         node_embeddings = self.forward(x, edge_index, edge_attr, batch)
-        print(f"\ngraph/node embeddings: {node_embeddings.shape}\n")
+        print(f"\ngraph/node embeddings: {node_embeddings}\n")
+        #print(f"\nnode_embeddings.mean(dim=0): {node_embeddings.mean(dim=0)}\n") # dim=0 is not required because of readout layer.
 
         # Predict the number of proposals
-        # dim=0 reduces the 2D tensor (num_nodes, hidden_channels) to a 1D tensor of size (hidden_channels,)
-        # hidden_channels is the number of features for each node embedding. By taking the mean along dim=0, we're averaging across all nodes.
-        num_proposals_logits = self.num_proposals_layer(node_embeddings.mean(dim=0)) # AVERAGED NODE EMBEDDINGS
+        num_proposals_logits = self.num_proposals_layer(node_embeddings) 
+        print(f"\nHERE: num_proposals_logits: {num_proposals_logits}\n")
         # Apply temperature to control exploration-exploitation trade-off
         num_proposals_probs = F.softmax(num_proposals_logits / self.temperature, dim=-1)  # Convert to probabilities for each index (total sum to 1) with temperature
 
@@ -565,7 +614,7 @@ class GATv2ActorCritic(nn.Module):
         print(f"\nthicknesses: {thicknesses.shape}\n")
 
         # Create a padded fixed-sized output. 
-        output = torch.full((self.max_proposals, 2), -1.0)
+        output = torch.full((self.max_proposals, 2), 0.0) # padded with 0s
         output[:num_actual_proposals, 0] = locations.squeeze()
         output[:num_actual_proposals, 1] = thicknesses.squeeze()
 
@@ -590,10 +639,12 @@ class GATv2ActorCritic(nn.Module):
 
         # Get node embeddings
         node_embeddings = self.forward(x, edge_index, edge_attr, batch)
-        print(f"\ngraph/node embeddings: {node_embeddings.shape}\n")
+        print(f"\ngraph/node embeddings: {node_embeddings}\n")
         
         # Predict the number of proposals
         num_proposals_logits = self.num_proposals_layer(node_embeddings)
+        print(f"\nHERE:num_proposals_logits: {num_proposals_logits}\n")
+
         num_proposals_probs = F.softmax(num_proposals_logits / self.temperature, dim=-1)
         
         gmm = self.get_gmm_distribution(node_embeddings)
@@ -606,6 +657,11 @@ class GATv2ActorCritic(nn.Module):
         print(f"\nentropy: {entropy}\n")
 
         # Process actions while preserving structure
+        # Actions are locations (in the range [0, 1]) and thicknesses. Should we sort them? 
+        print(f"\nHERE: actions: {actions}, flattened: {actions.flatten()}\n")
+
+
+
         action_embedding = self.action_encoder(actions.flatten())
         print(f"\naction_embedding: {action_embedding.shape}\n")
         
@@ -729,5 +785,10 @@ print(f"  Action log probabilities: {action_log_probs}")
 print(f"  State value: {state_value.item()}")
 print(f"  Entropy: {entropy.item()}")
 print(f"  Number of proposals probabilities: {num_proposals_probs}")
+
+# Visualize the GMM distribution
+print("\nVisualizing the GMM distribution...")
+gmm = model.get_gmm_distribution(model.forward(x, edge_index, edge_attr, batch))
+model.visualize_gmm(gmm)
 
 
