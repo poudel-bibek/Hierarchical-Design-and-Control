@@ -1,6 +1,6 @@
 import torch
 import torch.optim as optim
-from models import MLPActorCritic, CNNActorCritic
+from models import MLPActorCritic, CNNActorCritic, GATv2ActorCritic
 
 class Memory:
     """
@@ -73,6 +73,7 @@ class PPO:
         self.model_choice_functions = {
             'cnn': CNNActorCritic,
             'mlp': MLPActorCritic,
+            'gatv2': GATv2ActorCritic,
         }
         
         # Initialize the current policy network

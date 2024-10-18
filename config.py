@@ -46,6 +46,20 @@ def get_args():
     parser.add_argument('--higher_model_size', choices=['small', 'medium'], default='medium', help='Model size for CNN: small or medium (default)')
     parser.add_argument('--higher_dropout_rate', type=float, default=0.2, help='Dropout rate for CNN (default: 0.2)')
 
+    # Higher-level agent specific arguments
+    parser.add_argument('--max_proposals', type=int, default=10, help='Maximum number of crosswalk proposals')
+    parser.add_argument('--min_thickness', type=float, default=0.1, help='Minimum thickness of crosswalks')
+    parser.add_argument('--max_thickness', type=float, default=10.0, help='Maximum thickness of crosswalks')
+    parser.add_argument('--min_coordinate', type=float, default=0.0, help='Minimum coordinate for crosswalk placement')
+    parser.add_argument('--max_coordinate', type=float, default=1.0, help='Maximum coordinate for crosswalk placement')
+    parser.add_argument('--higher_hidden_channels', type=int, default=64, help='Number of hidden channels in GATv2 layers')
+    parser.add_argument('--higher_out_channels', type=int, default=32, help='Number of output channels in GATv2 layers')
+    parser.add_argument('--higher_initial_heads', type=int, default=8, help='Number of attention heads in first GATv2 layer')
+    parser.add_argument('--higher_second_heads', type=int, default=1, help='Number of attention heads in second GATv2 layer')
+    parser.add_argument('--higher_action_hidden_channels', type=int, default=32, help='Number of hidden channels in action layers')
+    parser.add_argument('--higher_gmm_hidden_dim', type=int, default=64, help='Hidden dimension for GMM layers')
+    parser.add_argument('--higher_num_mixtures', type=int, default=3, help='Number of mixtures in GMM')
+
     # PPO (lower level agent)
     parser.add_argument('--lower_anneal_lr', action='store_true', default=True, help='Anneal learning rate (default: False)')
     parser.add_argument('--lower_gae_lambda', type=float, default=0.95, help='GAE lambda (default: 0.95)')

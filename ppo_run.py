@@ -14,7 +14,7 @@ from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
 from craver_control_env import CraverControlEnv
 from craver_design_env import CraverDesignEnv
-from models import MLPActorCritic, CNNActorCritic
+from models import MLPActorCritic, CNNActorCritic, GATv2ActorCritic
 
 from wandb_sweep import HyperParameterTuner
 from ppo_alg import PPO, Memory
@@ -352,55 +352,61 @@ def train(train_args, is_sweep=False, config=None):
     device = torch.device("cuda:0" if torch.cuda.is_available() and train_args.gpu else "cpu")
     print(f"Using device: {device}")
 
-    # Dummy environments. Required for setup.
-    environments = {'lower' : CraverControlEnv(train_args, worker_id=None) , 
-              'higher':  CraverDesignEnv(train_args) }
+    design_args = {
+        'save_graph_images': True,
+        'save_network_xml': True,
+        'save_gmm_plots': True,
+        'max_proposals': train_args.max_proposals,
+        'min_thickness': train_args.min_thickness,
+        'max_thickness': train_args.max_thickness,
+        'min_coordinate': train_args.min_coordinate,
+        'max_coordinate': train_args.max_coordinate,
+    }
     
-    for env_type in environments.keys():
+    # Dummy environments. Required for setup.
+    environments = {
+        'lower': CraverControlEnv(train_args, worker_id=None),
+        'higher': CraverDesignEnv(design_args)
+    }
+    
+    for env_type, env in environments.items():
         print(f"\nEnvironment for {env_type} level agent:")
-        print(f"\tDefined observation space: {environments[env_type].observation_space}")
-        print(f"\tObservation space shape: {environments[env_type].observation_space.shape}")
-        print(f"\tDefined action space: {environments[env_type].action_space}")
-        print(f"\tOptions per action dimension: {environments[env_type].action_space.nvec}")
+        print(f"\tDefined observation space: {env.observation_space}")
+        print(f"\tObservation space shape: {env.observation_space.shape}")
+        print(f"\tDefined action space: {env.action_space}")
+        
+        if env_type == 'lower':
+            print(f"\tOptions per action dimension: {env.action_space.nvec}")
+        elif env_type == 'higher':
+            print(f"\tNumber of proposals: {env.action_space['num_proposals'].n}")
+            print(f"\tProposal space: {env.action_space['proposals']}")
 
     # Higher level agent
-    if train_args.higher_model_choice == 'mlp':
-        state_dim_flat = 40 # TODO: harcoded, change this
-        model_kwargs_higher = {
-            'hidden_dim': 256,  # For MLP
-            }
-    else: # cnn
-        state_dim = (10, 74) # TODO: hardcoded, change this
-        n_channels = 1
-        model_kwargs_higher = {
-            'action_duration': train_args.action_duration,  
-            'per_timestep_state_dim': 40,  # TODO: hardcoded, change this
-            'model_size': train_args.higher_model_size,  
-            'kernel_size': train_args.higher_kernel_size,
-            'dropout_rate': train_args.higher_dropout_rate
-            }
-    
-    higher_action_dim = 15 # TODO: hardcoded, change this
-    print(f"\nHigher level agent: \n\tState dimension: {state_dim}, Action dimension: {higher_action_dim}\n")
+    higher_in_channels = environments['higher'].torch_graph.num_node_features
+    higher_edge_dim = environments['higher'].torch_graph.edge_attr.size(1)
+    higher_action_dim = design_args['max_proposals']
 
-    environments['higher'].close() # Dont need this anymore
-    higher_ppo = PPO(state_dim_flat if train_args.higher_model_choice == 'mlp' else n_channels, 
-        higher_action_dim, 
-        device, 
-        train_args.higher_lr, 
-        train_args.higher_gamma, 
-        train_args.higher_K_epochs, 
-        train_args.higher_eps_clip, 
-        train_args.higher_ent_coef, 
-        train_args.higher_vf_coef, 
-        train_args.higher_batch_size,
-        train_args.higher_num_processes, # This agent has a single process
-        train_args.higher_gae_lambda,
-        train_args.higher_model_choice,
-        agent_type="higher",
-        **model_kwargs_higher
-        )
-    
+    higher_model_kwargs = {
+        'in_channels': higher_in_channels,
+        'hidden_channels': train_args.higher_hidden_channels,
+        'out_channels': train_args.higher_out_channels,
+        'initial_heads': train_args.higher_initial_heads,
+        'second_heads': train_args.higher_second_heads,
+        'edge_dim': higher_edge_dim,
+        'action_hidden_channels': train_args.higher_action_hidden_channels,
+        'action_dim': higher_action_dim,
+        'gmm_hidden_dim': train_args.higher_gmm_hidden_dim,
+        'num_mixtures': train_args.higher_num_mixtures,
+    }
+
+    print(f"\nHigher level agent: \n\tIn channels: {higher_in_channels}, Action dimension: {higher_action_dim}\n")
+
+    environments['higher'].close()  # Don't need this anymore
+
+    higher_ppo = PPO(
+        **higher_model_kwargs
+    )
+
     # Lower level agent
     # If model choice is mlp, the input is flat. However, if model choice is cnn, the input is single channel 2d
     if train_args.lower_model_choice == 'mlp':
@@ -418,6 +424,7 @@ def train(train_args, is_sweep=False, config=None):
             'kernel_size': train_args.lower_kernel_size,
             'dropout_rate': train_args.lower_dropout_rate
             }
+        
     lower_action_dim = len(environments['lower'].action_space.nvec)
     print(f"\nLower level agent: \n\tState dimension: {state_dim}, Action dimension: {lower_action_dim}")
 
@@ -560,6 +567,34 @@ def train(train_args, is_sweep=False, config=None):
         # The join() method is called on each process in the processes list. This ensures that the main program waits for all processes to complete before continuing.
         for p in processes:
             p.join()
+
+        # Higher-level agent update
+        if iteration % train_args.higher_update_freq == 0:
+            higher_env = CraverDesignEnv(design_args)
+            higher_state = higher_env.reset()
+            higher_done = False
+
+            while not higher_done:
+                higher_action, _ = higher_ppo.policy_old.act(higher_state.x, higher_state.edge_index, higher_state.edge_attr, higher_state.batch)
+                higher_next_state, higher_reward, higher_done, _ = higher_env.step(higher_action)
+
+                higher_ppo.memory.states.append(higher_state)
+                higher_ppo.memory.actions.append(higher_action)
+                higher_ppo.memory.rewards.append(higher_reward)
+                higher_ppo.memory.is_terminals.append(higher_done)
+
+                higher_state = higher_next_state
+
+            higher_loss = higher_ppo.update()
+
+            if not is_sweep:
+                writer.add_scalar('Higher/Reward', higher_reward, global_step)
+                writer.add_scalar('Higher/Policy_Loss', higher_loss['policy_loss'], global_step)
+                writer.add_scalar('Higher/Value_Loss', higher_loss['value_loss'], global_step)
+                writer.add_scalar('Higher/Entropy_Loss', higher_loss['entropy_loss'], global_step)
+                writer.add_scalar('Higher/Total_Loss', higher_loss['total_loss'], global_step)
+
+            higher_env.close()
 
     if is_sweep:
         wandb.finish()

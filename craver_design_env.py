@@ -89,10 +89,11 @@ class CraverDesignEnv(gym.Env):
     @property
     def observation_space(self):
         """
-        No observation space definiton required.
-        GATv2 can accept variable sized inputs.
+        Returns an arbitrary high-dimensional shape for the observation space.
+        Note: This is an arbitrary shape and doesn't reflect the actual dimensions of the graph.
+        The GATv2 model can handle variable-sized inputs, so this is mainly for compatibility.
         """
-        pass 
+        return spaces.Box(low=0, high=1, shape=(1000, 3), dtype=np.float32)
 
     def _extract_original_graph(self):
         """
@@ -397,6 +398,7 @@ class CraverDesignEnv(gym.Env):
 # parser.add_argument('--max_coordinate', type=float, default=1.0, help='Maximum coordinate for crosswalk placement')
 # args = parser.parse_args()
 
+"""
 design_args = {
     'save_graph_images': True,
     'save_network_xml': True,
@@ -489,3 +491,4 @@ print("\nFinal Normalizer values:")
 print(f"X-coordinate: {env.normalizer_x}")
 print(f"Y-coordinate: {env.normalizer_y}")
 print(f"Width: {env.normalizer_width}")
+"""
