@@ -548,15 +548,15 @@ class GATv2ActorCritic(nn.Module):
         ax.set_title("Gaussian Mixture Model", fontsize=14)
         
         # Adjust x-axis
-        ax.set_xlim(-0.5, 1.5)
-        ax.set_xticks(np.arange(-0.5, 1.5, 0.1))
-        ax.set_xticklabels([f"{x:.1f}" for x in np.arange(-0.5, 1.5, 0.1)])
+        #ax.set_xlim(-0.5, 1.5)
+        #ax.set_xticks(np.arange(-0.5, 1.5, 0.1))
+        #ax.set_xticklabels([f"{x:.1f}" for x in np.arange(-0.5, 1.5, 0.1)])
         
         # Adjust y-axis
-        ax.set_ylim(self.min_thickness, self.max_thickness)
-        y_ticks = np.linspace(self.min_thickness, self.max_thickness, 10)
-        ax.set_yticks(y_ticks)
-        ax.set_yticklabels([f"{y:.1f}" for y in y_ticks])
+        #ax.set_ylim(self.min_thickness, self.max_thickness)
+        #y_ticks = np.linspace(self.min_thickness, self.max_thickness, 10)
+        #ax.set_yticks(y_ticks)
+        #ax.set_yticklabels([f"{y:.1f}" for y in y_ticks])
         
         # Add a colorbar to represent density
         sns.kdeplot(x=samples[:, 0], y=samples[:, 1], cmap="YlOrRd", fill=True, cbar=True, ax=ax)
@@ -706,6 +706,7 @@ class GATv2ActorCritic(nn.Module):
 
 
 ################ EXAMPLE USAGE #################
+"""
 
 # Set up parameters
 num_nodes = 50
@@ -791,4 +792,5 @@ print("\nVisualizing the GMM distribution...")
 gmm = model.get_gmm_distribution(model.forward(x, edge_index, edge_attr, batch))
 model.visualize_gmm(gmm)
 
+"""
 
