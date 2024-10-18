@@ -11,6 +11,7 @@ from torch_geometric.data import Data
 from models import GATv2ActorCritic  # Import the GAT model
 import os
 import shutil
+from gymnasium import spaces
 
 def pairwise(iterable):
     """
@@ -37,10 +38,16 @@ class CraverDesignEnv(gym.Env):
     For the higher level agent, modifies the net file based on the design decision.
     No need to connect or close this environment. Will be limited to network file modifications.
     """
-    def __init__(self, args):
+    def __init__(self, design_args):
         super().__init__()
-        self.args = args
+        self.design_args = design_args
         self.original_net_file = './SUMO_files/original_craver_road.net.xml'
+
+        # Extract design parameters
+        self.min_thickness = design_args.get('min_thickness', 0.1)
+        self.max_thickness = design_args.get('max_thickness', 1.0)
+        self.min_coordinate = design_args.get('min_coordinate', 0.0)
+        self.max_coordinate = design_args.get('max_coordinate', 1.0)
 
         # Clear existing folders and create new ones
         clear_folders()
@@ -51,7 +58,7 @@ class CraverDesignEnv(gym.Env):
         self.original_pedestrian_graph = self._extract_original_graph()
         self.pedestrian_graph = self.original_pedestrian_graph.copy()
         
-        if self.args.save_graph_images == 'True':
+        if self.design_args.get('save_graph_images', False):
             self._visualize_pedestrian_graph(save_path='graph_iterations/original_pedestrian_graph.png')
         
         # Initialize normalizer values
@@ -67,18 +74,25 @@ class CraverDesignEnv(gym.Env):
     @property
     def action_space(self):
         """
-        
+        Defines the action space for the environment.
         """
-        
-        return gym.spaces.MultiDiscrete([2] * 15)
+        max_proposals = self.design_args.get('max_proposals', 10)
+        return spaces.Dict({
+            'num_proposals': spaces.Discrete(max_proposals + 1),  # 0 to max_proposals
+            'proposals': spaces.Box(
+                low=np.array([[self.min_coordinate, self.min_thickness]] * max_proposals),
+                high=np.array([[self.max_coordinate, self.max_thickness]] * max_proposals),
+                dtype=np.float32
+            )
+        })
 
     @property
     def observation_space(self):
         """
-        
+        No observation space definiton required.
+        GATv2 can accept variable sized inputs.
         """
-
-        return gym.spaces.Box(low=0, high=1, shape=(10, 74), dtype=np.float32)
+        pass 
 
     def _extract_original_graph(self):
         """
@@ -120,16 +134,20 @@ class CraverDesignEnv(gym.Env):
         """
         Implement the environment step here.
         """
-        # Update the graph based on the action
-        self._update_graph(action)
+        print(f"Action received: {action}")
+        # Convert tensor action to proposals
+        action = action.cpu().numpy()  # Convert to numpy array if it's not already
+        num_proposals = np.count_nonzero(action.any(axis=1))  # Count non-zero rows
+        proposals = action[:num_proposals]  # Only consider the actual proposals
+
+        # Apply the action to update the graph
+        self._apply_action(proposals)
 
         # Here you would typically:
-        # 1. Apply the action
-        # 2. Calculate the reward
-        # 3. Determine if the episode is done
-        # 4. Collect any additional info for the info dict
+        # 1. Calculate the reward
+        # 2. Determine if the episode is done
+        # 3. Collect any additional info for the info dict
 
-        # For now, we'll just return placeholder values
         observation = self.torch_graph
         reward = 0  # You need to implement a proper reward function
         done = False
@@ -139,11 +157,37 @@ class CraverDesignEnv(gym.Env):
 
         return observation, reward, done, info
 
-    def _apply_action(self, action):
-        pass
-    
-    def _get_reward(self, action):
-        pass
+    def _apply_action(self, proposals):
+        """
+        Updates the graph based on the action.
+        The proposals are expected to be a list of tuples (location, thickness) for each proposed crosswalk.
+        """
+        for i, (location, thickness) in enumerate(proposals):
+            # Denormalize the location (x-coordinate) and thickness
+            denorm_location = self.normalizer_x['min'] + location * (self.normalizer_x['max'] - self.normalizer_x['min'])
+            denorm_thickness = self.normalizer_width['min'] + thickness * (self.normalizer_width['max'] - self.normalizer_width['min'])
+
+            # Find the closest existing nodes (junctions) to place the new crosswalk
+            closest_nodes = self._find_closest_nodes(denorm_location)
+
+            if closest_nodes:
+                # Create a new node for the crosswalk
+                new_node_id = f"crosswalk_{self.iteration}_{i}"
+                y_coord = sum(self.pedestrian_graph.nodes[node]['pos'][1] for node in closest_nodes) / len(closest_nodes)
+                self.pedestrian_graph.add_node(new_node_id, pos=(denorm_location, y_coord), type='crosswalk', width=denorm_thickness)
+
+                # Connect the new node to the closest existing nodes
+                for node in closest_nodes:
+                    self.pedestrian_graph.add_edge(new_node_id, node, width=denorm_thickness)
+
+        # After updating the graph, we need to update the PyTorch Geometric Data object
+        self.torch_graph = self._convert_to_torch_geometric()
+
+        if self.design_args.get('save_network_xml', False):
+            self._save_graph_as_xml(f'updated_network_iteration_{self.iteration}.net.xml')
+
+        if self.design_args.get('save_graph_images', False):
+            self._save_graph_as_image(f'pedestrian_graph_iteration_{self.iteration}.png')
 
     def reset(self):
         """
@@ -174,38 +218,6 @@ class CraverDesignEnv(gym.Env):
         print(f"Following crosswalks will be removed: {crosswalks_to_remove}.\n")
         pass
     
-    def _update_graph(self, action):
-        """
-        Updates the graph based on the action.
-        The action is expected to be a list of tuples (location, thickness) for each proposed crosswalk.
-        """
-        for i, (location, thickness) in enumerate(action):
-            # Denormalize the location (x-coordinate) and thickness
-            denorm_location = self.normalizer_x['min'] + location * (self.normalizer_x['max'] - self.normalizer_x['min'])
-            denorm_thickness = self.normalizer_width['min'] + thickness * (self.normalizer_width['max'] - self.normalizer_width['min'])
-
-            # Find the closest existing nodes (junctions) to place the new crosswalk
-            closest_nodes = self._find_closest_nodes(denorm_location)
-
-            if closest_nodes:
-                # Create a new node for the crosswalk
-                new_node_id = f"crosswalk_{self.iteration}_{i}"
-                y_coord = sum(self.pedestrian_graph.nodes[node]['pos'][1] for node in closest_nodes) / len(closest_nodes)
-                self.pedestrian_graph.add_node(new_node_id, pos=(denorm_location, y_coord), type='crosswalk', width=denorm_thickness)
-
-                # Connect the new node to the closest existing nodes
-                for node in closest_nodes:
-                    self.pedestrian_graph.add_edge(new_node_id, node, width=denorm_thickness)
-
-        # After updating the graph, we need to update the PyTorch Geometric Data object
-        self.torch_graph = self._convert_to_torch_geometric()
-
-        if self.args.save_network_xml:
-            self._save_graph_as_xml(f'updated_network_iteration_{self.iteration}.net.xml')
-
-        if self.args.save_graph_images:
-            self._save_graph(f'pedestrian_graph_iteration_{self.iteration}.png')
-
     def _find_closest_nodes(self, x_location):
         """
         Finds the closest existing nodes (junctions) to the given x_location.
@@ -304,7 +316,7 @@ class CraverDesignEnv(gym.Env):
 
         return torch.stack([normalized_x, normalized_y, normalized_width], dim=1)
 
-    def _save_graph(self, filename):
+    def _save_graph_as_image(self, filename):
         """
         Saves the current state of the graph as an image.
         """
@@ -373,22 +385,38 @@ class CraverDesignEnv(gym.Env):
         print(f"Updated network saved to {os.path.join('network_iterations', filename)}")
 
 ############ EXAMPLE USAGE ############
-import argparse
+# import argparse
+# parser = argparse.ArgumentParser(description="CraverDesignEnv arguments")
+# parser.add_argument('--save_graph_images', action='store_true', help='Save graph images')
+# parser.add_argument('--save_network_xml', action='store_true', help='Save network XML files')
+# parser.add_argument('--save_gmm_plots', action='store_true', help='Save GMM distribution plots')
+# parser.add_argument('--max_proposals', type=int, default=10, help='Maximum number of crosswalk proposals')
+# parser.add_argument('--min_thickness', type=float, default=0.1, help='Minimum thickness of crosswalks')
+# parser.add_argument('--max_thickness', type=float, default=1.0, help='Maximum thickness of crosswalks')
+# parser.add_argument('--min_coordinate', type=float, default=0.0, help='Minimum coordinate for crosswalk placement')
+# parser.add_argument('--max_coordinate', type=float, default=1.0, help='Maximum coordinate for crosswalk placement')
+# args = parser.parse_args()
 
-parser = argparse.ArgumentParser(description="CraverDesignEnv arguments")
-parser.add_argument('--save_graph_images', type=str, choices=['True', 'False'], default='True', help='Save graph images')
-parser.add_argument('--save_network_xml', type=str, choices=['True', 'False'], default='True', help='Save network XML files')
-parser.add_argument('--save_gmm_plots', type=str, choices=['True', 'False'], default='True', help='Save GMM distribution plots')
-args = parser.parse_args()
+design_args = {
+    'save_graph_images': True,
+    'save_network_xml': True,
+    'save_gmm_plots': True,
+    'max_proposals': 10,
+    'min_thickness': 0.1,
+    'max_thickness': 10.0,
+    'min_coordinate': 0.0,
+    'max_coordinate': 1.0,
+}
 
-env = CraverDesignEnv(args)
+env = CraverDesignEnv(design_args)
 
-# Print information about the extracted graph
+# Print information about the extracted graph and action space
 print(f"Number of nodes: {env.torch_graph.num_nodes}")
 print(f"Number of edges: {env.torch_graph.num_edges}")
 print(f"Node feature shape: {env.torch_graph.x.shape}")
 print(f"Edge index shape: {env.torch_graph.edge_index.shape}")
 print(f"Edge attribute shape: {env.torch_graph.edge_attr.shape}")
+print(f"Action space: {env.action_space}")
 
 # Initialize the GAT model
 in_channels = env.torch_graph.num_node_features
@@ -443,7 +471,7 @@ for iteration in range(5):
     print(f"Entropy: {entropy.item()}")
 
     # Visualize and save the GMM distribution
-    if args.save_gmm_plots == 'True':
+    if design_args.get('save_gmm_plots', False):
         print("Saving GMM distribution plot...")
         gmm = gat_model.get_gmm_distribution(gat_model.forward(x, edge_index, edge_attr, batch))
         os.makedirs('gmm_plots', exist_ok=True)
