@@ -1,27 +1,95 @@
 import torch
 import torch.nn as nn
 from torch.distributions import Categorical, Bernoulli
-import math
+import matplotlib.pyplot as plt
+import seaborn as sns
+from torch_geometric.nn import GATv2Conv
+import torch.nn.functional as F
+from torch_geometric.nn import global_mean_pool
+from torch.distributions import MixtureSameFamily, MultivariateNormal, Categorical
+
+"""
+Notes: 
+In the act method:
+    The key idea is that actor outputs logits for each binary decision, then we convert these logits to probabilities and sample from this distribution to get our binary actions.
+    The choice of using Bernoulli distribution is because we want to model the probability of a binary event (e.g., turn ON and OFF).
+    We need to return the sum of log probabilities to be used in the PPO loss function. 
+
+    # TODO: check the validity of the sum operation. (Done)
+    The validity of the sum operation depends on the intended interpretation of the action space. Let's consider two scenarios:
+
+    a) Independent Binary Actions:
+    If each of the (e.g., 10) binary choices is truly independent (e.g., selecting multiple items from a list), then summing the log probabilities is valid. This sum represents the log probability of the entire action vector.
+    In this scenario, we can control traffic light for NS and EW independently. This means we can have all combinations: both red, both green, or one red and one green.
+    Actions:
+        Action 1: NS light (0 = red, 1 = green)
+        Action 2: EW light (0 = red, 1 = green)
+
+        Example:
+        Let's say our model predicts:
+
+        P(NS = green) = 0.7
+        P(NS = red) = 0.3
+        P(EW = green) = 0.4
+        P(EW = red) = 0.6
+
+        If we sample and get [1, 0] (NS green, EW red):
+        Log probability = log(0.7) + log(0.6) = -0.71
+        This sum of log probabilities is valid because the decisions for NS and EW are independent. The total log probability represents how likely the model was to choose this specific combination.
+
+    b) Mutually Exclusive Actions:
+    If the (e.g., 10) binary choices are meant to be mutually exclusive (e.g., selecting one out of 10 options), then summing the log probabilities isn't the correct approach. In this case, we'd typically use a Categorical distribution instead of multiple Bernoulli distributions.
+    Instead that we could only choose one direction to be green at a time, and the other must be red.
+    Actions:
+
+        0: NS green, EW red
+        1: NS red, EW green
+
+        In this case, we'd use a Categorical distribution:
+        P(NS green, EW red) = 0.6
+        P(NS red, EW green) = 0.4
+
+        If we choose NS green, EW red:
+        Log probability = log(0.6) = -0.51
+        Here, summing log probabilities wouldn't make sense because we're making a single choice between mutually exclusive options.
+
+    In our actual traffic light scenario:
+
+    We have multiple independent binary decisions (one for each traffic light and crosswalk).
+    Each decision (turn a light ON or OFF) doesn't affect the others directly.
+    We can have any combination of lights ON or OFF.
+
+    The actions for different traffic lights and crosswalks are separate decisions, so treating them as independent. 
+    Given that the actions are independent binary decisions, summing the log probabilities is a valid operation.
+
+    ######### FINAL VERSION #########
+    - actor_layers now output 3 values instead of 4: 2 for the traffic direction (which will be treated as a single decision) and 1 each for the two crosswalk decisions.
+    In the act method:
+        - We split the logits into traffic direction and crosswalk decisions.
+        - For the traffic direction, we use a Categorical distribution to select one of the four options (00, 01, 10, 11).
+        - For the crosswalks, we use Bernoulli distributions for each independent binary decision.
+        - We combine these into a 4-bit string, where the first two bits represent the traffic direction (in one-hot encoding) and the last two bits represent the crosswalk decisions.
+    
+    In the evaluate method:
+        - We split the logits and actions similarly.
+        - We evaluate the traffic direction action using a Categorical distribution.
+        - We evaluate the crosswalk actions using Bernoulli distributions.
+        - We combine the log probabilities (sum for each crosswalk, no sum for traffic direction) and calculate the entropy.
+"""
 
 ######## MLP model ########
 class MLPActorCritic(nn.Module):
     def __init__(self, state_dim, action_dim, device, **kwargs):
         """
-        A simple MLP Actor-Critic network 
-        Since negative values can sparingly occur, use leaky ReLU.
-        # MLP network Param count: ~around 138,000
-
+        A simple MLP Actor-Critic network. Param count: ~around 138,000
         Since I expect the output to be binary, I need to apply the sigmoid somewhere. 
-        The network needs to understand that the 10 choices are binary. (Done in the act function)
-
-        The input is flat
-        TODO: Regularization: Apply Dropout and Batch Normalization after the shared layers.
+        Since negative values can sparingly occur, use leaky ReLU.
+        TODO: 
+        Regularization: Apply Dropout and Batch Normalization after the shared layers.
         """
         super(MLPActorCritic, self).__init__()
+
         self.device = device
-        
-        # hidden_dim = kwargs.get('hidden_dim', 256) #If not specified, default to 256
-        
         # Shared layers
         self.shared_layers = nn.Sequential(
             nn.Linear(state_dim, 256),
@@ -56,98 +124,66 @@ class MLPActorCritic(nn.Module):
     
     def act(self, state):
         """
-        Select an action based on the current state
-        The key idea is that actor outputs logits for each binary decision, then we convert these logits to probabilities and sample from this distribution to get our binary actions.
-        The choice of using Bernoulli distribution is because we want to model the probability of a binary event (e.g., turn ON and OFF).
-        We need to return the sum of log probabilities to be used in the PPO loss function. 
-
-        # TODO: check the validity of the sum operation. (Done)
-        The validity of the sum operation depends on the intended interpretation of the action space. Let's consider two scenarios:
-
-        a) Independent Binary Actions:
-        If each of the (e.g., 10) binary choices is truly independent (e.g., selecting multiple items from a list), then summing the log probabilities is valid. This sum represents the log probability of the entire action vector.
-        In this scenario, we can control traffic light for NS and EW independently. This means we can have all combinations: both red, both green, or one red and one green.
-        Actions:
-            Action 1: NS light (0 = red, 1 = green)
-            Action 2: EW light (0 = red, 1 = green)
-
-            Example:
-            Let's say our model predicts:
-
-            P(NS = green) = 0.7
-            P(NS = red) = 0.3
-            P(EW = green) = 0.4
-            P(EW = red) = 0.6
-
-            If we sample and get [1, 0] (NS green, EW red):
-            Log probability = log(0.7) + log(0.6) = -0.71
-            This sum of log probabilities is valid because the decisions for NS and EW are independent. The total log probability represents how likely the model was to choose this specific combination.
-
-        b) Mutually Exclusive Actions:
-        If the (e.g., 10) binary choices are meant to be mutually exclusive (e.g., selecting one out of 10 options), then summing the log probabilities isn't the correct approach. In this case, we'd typically use a Categorical distribution instead of multiple Bernoulli distributions.
-        Instead that we could only choose one direction to be green at a time, and the other must be red.
-        Actions:
-
-            0: NS green, EW red
-            1: NS red, EW green
-
-            In this case, we'd use a Categorical distribution:
-            P(NS green, EW red) = 0.6
-            P(NS red, EW green) = 0.4
-
-            If we choose NS green, EW red:
-            Log probability = log(0.6) = -0.51
-            Here, summing log probabilities wouldn't make sense because we're making a single choice between mutually exclusive options.
-
-        In our actual traffic light scenario:
-
-        We have multiple independent binary decisions (one for each traffic light and crosswalk).
-        Each decision (turn a light ON or OFF) doesn't affect the others directly.
-        We can have any combination of lights ON or OFF.
-
-        The actions for different traffic lights and crosswalks are separate decisions, so treating them as independent. 
-        Given that the actions are independent binary decisions, summing the log probabilities is a valid operation.
+        Select an action based on the current state:
+        - First two bits: 4-class classification for traffic light
+        - Last two bits: binary choices for crosswalks
         """
-
-        state_tensor = torch.FloatTensor(state.flatten()).to(self.device) # Because MLP receives a flattened input.
-        action_logits = self.actor(state_tensor)  # outputs logits for each binary decision
-        action_probs = torch.sigmoid(action_logits) # convert these logits to probabilities
-
-        # Option a)
-        # dist = Bernoulli(action_probs) # create a Bernoulli distribution using these probabilities
-        # action = dist.sample() # sample from this distribution to get our binary actions.
-        # return action.long(), dist.log_prob(action).sum(-1) #  return the actions and the sum of their log probabilities (sum along the last dimension)
+        state_tensor = torch.FloatTensor(state.flatten()).to(self.device)
+        action_logits = self.actor(state_tensor)
         
-        # Option b) 
-        dist = Categorical(action_probs) # create a Categorical distribution using these probabilities
-        action = dist.sample() # sample from this distribution to get our binary actions.
-        return action.long(), dist.log_prob(action) #  return the actions and the sum of their log probabilities (no sum)
-
+        # Split logits into traffic light and crosswalk decisions
+        traffic_logits = action_logits[:2]  # First 2 logits for traffic light (4-class)
+        crosswalk_logits = action_logits[2:]  # Last 2 logits for crosswalks (binary)
+        
+        # Multi-class classification for traffic light
+        traffic_probs = F.softmax(traffic_logits, dim=0)
+        traffic_dist = Categorical(traffic_probs)
+        traffic_action = traffic_dist.sample()
+        
+        # Binary choices for crosswalks
+        crosswalk_probs = torch.sigmoid(crosswalk_logits)
+        crosswalk_dist = Bernoulli(crosswalk_probs)
+        crosswalk_actions = crosswalk_dist.sample()
+        
+        # Combine actions
+        combined_action = torch.cat([F.one_hot(traffic_action, num_classes=4), crosswalk_actions])
+        
+        # Calculate log probabilities
+        log_prob = traffic_dist.log_prob(traffic_action) + crosswalk_dist.log_prob(crosswalk_actions).sum()
+        
+        return combined_action.long(), log_prob
 
     def evaluate(self, states, actions):
         """
         Evaluates a batch of states and actions.
-        States are passed to actor to get action logits, using which we get the probabilities and then the distribution. similar to act function.
-        Then using the sampled actions, we get the log probabilities and the entropy. 
-        Finally, we pass the states to critic to get the state values. (used to compute the value function component of the PPO loss)
-        The entropy is used as a regularization term to encourage exploration.
         """
         action_logits = self.actor(states)
-        action_probs = torch.sigmoid(action_logits)
-
-        # Option a)
-        # dist = Bernoulli(action_probs)
-        # action_logprobs = dist.log_prob(actions.float())
-        # dist_entropy = dist.entropy()
-        # state_values = self.critic(states)
-        # return action_logprobs.sum(-1), state_values, dist_entropy
-
-        # Option b)
-        dist = Categorical(action_probs)
-        action_logprobs = dist.log_prob(actions)
-        dist_entropy = dist.entropy()
+        
+        # Split logits and actions
+        traffic_logits = action_logits[:, :2]
+        crosswalk_logits = action_logits[:, 2:]
+        traffic_actions = actions[:, :4].argmax(dim=1)  # Convert one-hot back to index
+        crosswalk_actions = actions[:, 4:]
+        
+        # Evaluate traffic direction actions
+        traffic_probs = F.softmax(traffic_logits, dim=1)
+        traffic_dist = Categorical(traffic_probs)
+        traffic_log_probs = traffic_dist.log_prob(traffic_actions)
+        
+        # Evaluate crosswalk actions
+        crosswalk_probs = torch.sigmoid(crosswalk_logits)
+        crosswalk_dist = Bernoulli(crosswalk_probs)
+        crosswalk_log_probs = crosswalk_dist.log_prob(crosswalk_actions)
+        
+        # Combine log probabilities
+        action_log_probs = traffic_log_probs + crosswalk_log_probs.sum(dim=1)
+        
+        # Calculate entropy 
+        dist_entropy = traffic_dist.entropy() + crosswalk_dist.entropy().sum(dim=1)
+        
         state_values = self.critic(states)
-        return action_logprobs, state_values, dist_entropy
+        
+        return action_log_probs, state_values, dist_entropy
     
 
     def param_count(self, ):
@@ -190,9 +226,10 @@ class CNNActorCritic(nn.Module):
         super(CNNActorCritic, self).__init__()
         self.device = torch.device(device)
         self.in_channels = in_channels
-        
+        self.action_dim = action_dim 
         self.action_duration = kwargs.get('action_duration')
         self.per_timestep_state_dim = kwargs.get('per_timestep_state_dim')
+
         model_size = kwargs.get('model_size', 'medium')
         kernel_size = kwargs.get('kernel_size', 3)
         dropout_rate = kwargs.get('dropout_rate', 0.2)
@@ -261,7 +298,7 @@ class CNNActorCritic(nn.Module):
             nn.Linear(hidden_dim, hidden_dim // 2),
             nn.LeakyReLU(),
             nn.Dropout(dropout_rate),
-            nn.Linear(hidden_dim // 2, action_dim)
+            nn.Linear(hidden_dim // 2, self.action_dim)
         ).to(device)
         
         # Critic-specific layers
@@ -277,7 +314,9 @@ class CNNActorCritic(nn.Module):
 
     def actor(self, state,):
         shared_features = self.shared_cnn(state)
-        return self.actor_layers(shared_features)
+        action_logits = self.actor_layers(shared_features)
+        print(f"\n\nAction logits: {action_logits}\n\n")
+        return action_logits
     
     def critic(self, state):
         shared_features = self.shared_cnn(state)
@@ -285,43 +324,79 @@ class CNNActorCritic(nn.Module):
     
     def act(self, state):
         """
-        Select an action based on the current state
+        Select an action based on the current state:
+        - First action: 4-class classification for traffic light
+        - Second and third actions: binary choices for crosswalks
         """
         state_tensor = state.to(self.device).reshape(1, self.in_channels, self.action_duration, self.per_timestep_state_dim)
         action_logits = self.actor(state_tensor)
-        action_probs = torch.sigmoid(action_logits)
-
-        # Option a)
-        # dist = Bernoulli(action_probs)
-        # action = dist.sample().squeeze(0)
-        # #print(f"\n\nAction: {action}\n\n")
-        # return action.long(), dist.log_prob(action).sum(-1)
-
-        # Option b)
-        dist = Categorical(action_probs)
-        action = dist.sample().squeeze(0)
-        return action.long(), dist.log_prob(action)
+        print(f"\nAction logits: {action_logits}")
+        
+        # Split logits into traffic light and crosswalk decisions
+        traffic_logits = action_logits[:, :4]  # First 4 logits for traffic light (4-class)
+        crosswalk_logits = action_logits[:, 4:]  # Last 2 logits for crosswalks (binary)
+        print(f"\nTraffic logits: {traffic_logits}")
+        print(f"Crosswalk logits: {crosswalk_logits}")
+        
+        # Multi-class classification for traffic light
+        traffic_probs = F.softmax(traffic_logits, dim=1)
+        traffic_dist = Categorical(traffic_probs)
+        traffic_action = traffic_dist.sample()
+        print(f"\nTraffic probabilities: {traffic_probs}")
+        print(f"Traffic action: {traffic_action}")
+        
+        # Binary choices for crosswalks
+        crosswalk_probs = torch.sigmoid(crosswalk_logits)
+        crosswalk_dist = Bernoulli(crosswalk_probs)
+        crosswalk_actions = crosswalk_dist.sample()
+        print(f"\nCrosswalk probabilities: {crosswalk_probs}")
+        print(f"Crosswalk actions: {crosswalk_actions}")
+        
+        # Combine actions
+        combined_action = torch.cat([traffic_action, crosswalk_actions.squeeze(0)])
+        print(f"\nCombined action: {combined_action}")
+        
+        # Calculate log probabilities
+        log_prob = traffic_dist.log_prob(traffic_action) + crosswalk_dist.log_prob(crosswalk_actions).sum()
+        print(f"\nLog probability: {log_prob}")
+        
+        return combined_action.long(), log_prob
 
     def evaluate(self, states, actions):
         """
-        
+        Evaluates a batch of states and actions.
+        States are passed to actor to get action logits, using which we get the probabilities and then the distribution. similar to act function.
+        Then using the sampled actions, we get the log probabilities and the entropy. 
+        Finally, we pass the states to critic to get the state values. (used to compute the value function component of the PPO loss)
+        The entropy is used as a regularization term to encourage exploration.
         """
         action_logits = self.actor(states)
-        action_probs = torch.sigmoid(action_logits)
-
-        # Option a)
-        # dist = Bernoulli(action_probs)
-        # action_logprobs = dist.log_prob(actions.float())
-        # dist_entropy = dist.entropy()
-        # state_values = self.critic(states)
-        # return action_logprobs.sum(-1), state_values, dist_entropy
-
-        # Option b)
-        dist = Categorical(action_probs)
-        action_logprobs = dist.log_prob(actions)
-        dist_entropy = dist.entropy()
+        
+        # Split logits and actions
+        traffic_logits = action_logits[:, 0:2]
+        crosswalk_logits = action_logits[:, 2:]
+        traffic_actions = actions[:, 0:2].argmax(dim=1)  # Convert one-hot back to index
+        crosswalk_actions = actions[:, 2:]
+        
+        # Evaluate traffic direction actions
+        traffic_probs = F.softmax(traffic_logits, dim=1)
+        traffic_dist = Categorical(traffic_probs)
+        traffic_log_probs = traffic_dist.log_prob(traffic_actions)
+        
+        # Evaluate crosswalk actions
+        crosswalk_probs = torch.sigmoid(crosswalk_logits)
+        crosswalk_dist = Bernoulli(crosswalk_probs)
+        crosswalk_log_probs = crosswalk_dist.log_prob(crosswalk_actions)
+        
+        # Combine log probabilities
+        action_log_probs = traffic_log_probs + crosswalk_log_probs.sum(dim=1)
+        
+        # Calculate entropy 
+        dist_entropy = traffic_dist.entropy() + crosswalk_dist.entropy().sum(dim=1)
+        
         state_values = self.critic(states)
-        return action_logprobs, state_values, dist_entropy  
+        
+        return action_log_probs, state_values, dist_entropy
 
     def param_count(self, ):
         """
@@ -340,14 +415,6 @@ class CNNActorCritic(nn.Module):
 
 ######## GATv2 model ########
 # Used excluisively for the design agent. 
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-from torch_geometric.nn import GATv2Conv
-import torch.nn.functional as F
-from torch_geometric.nn import global_mean_pool
-from torch.distributions import MixtureSameFamily, MultivariateNormal, Categorical
-
 class GATv2ActorCritic(nn.Module):
     """
     GATv2 with edge features.

@@ -456,18 +456,42 @@ class CraverControlEnv(gym.Env):
     @property
     def action_space(self):
         """
-        In the simplified action space with phase groups, the agents decision is binary.
-        Changed this to use MultiDiscrete 
-        """
-        num_actions = len(self.tl_ids) # Number of traffic lights where the choice is between the number of phase groups (in this case just two).
-        num_actions += len(self.controlled_crosswalk_mask) # Plus the size of the controlled_crosswalks_masked_dict (enable/ disable)
-        return gym.spaces.MultiDiscrete([2] * num_actions) # 2 indicates the binary choice
+        The control part performs following actions as a 4-bit string (these are in total 3 actions not 4):
+        First and second bit: for traffic lights
+        - 00 = allow vehicular traffic through North-South direction, disallow all others
+        - 01 = allow vehicular traffic through East-West direction, disallow all others
+        - 10 = allow vehicular traffic through North-East and South-West direction (Dedicated left turns), disallow all others.
+        - 11 = Disallow vehicular traffic in all direction (Useful in situation where lets say the pedestrian demand is just too high)
+            - Traffic lights:
+
+        Third and fourth bit: for controlled crosswalks
+        - Third bit:
+            - 1 = allow pedestrians in the pair of crosswalks at North-South
+            - 0 = disallow pedestrians in the pair of crosswalks at North-South
+        - Fourth bit:
+            - 1 = allow pedestrians in the pair of crosswalks at East-West 
+            - 0 = disallow pedestrians in the pair of crosswalks at East-West
         
+        Use MultiDiscrete action space.
+        """
+        
+        num_traffic_lights = len(self.tl_ids)
+        
+        action_space = []
+        for _ in range(num_traffic_lights):
+            action_space.extend([
+                4,  # 4 options for traffic light phases (00, 01, 10, 11) # first action
+                2,  # 2 options for N-S crosswalk (0, 1) # second action
+                2   # 2 options for E-W crosswalk (0, 1) # third action
+            ])
+        
+        return gym.spaces.MultiDiscrete(action_space)
+    
     @property
     def observation_space(self):
         """
         Each timestep (not action step) observation is the pressure in all outgoing directions.
-        TODO: We do not have lane level granularity yet (in both action and observation).
+        For the lower level agent, observation does not need to include the uncontrolled crosswalks information.
         """
         # The observation is the entire observation buffer
         return gym.spaces.Box(
@@ -486,7 +510,12 @@ class CraverControlEnv(gym.Env):
         reward = 0
         done = False
         observation_buffer = []
+        print(f"\nAction: {action}")
+
+        # break down the actions into their components
         current_tl_action = action[0].item() # Convert tensor to int
+        current_ns_crosswalk_action = action[1].item()
+        current_ew_crosswalk_action = action[2].item()
 
         # Run simulation steps for the duration of the action
         for _ in range(self.steps_per_action):

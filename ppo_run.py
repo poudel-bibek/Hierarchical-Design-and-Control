@@ -291,6 +291,7 @@ def worker(rank, config, shared_policy_old, memory_queue, global_seed):
             action = action.cpu()  # Explicitly Move to CPU, Incase they were on GPU
             logprob = logprob.cpu() 
 
+        print(f"\nAction: in worker {rank}: {action}")
         # Perform action
         # These reward and next_state are for the action_duration timesteps.
         next_state, reward, done, truncated, info = env.step(action)
@@ -438,7 +439,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
             'dropout_rate': train_config['lower_dropout_rate']
             }
         
-    lower_action_dim = len(environments['lower'].action_space.nvec)
+    lower_action_dim = train_config['lower_action_dim'] 
     print(f"\nLower level agent: \n\tState dimension: {state_dim}, Action dimension: {lower_action_dim}")
 
     environments['lower'].close() # Dont need this anymore

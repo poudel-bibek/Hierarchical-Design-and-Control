@@ -1,27 +1,27 @@
-***Starting server on port 55335 ***
-Loading net-file from './SUMO_files/original_craver_road.net.xml' ... done (33ms).
+***Starting server on port 33557 ***
+Loading net-file from './SUMO_files/original_craver_road.net.xml' ... done (38ms).
 Loading done.
 Simulation started with time: 0.00.
 Error: tcpip::Socket::recvAndCheck @ recv: peer shutdown
 Quitting (on error).
-Simulation ended at time: 10.00
+Simulation ended at time: 40.00
 Performance: 
- Duration: 1.35s
- TraCI-Duration: 0.16s
- Real time factor: 7.38552
- UPS: 7.385524
- UPS-Persons: 56.868538
+ Duration: 2.39s
+ TraCI-Duration: 1.57s
+ Real time factor: 16.7154
+ UPS: 56.414542
+ UPS-Persons: 543.669035
 Vehicles: 
- Inserted: 2 (Loaded: 32)
- Running: 2
- Waiting: 1
+ Inserted: 6 (Loaded: 23)
+ Running: 6
+ Waiting: 0
 Persons: 
- Inserted: 440
- Running: 16
+ Inserted: 370
+ Running: 71
 
-DijkstraRouter answered 6 queries and explored 3.83 edges on average.
+DijkstraRouter answered 78 queries and explored 4.13 edges on average.
 DijkstraRouter spent 0.00s answering queries (0.00ms on average).
-DijkstraRouter answered 16 queries and explored 532.88 edges on average.
-DijkstraRouter spent 0.00s answering queries (0.06ms on average).
-DijkstraRouter answered 3 queries and explored 57.33 edges on average.
+DijkstraRouter answered 71 queries and explored 447.69 edges on average.
+DijkstraRouter spent 0.00s answering queries (0.04ms on average).
+DijkstraRouter answered 6 queries and explored 58.00 edges on average.
 DijkstraRouter spent 0.00s answering queries (0.00ms on average).

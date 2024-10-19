@@ -68,7 +68,8 @@ def get_config():
         "lower_kernel_size": 3,  # Kernel size for CNN
         "lower_model_size": "medium",  # Model size for CNN: 'small' or 'medium'
         "lower_dropout_rate": 0.2,  # Dropout rate for CNN
-
+        "lower_action_dim": 6,  # Number of action logits (not the same as number of actions. think)
+        
         # Evaluation
         "evaluate": None,  # Evaluation mode: 'tl' (traffic light), 'ppo', or None
         "model_path": None,  # Path to the saved PPO model for evaluation
