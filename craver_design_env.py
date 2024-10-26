@@ -5,7 +5,7 @@ import xml.etree.ElementTree as ET
 import networkx as nx
 import matplotlib.pyplot as plt
 from itertools import tee
-from craver_config import (PHASES, DIRECTIONS_AND_EDGES, CONTROLLED_CROSSWALKS_DICT, initialize_lanes, get_phase_groups)
+from craver_config import (PHASES, DIRECTIONS_AND_EDGES, CONTROLLED_CROSSWALKS_DICT, initialize_lanes)
 import torch
 from torch_geometric.data import Data
 from models import GATv2ActorCritic  # Import the GAT model

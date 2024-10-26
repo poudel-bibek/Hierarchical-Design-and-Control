@@ -64,12 +64,11 @@ def get_config():
         "lower_vf_coef": 0.5,  # Value function coefficient
         "lower_batch_size": 32,  # Batch size
         "lower_num_processes": 6,  # Number of parallel processes to use (Lower level agent has multiple workers)
-        "lower_model_choice": "cnn",  # Model choice: 'cnn' or 'mlp'
         "lower_kernel_size": 3,  # Kernel size for CNN
         "lower_model_size": "medium",  # Model size for CNN: 'small' or 'medium'
         "lower_dropout_rate": 0.2,  # Dropout rate for CNN
         "lower_action_dim": 6,  # Number of action logits (not the same as number of actions. think)
-        
+
         # Evaluation
         "evaluate": None,  # Evaluation mode: 'tl' (traffic light), 'ppo', or None
         "model_path": None,  # Path to the saved PPO model for evaluation

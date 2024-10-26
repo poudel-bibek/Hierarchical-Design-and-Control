@@ -1,6 +1,6 @@
 import torch
 import torch.optim as optim
-from models import MLPActorCritic, CNNActorCritic, GATv2ActorCritic
+from models import CNNActorCritic, GATv2ActorCritic
 
 class Memory:
     """
@@ -56,7 +56,6 @@ class PPO:
                  batch_size, 
                  num_processes, 
                  gae_lambda, 
-                 model_choice,
                  agent_type,
                  **model_kwargs):
         
@@ -72,18 +71,17 @@ class PPO:
         self.num_processes = num_processes
         self.gae_lambda = gae_lambda
         self.agent_type = agent_type
-        self.model_choice_functions = {
-            'cnn': CNNActorCritic,
-            'mlp': MLPActorCritic,
-            'gatv2': GATv2ActorCritic,
-        }
         
-        
-        # Initialize the current policy network
-        self.policy = self.model_choice_functions[model_choice](self.model_dim, self.action_dim, device, **model_kwargs).to(device)
+        if self.agent_type == 'lower':  
+            # Initialize the current policy network
+            self.policy = CNNActorCritic(self.model_dim, self.action_dim, device, **model_kwargs).to(device)
 
-        # Initialize the old policy network (used for importance sampling)
-        self.policy_old = self.model_choice_functions[model_choice](self.model_dim, self.action_dim, device, **model_kwargs).to(device)
+            # Initialize the old policy network (used for importance sampling)
+            self.policy_old = CNNActorCritic(self.model_dim, self.action_dim, device, **model_kwargs).to(device)
+
+        else: # Higher level agent
+            self.policy = GATv2ActorCritic(self.model_dim, self.action_dim, device, **model_kwargs).to(device)
+            self.policy_old = GATv2ActorCritic(self.model_dim, self.action_dim, device, **model_kwargs).to(device)
 
         param_counts = self.policy.param_count()
         print(f"\nTotal number of parameters in {self.agent_type}-level policy: {param_counts['total']}")

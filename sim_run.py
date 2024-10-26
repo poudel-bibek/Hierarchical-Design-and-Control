@@ -7,7 +7,7 @@ import gymnasium as gym
 import numpy as np
 import xml.etree.ElementTree as ET
 from utils import convert_demand_to_scale_factor, scale_demand
-from craver_config import (PHASES, DIRECTIONS_AND_EDGES, CONTROLLED_CROSSWALKS_DICT, initialize_lanes, get_phase_groups)
+from craver_config import (PHASES, DIRECTIONS_AND_EDGES, CONTROLLED_CROSSWALKS_DICT, initialize_lanes, get_tl_phase_groups)
 
 class CraverControlEnv(gym.Env):
     """
@@ -51,7 +51,7 @@ class CraverControlEnv(gym.Env):
         self.current_action_step = 0 # To track where we are within the curret action's duration
 
         self.phases = PHASES
-        self.phase_groups = get_phase_groups(self.action_duration)
+        self.phase_groups = get_tl_phase_groups(self.action_duration)
         self.controlled_crosswalks_dict = CONTROLLED_CROSSWALKS_DICT
         self.direction_and_edges = DIRECTIONS_AND_EDGES
 

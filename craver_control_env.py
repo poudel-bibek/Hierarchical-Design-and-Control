@@ -6,7 +6,7 @@ import random
 import gymnasium as gym
 import numpy as np
 from utils import convert_demand_to_scale_factor, scale_demand
-from craver_config import (PHASES, DIRECTIONS_AND_EDGES, CONTROLLED_CROSSWALKS_DICT, initialize_lanes, get_phase_groups )
+from craver_config import (PHASES, DIRECTIONS_AND_EDGES, CONTROLLED_CROSSWALKS_DICT, initialize_lanes, get_tl_phase_groups, get_crosswalk_phase_groups)
 
 class CraverControlEnv(gym.Env):
     """
@@ -58,7 +58,8 @@ class CraverControlEnv(gym.Env):
         self.current_action_step = 0 # To track where we are within the curret action's duration
 
         self.phases = PHASES
-        self.phase_groups = get_phase_groups(self.action_duration)
+        self.tl_phase_groups = get_tl_phase_groups(self.action_duration)
+        self.crosswalk_phase_groups = get_crosswalk_phase_groups()
         self.controlled_crosswalks_dict = CONTROLLED_CROSSWALKS_DICT
         self.direction_and_edges = DIRECTIONS_AND_EDGES
 
@@ -70,8 +71,9 @@ class CraverControlEnv(gym.Env):
         self.demand_scale_max = config['demand_scale_max']
 
         self.current_crosswalk_selection = None 
-        self.current_phase_group = None
-        self.current_state_index = None 
+        self.current_tl_phase_group = None
+        self.current_crosswalk_actions = None
+        self.current_tl_state_index = None 
         self.corrected_occupancy_map = None
 
         # Create a bunch of reverse lookup dictionaries which can be referenced in various ways
@@ -122,8 +124,9 @@ class CraverControlEnv(gym.Env):
 
         self.directions = ['north', 'east', 'south', 'west']
         self.turns = ['straight', 'right', 'left']
-        # The multiplier 4 is incoming, outgoing, inside, rerouted. The -1 because the crosswalk with 500 and 501 are the same. 
-        self.single_obs_shape = (len(self.tl_ids)*(2 + 12 + 12 + 4 + 4 + 4) + (len(self.controlled_crosswalk_masked_ids) - 1)*4, ) # TL related (both veh and ped) + crosswalks related (only ped). 
+
+        # TL state, crosswalk state, vehicle incoming, vehicle inside, vehicle outgoing, pedestrian incoming, pedestrian outgoing
+        self.single_obs_shape = len(self.tl_ids)*(2 + 2 + 12 + 12 + 4 + 4 + 4)
 
         # For crosswalk control 
         self.walking_edges_to_reroute_from = []
@@ -497,7 +500,7 @@ class CraverControlEnv(gym.Env):
         return gym.spaces.Box(
             low=0, 
             high=1, 
-            shape=(self.steps_per_action, int(self.single_obs_shape[0])),
+            shape=(self.steps_per_action, int(self.single_obs_shape)),
             dtype=np.float32
         )
 
@@ -570,174 +573,127 @@ class CraverControlEnv(gym.Env):
         self.corrected_occupancy_map = self._step_operations(occupancy_map, print_map=print_map, cutoff_distance=100)
         
         observation = []
-        # Traffic lights
-        for tl_id in self.tl_ids:
-            #### Current phase group info (This changes even within the action timesteps) ####
-            current_phase_group = []
-            current_phase_group.append(self.current_phase_group)
-            current_phase_group.append(self.current_state_index/1) # To prevent a value of 2 [0, 1, 2] -> [0, 0.5, 1]
-            observation.extend(current_phase_group)
+        tl_id = self.tl_ids[0]
+        
+        #### Current phase group info (This changes even within the action timesteps) ####
+        current_tl_info = []
+        current_tl_info.append(self.current_tl_phase_group/4) # 0, 1, 2, 3 to 0, 0.25, 0.5, 0.75 
+        current_tl_info.append(self.current_tl_state_index/2) # For 0, 1, 2, 3, its always 0 but for 4 and 5, it varies in 0, 1, 2; convert that to 0, 0.5, 1
 
-            #### VEHICLES INFO ####
-            # Incoming
-            for outgoing_direction in self.directions:
-                for turn in self.turns:
-                    incoming = len(self.corrected_occupancy_map[tl_id]['vehicle']['incoming'][f"{outgoing_direction}-{turn}"])
-                    observation.append(incoming)
-
-            # Inside
-            for outgoing_direction in self.directions:
-                for turn in self.turns:
-                    inside = len(self.corrected_occupancy_map[tl_id]['vehicle']['inside'][f"{outgoing_direction}-{turn}"])
-                    observation.append(inside)
-
-            # Outgoing
-            for outgoing_direction in self.directions:
-                outgoing = len(self.corrected_occupancy_map[tl_id]['vehicle']['outgoing'][outgoing_direction])
-                observation.append(outgoing)
-                
-            #### PEDESTRIANS INFO ####
-            # Incoming
-            for outgoing_direction in self.directions:
-                incoming = len(self.corrected_occupancy_map[tl_id]['pedestrian']['incoming'][outgoing_direction])
+        observation.extend(current_tl_info)
+        observation.extend([float(x) for x in self.current_crosswalk_actions]) # 0 and 1 to 0.0 and 1.0
+        
+        #### VEHICLES INFO ####
+        # Incoming
+        for outgoing_direction in self.directions:
+            for turn in self.turns:
+                incoming = len(self.corrected_occupancy_map[tl_id]['vehicle']['incoming'][f"{outgoing_direction}-{turn}"])
                 observation.append(incoming)
 
-            # Outgoing
-            for outgoing_direction in self.directions:
-                outgoing = len(self.corrected_occupancy_map[tl_id]['pedestrian']['outgoing'][outgoing_direction])
-                observation.append(outgoing)
+        # Inside
+        for outgoing_direction in self.directions:
+            for turn in self.turns:
+                inside = len(self.corrected_occupancy_map[tl_id]['vehicle']['inside'][f"{outgoing_direction}-{turn}"])
+                observation.append(inside)
+
+        # Outgoing
+        for outgoing_direction in self.directions:
+            outgoing = len(self.corrected_occupancy_map[tl_id]['vehicle']['outgoing'][outgoing_direction])
+            observation.append(outgoing)
+            
+        #### PEDESTRIANS INFO ####
+        # Incoming
+        for outgoing_direction in self.directions:
+            incoming = len(self.corrected_occupancy_map[tl_id]['pedestrian']['incoming'][outgoing_direction])
+            observation.append(incoming)
+
+        # Outgoing
+        for outgoing_direction in self.directions:
+            outgoing = len(self.corrected_occupancy_map[tl_id]['pedestrian']['outgoing'][outgoing_direction])
+            observation.append(outgoing)
 
         observation = np.asarray(observation, dtype=np.float32)
         # Create a mask for part of observations that do not need normalization i.e., a bunch of elements at the beginning (which do not need a normalization)
-        mask = np.tile([False] * (len(self.tl_ids)*len(current_phase_group)) + \
-                       [True] * (len(observation) - len(self.tl_ids)*len(current_phase_group)), len(self.tl_ids)) # This seems overly complicated but isnt
-        # Normalize the items other than the masked ones
-        normalizer = 10.0 # TODO: A better normalization scheme?
-        observation[mask] /= normalizer
 
-        # Concatenate the crosswalk info (4 obs for each crosswalk)
-        crosswalk_info = []
-        for crosswalk_id in self.controlled_crosswalk_masked_ids: # ':9687187501_c0' and ':9687187500_c0' are same special case crosswalk
-            if crosswalk_id != ':9687187501_c0': # This if condition is a huge tax to the system.
-                crosswalk_info.append(len(self.corrected_occupancy_map['crosswalks'][crosswalk_id]['upside']))
-                crosswalk_info.append(len(self.corrected_occupancy_map['crosswalks'][crosswalk_id]['downside']))
-                crosswalk_info.append(len(self.corrected_occupancy_map['crosswalks'][crosswalk_id]['inside']))
-                crosswalk_info.append(len(self.corrected_occupancy_map['crosswalks'][crosswalk_id]['rerouted']))
+        mask = list(range(len(current_tl_info) + len(self.current_crosswalk_actions), len(observation))) # Except 0, 1, 2, 3
+        observation[mask] /= 10.0 # TODO: A better normalization scheme?
 
-        # Normalize the crosswalk info
-        crosswalk_info = np.asarray(crosswalk_info, dtype=np.float32)
-        crosswalk_info /= normalizer # TODO: A better normalization scheme? 
-        observation = np.concatenate((observation, crosswalk_info))
+        # #TODO: Accumulate crosswalk specific info to be accumulated for the design agent. 
+        # # Concatenate the crosswalk info (4 obs for each crosswalk)
+        # crosswalk_info = []
+        # for crosswalk_id in self.controlled_crosswalk_masked_ids: # ':9687187501_c0' and ':9687187500_c0' are same special case crosswalk
+        #     if crosswalk_id != ':9687187501_c0': # This if condition is a huge tax to the system.
+        #         crosswalk_info.append(len(self.corrected_occupancy_map['crosswalks'][crosswalk_id]['upside']))
+        #         crosswalk_info.append(len(self.corrected_occupancy_map['crosswalks'][crosswalk_id]['downside']))
+        #         crosswalk_info.append(len(self.corrected_occupancy_map['crosswalks'][crosswalk_id]['inside']))
+        #         crosswalk_info.append(len(self.corrected_occupancy_map['crosswalks'][crosswalk_id]['rerouted']))
+        # crosswalk_info = np.asarray(crosswalk_info, dtype=np.float32)
+
+        print(f"\nObservation: {observation.shape}")
         return observation
     
+    def _get_tl_switch_state(self, east_to_north_switch, north_to_east_switch, current_action_step):
+        """
+        If this function is called, one of them needs to be true.
+        """
+        if east_to_north_switch:
+            current_tl_action = 4
+        elif north_to_east_switch:
+            current_tl_action = 5
+
+        durations = [phase["duration"] for phase in self.tl_phase_groups[current_tl_action]]
+        cumulative_durations = [sum(durations[:i+1]) for i in range(len(durations))] # [4, 5, 10]
+
+        for i, duration in enumerate(cumulative_durations):
+            if current_action_step < duration:
+                index = i
+                break
+
+        self.current_tl_state_index = index
+        return self.tl_phase_groups[current_tl_action][index]["state"]
+
     def _apply_action(self, action, current_action_step, previous_tl_action=None):
         """
-        In the action space with phase groups, previous action is used to determine if there was a switch.
-        Later, actions were added to whether or not enable the crosswalks.
+        apply_action is the enforcement of the chosen action and will be called every step.
+        previous_action will be None in reset.
 
-        previous_action will be None none in reset.
-        apply_action is called every step.
+        Use previous action to determine if there was a switch.
+        If there was a switch, then on certain switches (between N-S and E-W) there needs to be a yellow round first.
+
+        For TL, there are 4 mutually exclusive choices: 
+        0: Allow N-S disallow other directions
+        1: Allow E-W disallow other directions
+        2: Allow North-East and South-West direction (Dedicated left turns), disallow other directions
+        3: Disallow vehicular traffic in all direction (Useful in situation where lets say the pedestrian demand is just too high)
         """
-        #print(f"\nCurrent Action: {action}, TL action: {action[0]} Previous TL Action: {previous_tl_action}")
+        # First get the string together. 
+        # For the TL control. 
+        current_tl_action = action[0].item() # 0, 1, 2, 3
+        print(f"\nCurrent Action: {action}, TL action: {current_tl_action} Previous TL Action: {previous_tl_action}")
 
-        # For the TL control. For the same action, what state is applied changes within the action timesptes
-        current_tl_action = action[0].item() # Convert tensor to int
-        self.current_phase_group = current_tl_action # Convert tensor to int
-        # For action space with phase groups
         if previous_tl_action == None: # First action 
             previous_tl_action = current_tl_action # Assume that there was no switch
 
-        if current_tl_action != previous_tl_action:
-            # print("Switching phase group")
-            # Switch the phase group
-            for tl_id in self.tl_ids:
-                
-                # All these shenanigans is to determine the index. TODO: Is there an efficient way to do this?
-                durations = [phase["duration"] for phase in self.phase_groups[current_tl_action]]
-                cumulative_durations = [sum(durations[:i+1]) for i in range(len(durations))] # [4, 5, 10]
-                for i, duration in enumerate(cumulative_durations):
-                    if current_action_step < duration:
-                        index = i
-                        break
-
-                self.current_state_index = index
-                state = self.phase_groups[current_tl_action][index]["state"]
-                # print(f"Setting phase: {state}")
-                traci.trafficlight.setRedYellowGreenState(tl_id, state)
-                    
-        else: # No switch. Just continue with the green in this phase group.
-            # print("Continuing with the same phase group")
-            self.current_state_index = 2
-            for tl_id in self.tl_ids:
-                state = self.phase_groups[current_tl_action][2]["state"] # Index is always 2
-                # print(f"Setting phase: {state}")
-                # Skip the first two phases, they are for buffering the transition.
-                traci.trafficlight.setRedYellowGreenState(tl_id, state)
-
-        # For the same action, what choice is performed remains same within the action timesteps
-        # Only update the corsswalk control lists when current_action_step is 0 i.e., when a new action is gotten
-        if current_action_step == 0:   
-            # Clear the previous values 
-            self.walking_edges_to_reroute_from = []
-            self.related_junction_edges_to_lookup_from = []
-            self.alternative_crosswalks_flat = []
-            self.currently_rerouted = []
-            self.crosswalks_to_disable = []
-            self.alternative_crosswalks_num = []
+        # If these are true, then need yellow rounds in between.
+        east_to_north_switch = (current_tl_action == 1 and previous_tl_action == 0)
+        north_to_east_switch = (current_tl_action == 0 and previous_tl_action == 1)
+        
+        if east_to_north_switch or north_to_east_switch:
+            tl_state = self._get_tl_switch_state(east_to_north_switch, north_to_east_switch, current_action_step)
+        else: # Normal conditions.
+            self.current_tl_state_index = 0
+            tl_state = self.tl_phase_groups[current_tl_action][self.current_tl_state_index]["state"] # The list corresponding to normal conditions does not have multiple items.
             
-            current_crosswalk_action = action[1:].tolist() # The first element is the TL action
-            # controlled_crosswalks_dict goes from 0 to 10, but we need to exclude 1 and 2
-            for i in range(len(current_crosswalk_action)): 
-                if current_crosswalk_action[i] == 0: # 0 means disable 
-
-                    j = self.controlled_crosswalk_mask[i] # Get the actual crosswalk number (key), excludes 1 and 2
-                    crosswalks_list = self.controlled_crosswalks_masked_dict[j]['ids'] # Get the crosswalks that are controlled by this action
-                    for item in crosswalks_list: # Need a for loop because of them contains multiple crosswalks in a list
-                        self.crosswalks_to_disable.append(item)
-
-            ######################################
-            # For testing purposes.
-            # Based on the timesteps, allow a bunch and then disallow the bunch
-            # print(f"Step count: {self.step_count}") # Increments by 10 here
-            
-            # # Define time ranges for disabling crosswalks
-            # time_ranges = [
-            #     (200, 1000, self.all_crosswalk_ids[3:7]),
-            # ]
-
-            # # Determine which crosswalks to disable based on current step
-            # self.crosswalks_to_disable = [] 
-            # for start, end, crosswalks in time_ranges:
-            #     if start < self.step_count <= end:
-            #         #print(f"\nTime range: {start} - {end}, Disabled Crosswalks: {crosswalks}")
-            #         self.crosswalks_to_disable = crosswalks
-            #         break
-            
-            # End of testing purposes code
-            ######################################
-
-            # self.all_crosswalks contains 1 and 2, controlled_crosswalks_masked_dict does not
-            #print(f"All crosswalks: {self.controlled_crosswalk_masked_ids}\nCrosswalks to disable: {self.crosswalks_to_disable}")
-
-            for crosswalk_id in self.crosswalks_to_disable:
-                edges = self.crosswalk_to_vicinity_walking_edges[crosswalk_id] # Does not contain the crosswalk itself, just the vicinity walking edges list
-                self.walking_edges_to_reroute_from.extend(edges)
-
-                lookup_edges = self.crosswalk_to_related_junction_edges[crosswalk_id] # Just the lookup edges i.e., related_junction_edges
-                self.related_junction_edges_to_lookup_from.extend(lookup_edges)
-                
-            # Find alternative crosswalks ids (they should include crosswalk 1 and 2, because 1 and 2 are present in the sim. we are controlling them as part of TL) and flatten
-            for crosswalk_data in self.controlled_crosswalks_dict.values():
-                if not any(cw in self.crosswalks_to_disable for cw in crosswalk_data['ids']):
-                    self.alternative_crosswalks_flat.extend(crosswalk_data['ids'])
-
-            # Get the numerical crosswalk ids
-            self.alternative_crosswalks_num = [self.edge_to_numerical_crosswalk_id[crosswalk_id] for crosswalk_id in self.alternative_crosswalks_flat]
-
-        # Although the crosswalks to disable are gotten every 10 timesteps, the enforcement of the action (i.e., re-routing pedestrians) is done every step.
-        # This is going to be severely computationally taxing on the simulation.
-        self._disallow_pedestrians(self.walking_edges_to_reroute_from, self.related_junction_edges_to_lookup_from)
-        #print(f"\nDisabled crosswalks: {disabled_crosswalks}\n")
+        # For the signalized crosswalk control. Append ArBCrD at the end of the tl state string.
+        self.current_crosswalk_actions = str(action[1].item()) + str(action[2].item()) # two binary actions 0, 1
+        crosswalk_state = self.crosswalk_phase_groups[self.current_crosswalk_actions]
+        
+        # Construct the crosswalk state string from the dict values
+        crosswalk_state_str = (crosswalk_state['A'] + crosswalk_state['B'] + 'r' + crosswalk_state['C'] + 'r' + crosswalk_state['D'])
+        
+        state = tl_state + crosswalk_state_str
+        print(f"\nState: {state}\n")
+        traci.trafficlight.setRedYellowGreenState(self.tl_ids[0], state)
 
     def _get_reward(self, current_tl_action):
         """ 
@@ -770,11 +726,7 @@ class CraverControlEnv(gym.Env):
         """
 
         reward = 0
-        lambda1 = -0.33
-        lambda2 = -0.33
-        lambda3 = -0.33
-
-        # Intersection
+        lambda1, lambda2, lambda3 = -0.33, -0.33, -0.33
 
         #### Pressure based ####
         # Traffic Signal Control
@@ -1009,21 +961,19 @@ class CraverControlEnv(gym.Env):
             print(f"An unexpected error occurred: {str(e)}")
             raise
 
-        # This should be done here after the SUMO call. As this can disallow pedestrians during the simulation run. 
-        # Disallow pedestrians in some crosswalks. After sumo call beacuse we need traci.
-        # disabled_crosswalks = self._disallow_pedestrians(to_disable)
-        # print(f"\nDisabled crosswalks: {disabled_crosswalks}\n")
-
         self.sumo_running = True
         self.step_count = 0 # This counts the timesteps in an episode. Needs reset.
         self.current_action_step = 0
         self.tl_lane_dict = {}
         self.tl_lane_dict['cluster_172228464_482708521_9687148201_9687148202_#5more'] = initialize_lanes()
 
-        # Randomly initialize the actions (current phase group and the current choice of crosswalks to activate) 
-        self.current_phase_group = random.choice(list(self.phase_groups.keys()))
-        self.current_crosswalk_selection = np.random.randint(2, size=len(self.controlled_crosswalks_masked_dict)).tolist() # 2 because of binary choice
-        initial_action = torch.tensor([self.current_phase_group] + self.current_crosswalk_selection) # Make it a tensor so that its compatible with other outputs
+        # Randomly initialize the actions (current tl phase group and combined binary action for crosswalks) 
+        self.current_tl_phase_group = random.choice([0, 1, 2, 3]) # not including [4, 5] from the list
+        self.current_crosswalk_actions = str(random.randint(0, 1)) + str(random.randint(0, 1))
+
+        action_list = [int(x) for x in str(self.current_tl_phase_group) + self.current_crosswalk_actions]
+        initial_action = torch.tensor(action_list, dtype=torch.long)
+        print(f"\nInitial action: {initial_action}\n")
 
         # Initialize the observation buffer
         observation_buffer = []
@@ -1035,8 +985,6 @@ class CraverControlEnv(gym.Env):
             observation_buffer.append(obs)
 
         observation = np.asarray(observation_buffer, dtype=np.float32)
-        #print(f"\nInitial observation inside: {observation}\n")
-        #print(f"\nInitial observation inside shape: {observation.shape}\n")
         info = {}
         return observation, info
 

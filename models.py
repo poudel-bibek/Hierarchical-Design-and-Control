@@ -66,7 +66,7 @@ In the act method:
     - actor_layers now output 3 values instead of 4: 2 for the traffic direction (which will be treated as a single decision) and 1 each for the two crosswalk decisions.
     In the act method:
         - We split the logits into traffic direction and crosswalk decisions.
-        - For the traffic direction, we use a Categorical distribution to select one of the four options (00, 01, 10, 11).
+        - For the traffic direction, we use a Categorical distribution to select one of the four options (0, 1, 2, 3).
         - For the crosswalks, we use Bernoulli distributions for each independent binary decision.
         - We combine these into a 4-bit string, where the first two bits represent the traffic direction (in one-hot encoding) and the last two bits represent the crosswalk decisions.
     
@@ -76,130 +76,6 @@ In the act method:
         - We evaluate the crosswalk actions using Bernoulli distributions.
         - We combine the log probabilities (sum for each crosswalk, no sum for traffic direction) and calculate the entropy.
 """
-
-######## MLP model ########
-class MLPActorCritic(nn.Module):
-    def __init__(self, state_dim, action_dim, device, **kwargs):
-        """
-        A simple MLP Actor-Critic network. Param count: ~around 138,000
-        Since I expect the output to be binary, I need to apply the sigmoid somewhere. 
-        Since negative values can sparingly occur, use leaky ReLU.
-        TODO: 
-        Regularization: Apply Dropout and Batch Normalization after the shared layers.
-        """
-        super(MLPActorCritic, self).__init__()
-
-        self.device = device
-        # Shared layers
-        self.shared_layers = nn.Sequential(
-            nn.Linear(state_dim, 256),
-            nn.LeakyReLU(),
-            nn.Linear(256, 128),
-            nn.LeakyReLU(),
-        ).to(device)
-        
-        # Actor-specific layers
-        self.actor_layers = nn.Sequential(
-            nn.Linear(128, 64),
-            nn.LeakyReLU(),
-            nn.Linear(64, action_dim), # Decided not to use sigmoid here but instead later in the act function.
-        ).to(device)
-        
-        # Critic-specific layers
-        self.critic_layers = nn.Sequential(
-            nn.Linear(128, 64),
-            nn.LeakyReLU(),
-            nn.Linear(64, 1),  # Corrected from 16 to 64
-        ).to(device)
-    
-    # Actor Network
-    def actor(self, state):
-        shared_features = self.shared_layers(state)
-        return self.actor_layers(shared_features)
-    
-    # Critic Network
-    def critic(self, state):
-        shared_features = self.shared_layers(state)
-        return self.critic_layers(shared_features)
-    
-    def act(self, state):
-        """
-        Select an action based on the current state:
-        - First two bits: 4-class classification for traffic light
-        - Last two bits: binary choices for crosswalks
-        """
-        state_tensor = torch.FloatTensor(state.flatten()).to(self.device)
-        action_logits = self.actor(state_tensor)
-        
-        # Split logits into traffic light and crosswalk decisions
-        traffic_logits = action_logits[:2]  # First 2 logits for traffic light (4-class)
-        crosswalk_logits = action_logits[2:]  # Last 2 logits for crosswalks (binary)
-        
-        # Multi-class classification for traffic light
-        traffic_probs = F.softmax(traffic_logits, dim=0)
-        traffic_dist = Categorical(traffic_probs)
-        traffic_action = traffic_dist.sample()
-        
-        # Binary choices for crosswalks
-        crosswalk_probs = torch.sigmoid(crosswalk_logits)
-        crosswalk_dist = Bernoulli(crosswalk_probs)
-        crosswalk_actions = crosswalk_dist.sample()
-        
-        # Combine actions
-        combined_action = torch.cat([F.one_hot(traffic_action, num_classes=4), crosswalk_actions])
-        
-        # Calculate log probabilities
-        log_prob = traffic_dist.log_prob(traffic_action) + crosswalk_dist.log_prob(crosswalk_actions).sum()
-        
-        return combined_action.long(), log_prob
-
-    def evaluate(self, states, actions):
-        """
-        Evaluates a batch of states and actions.
-        """
-        action_logits = self.actor(states)
-        
-        # Split logits and actions
-        traffic_logits = action_logits[:, :2]
-        crosswalk_logits = action_logits[:, 2:]
-        traffic_actions = actions[:, :4].argmax(dim=1)  # Convert one-hot back to index
-        crosswalk_actions = actions[:, 4:]
-        
-        # Evaluate traffic direction actions
-        traffic_probs = F.softmax(traffic_logits, dim=1)
-        traffic_dist = Categorical(traffic_probs)
-        traffic_log_probs = traffic_dist.log_prob(traffic_actions)
-        
-        # Evaluate crosswalk actions
-        crosswalk_probs = torch.sigmoid(crosswalk_logits)
-        crosswalk_dist = Bernoulli(crosswalk_probs)
-        crosswalk_log_probs = crosswalk_dist.log_prob(crosswalk_actions)
-        
-        # Combine log probabilities
-        action_log_probs = traffic_log_probs + crosswalk_log_probs.sum(dim=1)
-        
-        # Calculate entropy 
-        dist_entropy = traffic_dist.entropy() + crosswalk_dist.entropy().sum(dim=1)
-        
-        state_values = self.critic(states)
-        
-        return action_log_probs, state_values, dist_entropy
-    
-
-    def param_count(self, ):
-        """
-        Return a dict
-        """
-        actor_params = sum(p.numel() for p in self.actor_layers.parameters())
-        critic_params = sum(p.numel() for p in self.critic_layers.parameters())
-        shared_params = sum(p.numel() for p in self.shared_layers.parameters())
-        
-        return {
-            "actor_total": actor_params + shared_params,
-            "critic_total": critic_params + shared_params,
-            "total": actor_params + critic_params + shared_params,
-            "shared": shared_params
-        }
 
 ######## CNN model ########
 class CNNActorCritic(nn.Module):
@@ -286,7 +162,7 @@ class CNNActorCritic(nn.Module):
 
         # Calculate the size of the flattened CNN output
         with torch.no_grad():
-            sample_input = torch.zeros(1, in_channels, self.action_duration, self.per_timestep_state_dim).to(self.device) # E.g., (1,1,10,74) batch size of 1, 1 channel, 10 timesteps, 74 state dims
+            sample_input = torch.zeros(1, self.in_channels, self.action_duration, self.per_timestep_state_dim).to(self.device) # E.g., (1,1,10,74) batch size of 1, 1 channel, 10 timesteps, 74 state dims
             cnn_output_size = self.shared_cnn(sample_input).shape[1]
             #print(f"\n\nCNN output size: {cnn_output_size}\n\n")
 
@@ -341,19 +217,19 @@ class CNNActorCritic(nn.Module):
         # Multi-class classification for traffic light
         traffic_probs = F.softmax(traffic_logits, dim=1)
         traffic_dist = Categorical(traffic_probs)
-        traffic_action = traffic_dist.sample()
+        traffic_action = traffic_dist.sample() # This predicts 0, 1, 2, or 3
         print(f"\nTraffic probabilities: {traffic_probs}")
         print(f"Traffic action: {traffic_action}")
         
         # Binary choices for crosswalks
         crosswalk_probs = torch.sigmoid(crosswalk_logits)
         crosswalk_dist = Bernoulli(crosswalk_probs)
-        crosswalk_actions = crosswalk_dist.sample()
+        crosswalk_actions = crosswalk_dist.sample() # This predicts 0 or 1
         print(f"\nCrosswalk probabilities: {crosswalk_probs}")
-        print(f"Crosswalk actions: {crosswalk_actions}")
+        print(f"Crosswalk actions: {crosswalk_actions}\n")
         
         # Combine actions
-        combined_action = torch.cat([traffic_action, crosswalk_actions.squeeze(0)])
+        combined_action = torch.cat([traffic_action, crosswalk_actions.squeeze(0)], dim=0)
         print(f"\nCombined action: {combined_action}")
         
         # Calculate log probabilities

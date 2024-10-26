@@ -14,7 +14,7 @@ from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
 from craver_control_env import CraverControlEnv
 from craver_design_env import CraverDesignEnv
-from models import MLPActorCritic, CNNActorCritic, GATv2ActorCritic
+from models import CNNActorCritic, GATv2ActorCritic
 
 from wandb_sweep import HyperParameterTuner
 from ppo_alg import PPO, Memory
@@ -107,27 +107,18 @@ def evaluate_controller(config, env):
             # device = torch.device("cuda:0" if torch.cuda.is_available() and config['gpu'] else "cpu")
             # Maybe we should use only CPU during evaluation
             device = torch.device("cpu")
-            model_choice_functions = {
-                'cnn': CNNActorCritic,
-                'mlp': MLPActorCritic,
-            }
-            
-            if config['model_choice'] == 'mlp':
-                model_kwargs = {
-                    'hidden_dim': 256, 
-                }
-            else: 
-                action_dim = env.action_space.n
-                n_channels = 1 
-                model_kwargs = {
-                    'action_duration': env.observation_space.shape[0],  
-                    'per_timestep_state_dim': env.observation_space.shape[1], 
-                    'model_size': config['model_size'],  
-                    'kernel_size': config['kernel_size'],
-                    'dropout_rate': config['dropout_rate']
+
+            action_dim = env.action_space.n
+            n_channels = 1 
+            model_kwargs = {
+                'action_duration': env.observation_space.shape[0],  
+                'per_timestep_state_dim': env.observation_space.shape[1], 
+                'model_size': config['model_size'],  
+                'kernel_size': config['kernel_size'],
+                'dropout_rate': config['dropout_rate']
                 }
 
-            ppo_model = model_choice_functions[config['model_choice']](n_channels, action_dim, device, **model_kwargs).to(device) 
+            ppo_model = CNNActorCritic(n_channels, action_dim, device, **model_kwargs).to(device) 
             ppo_model.load_state_dict(torch.load(config['model_path'], map_location=device)) 
 
             state, _ = env.reset()
@@ -416,34 +407,26 @@ def train(train_config, is_sweep=False, sweep_config=None):
         batch_size=train_config['higher_batch_size'],
         num_processes=1,  # Higher-level agent only uses one process
         gae_lambda=train_config['higher_gae_lambda'],
-        model_choice='gatv2',
         agent_type="higher",
         **higher_model_kwargs
     )
 
     # Lower level agent
-    # If model choice is mlp, the input is flat. However, if model choice is cnn, the input is single channel 2d
-    if train_config['lower_model_choice'] == 'mlp':
-        state_dim_flat = environments['lower'].observation_space.shape[0] * environments['lower'].observation_space.shape[1]
-        model_kwargs_lower = {
-            'hidden_dim': 256,  # For MLP
-            }
-    else: # cnn
-        state_dim = environments['lower'].observation_space.shape # e.g., (10, 74) = (action_duration, per_timestep_state_dim)
-        n_channels = 1
-        model_kwargs_lower = {
-            'action_duration': train_config['action_duration'],  
-            'per_timestep_state_dim': environments['lower'].observation_space.shape[1],  
-            'model_size': train_config['lower_model_size'],  
-            'kernel_size': train_config['lower_kernel_size'],
-            'dropout_rate': train_config['lower_dropout_rate']
+    state_dim = environments['lower'].observation_space.shape # e.g., (10, 74) = (action_duration, per_timestep_state_dim)
+    in_channels = 1
+    model_kwargs_lower = {
+        'action_duration': train_config['action_duration'],  
+        'per_timestep_state_dim': environments['lower'].observation_space.shape[1],  
+        'model_size': train_config['lower_model_size'],  
+        'kernel_size': train_config['lower_kernel_size'],
+        'dropout_rate': train_config['lower_dropout_rate']
             }
         
     lower_action_dim = train_config['lower_action_dim'] 
     print(f"\nLower level agent: \n\tState dimension: {state_dim}, Action dimension: {lower_action_dim}")
 
     environments['lower'].close() # Dont need this anymore
-    lower_ppo = PPO(state_dim_flat if train_config['lower_model_choice'] == 'mlp' else n_channels, 
+    lower_ppo = PPO(in_channels, 
         lower_action_dim, 
         device, 
         train_config['lower_lr'], 
@@ -455,7 +438,6 @@ def train(train_config, is_sweep=False, sweep_config=None):
         train_config['lower_batch_size'],
         train_config['lower_num_processes'], # This agent has parallel processes (workers)
         train_config['lower_gae_lambda'],
-        train_config['lower_model_choice'],
         agent_type="lower",
         **model_kwargs_lower
         )

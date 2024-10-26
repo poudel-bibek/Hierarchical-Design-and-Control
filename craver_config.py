@@ -22,7 +22,6 @@ Phase information (22 characters). Incoming vehicle lanes, or pedestrian crossin
 20: pedestrian crossing south
 21: unused
 22: pedestrian crossing west
-
 """
 
 # TL_IDS, PHASES, PHASE_GROUPS, DIRECTIONS, TURNS, ORIGINAL_NET_FILE, CONTROLLED_CROSSWALKS_DICT, initialize_lanes
@@ -177,30 +176,50 @@ DIRECTIONS_AND_EDGES = {
         ],
 }
 
-# For a simplified action space, we can use 2 phase groups
-# Each group will consist of non-conflicting directions, with 4 seconds of yellow, then 1 second of red and 5 seconds of green at the end  
-# During the whole time that one group goes through its cycle, the other group will be in red.
-# Priority lefts are not treated with any priority in this setup.
-# The pedestrian crossing will be green during the green phase of the vehicle lanes in that group.
-# All right turns are always turned green. (This not implemented yet. Since the pedestrian frequency is relatively high)
-# If there is a switch, then the 4 seconds yellow and 1 second red will be applied to lanes (corresponding to other phase group). Hence thats the first thing that will occur in each phase group.
-# The total sum of the 3 phases should be equal to action_duration. All Red and all Yellow times do not change when action_duration changes.
-def get_phase_groups(action_duration):
+# With 4 possible original actions.
+# 0: Allow N-S disallow other directions
+# 1: Allow E-W disallow other directions
+# 2: Allow North-East and South-West direction (Dedicated left turns), disallow other directions
+# 3: Disallow vehicular traffic in all direction 
+# Two additional actions when switch is needed and yellow phases need to be in between.
+# 4: four timesteps of yellow for E-W, 1 timestep or red, then green for N-S
+# 5: four timesteps of yellow for N-S including dedicated left turns, 1 timestep or red, then green for E-W
+# The total sum of the 3 phases should be equal to action_duration
+def get_tl_phase_groups(action_duration):
+    """
+    We are returning the data structure.
+    """
     return {
+        0: [{"duration": action_duration, "state": "yyyyrrrryyyyrrrr"}],
+        1: [{"duration": action_duration, "state": "yyyyrrrryyyyrrrr"}],
+        2: [{"duration": action_duration, "state": "yyyyrrrryyyyrrrr"}],
+        3: [{"duration": action_duration, "state": "yyyyrrrryyyyrrrr"}],
 
-        # Group 0
-        # incoming vehicle lanes: north-straight, north-right, north-left, south-straight, south-right, south-left
-        # pedestrian crossings: west, east
-        0: [{"duration": 4, "state": "yyyyrrrryyyyrrrrrrrrrr"}, # These are to buffer the transition from the other one. Only necessary if there is a switch from another group.
-            {"duration": 1, "state": "rrrrrrrrrrrrrrrrrrrrrr"},
-            { "duration": (action_duration - (4 + 1)), "state": "rrrrGGGGrrrrGGGGrrGrrG"}], # This is the actual green phase for this group
+        4: [{"duration": 4, "state": "yyyyrrrryyyyrrrr"}, 
+            {"duration": 1, "state": "rrrrrrrrrrrrrrrr"}, 
+            {"duration": (action_duration - (4 + 1)), "state": "rrrrGGGGrrrrGGGG"}], # This is a list afterall.
 
-        # Group 1
-        # incoming vehicle lanes: west-straight, west-right, east-straight, east-right, east-left
-        # pedestrian crossings: south, north
-        1: [{ "duration": 4, "state": "rrrryyyyrrrryyyyrrrrrr"}, # These are to buffer the transition from the other one. Only necessary if there is a switch from another group.
-            { "duration": 1, "state": "rrrrrrrrrrrrrrrrrrrrrr"},
-            { "duration": (action_duration - (4 + 1)), "state": "GGGGrrrrGGGGrrrrGrrGrr"}] # This is the actual green phase for this group
+        5: [{"duration": 4, "state": "yyyyrrrryyyyrrrr"}, 
+            {"duration": 1, "state": "rrrrrrrrrrrrrrrr"}, 
+            {"duration": (action_duration - (4 + 1)), "state": "rrrrGGGGrrrrGGGG"}],
+    }
+
+# Essentially find replacement values for A, B, C, D. In the last ArBCrD.
+# A = North, B = East, C = South, D = West
+# The duration is always 1
+# 00: Both crosswalks located in N-S and E-W are red
+# 01: crosswalk located in N-S is red, E-W crosswalk is green
+# 10: crosswalk located in N-S is green, E-W crosswalk is red
+# 11: Both crosswalks located in N-S and E-W are green
+def get_crosswalk_phase_groups():
+    """
+    We are returning the data structure.
+    """
+    return {
+        '00': {'A': 'r', 'B': 'r', 'C': 'r', 'D': 'r'},
+        '01': {'A': 'r', 'B': 'G', 'C': 'r', 'D': 'G'},
+        '10': {'A': 'G', 'B': 'r', 'C': 'G', 'D': 'r'},
+        '11': {'A': 'G', 'B': 'G', 'C': 'G', 'D': 'G'},
     }
 
 def initialize_lanes():
