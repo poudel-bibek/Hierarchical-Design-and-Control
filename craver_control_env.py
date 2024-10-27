@@ -159,7 +159,8 @@ class CraverControlEnv(gym.Env):
         """
         Requires occupancy map as input. The changes made here should be reflected in the next time step's occupancy map.
         Some corrections have to be done every step.
-        1. Update the pedestrian status when they cross: For each traffic light, check the outgoing pedestrians.If a pedestrian is in the outgoing area and hasn't been marked as 'crossed', update their status to 'crossed' in the self.tl_pedestrian_status dictionary.
+        1. Update the pedestrian status when they cross: For each traffic light, check the outgoing pedestrians.
+        If a pedestrian is in the outgoing area and hasn't been marked as 'crossed', update their status to 'crossed' in the self.tl_pedestrian_status dictionary.
         2. In case the same lanes are used for L, R, S turns (in case of vehicles and incoming). The straight lane will have repeated entries, remove them.  
         3. Vehicles are only included in the occupancy map if they are close to a given distance. In both incoming and outgoing directions.
         """

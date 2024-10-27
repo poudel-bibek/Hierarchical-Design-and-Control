@@ -15,7 +15,7 @@ class Memory:
         self.is_terminals = []
 
     def append(self, state, action, logprob, reward, done):
-        self.states.append(torch.FloatTensor(state))
+        self.states.append(state)
 
         # clone creates a copy to ensure that subsequent operations on the copy do not affect the original tensor. 
         # Detach removes a tensor from the computational graph, preventing gradients from flowing through it during backpropagation.
@@ -54,7 +54,6 @@ class PPO:
                  ent_coef, 
                  vf_coef, 
                  batch_size, 
-                 num_processes, 
                  gae_lambda, 
                  agent_type,
                  **model_kwargs):
@@ -68,20 +67,16 @@ class PPO:
         self.ent_coef = ent_coef
         self.vf_coef = vf_coef
         self.batch_size = batch_size
-        self.num_processes = num_processes
         self.gae_lambda = gae_lambda
         self.agent_type = agent_type
         
         if self.agent_type == 'lower':  
-            # Initialize the current policy network
-            self.policy = CNNActorCritic(self.model_dim, self.action_dim, device, **model_kwargs).to(device)
-
-            # Initialize the old policy network (used for importance sampling)
-            self.policy_old = CNNActorCritic(self.model_dim, self.action_dim, device, **model_kwargs).to(device)
+            self.policy = CNNActorCritic(self.model_dim, self.action_dim, **model_kwargs).to(self.device)
+            self.policy_old = CNNActorCritic(self.model_dim, self.action_dim, **model_kwargs).to(self.device) # old policy network (used for importance sampling)
 
         else: # Higher level agent
-            self.policy = GATv2ActorCritic(self.model_dim, self.action_dim, device, **model_kwargs).to(device)
-            self.policy_old = GATv2ActorCritic(self.model_dim, self.action_dim, device, **model_kwargs).to(device)
+            self.policy = GATv2ActorCritic(self.model_dim, self.action_dim, **model_kwargs).to(self.device)
+            self.policy_old = GATv2ActorCritic(self.model_dim, self.action_dim, **model_kwargs).to(self.device) # old policy network (used for importance sampling)
 
         param_counts = self.policy.param_count()
         print(f"\nTotal number of parameters in {self.agent_type}-level policy: {param_counts['total']}")
@@ -92,8 +87,8 @@ class PPO:
         # Copy the parameters from the current policy to the old policy
         self.policy_old.load_state_dict(self.policy.state_dict())
 
-        self.policy.share_memory() # Share the policy network across all processes. Any tensor can be shared across processes by calling this.
-        self.policy_old.share_memory() # Share the old policy network across all processes. 
+        # self.policy.share_memory() # Share the policy network across all processes. Any tensor can be shared across processes by calling this.
+        # self.policy_old.share_memory() # Share the old policy network across all processes. 
 
         # Set up the optimizer for the current policy network
         self.initial_lr = lr
@@ -145,12 +140,13 @@ class PPO:
 
     def update(self, memories):
         """
-        memories = combined memories from all processes.
         Update the policy and value networks using the collected experiences.
-        
-        Includes GAE
-        For the choice between KL divergence vs. clipping, we use clipping.
+        For lower level agent, memories = combined memories from all processes. 
+        For higher level agent, memories = memories colelcted from a single process over multiple iterations.
+        - Includes GAE
+        - For the choice between KL divergence vs. clipping, we use clipping.
         """
+        # This works for both lower and higher level agents.
         combined_memory = Memory()
         for memory in memories:
             combined_memory.actions.extend(memory.actions)

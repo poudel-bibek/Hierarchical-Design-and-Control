@@ -51,6 +51,7 @@ class CraverDesignEnv(gym.Env):
         # Clear existing folders and create new ones
         clear_folders()
 
+        # The crosswalks present initially. 
         self.crosswalks_to_remove = [crosswalk_id for _, data in CONTROLLED_CROSSWALKS_DICT.items() for crosswalk_id in data['ids']]
         #self._clear_corridor(self.crosswalks_to_remove)
         
@@ -191,6 +192,7 @@ class CraverDesignEnv(gym.Env):
     def reset(self):
         """
         Reset the environment to its initial state.
+        Should return x, edge_index, edge_attr, batch
         """
         # Reset the graph to its original state
         self.pedestrian_graph = self.original_pedestrian_graph.copy()
@@ -199,12 +201,13 @@ class CraverDesignEnv(gym.Env):
         self.torch_graph = self._convert_to_torch_geometric()
 
         self.iteration = 0
-
-        return self.torch_graph  # Return the initial state
+        
+        # nodes, edge_index, edge_attr 
+        return self.torch_graph
 
     def close(self):
         """
-        Probably wont make use of it, just for completeness.
+        
         """
         pass
     

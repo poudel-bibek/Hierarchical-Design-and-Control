@@ -8,89 +8,15 @@ import torch.nn.functional as F
 from torch_geometric.nn import global_mean_pool
 from torch.distributions import MixtureSameFamily, MultivariateNormal, Categorical
 
-"""
-Notes: 
-In the act method:
-    The key idea is that actor outputs logits for each binary decision, then we convert these logits to probabilities and sample from this distribution to get our binary actions.
-    The choice of using Bernoulli distribution is because we want to model the probability of a binary event (e.g., turn ON and OFF).
-    We need to return the sum of log probabilities to be used in the PPO loss function. 
-
-    # TODO: check the validity of the sum operation. (Done)
-    The validity of the sum operation depends on the intended interpretation of the action space. Let's consider two scenarios:
-
-    a) Independent Binary Actions:
-    If each of the (e.g., 10) binary choices is truly independent (e.g., selecting multiple items from a list), then summing the log probabilities is valid. This sum represents the log probability of the entire action vector.
-    In this scenario, we can control traffic light for NS and EW independently. This means we can have all combinations: both red, both green, or one red and one green.
-    Actions:
-        Action 1: NS light (0 = red, 1 = green)
-        Action 2: EW light (0 = red, 1 = green)
-
-        Example:
-        Let's say our model predicts:
-
-        P(NS = green) = 0.7
-        P(NS = red) = 0.3
-        P(EW = green) = 0.4
-        P(EW = red) = 0.6
-
-        If we sample and get [1, 0] (NS green, EW red):
-        Log probability = log(0.7) + log(0.6) = -0.71
-        This sum of log probabilities is valid because the decisions for NS and EW are independent. The total log probability represents how likely the model was to choose this specific combination.
-
-    b) Mutually Exclusive Actions:
-    If the (e.g., 10) binary choices are meant to be mutually exclusive (e.g., selecting one out of 10 options), then summing the log probabilities isn't the correct approach. In this case, we'd typically use a Categorical distribution instead of multiple Bernoulli distributions.
-    Instead that we could only choose one direction to be green at a time, and the other must be red.
-    Actions:
-
-        0: NS green, EW red
-        1: NS red, EW green
-
-        In this case, we'd use a Categorical distribution:
-        P(NS green, EW red) = 0.6
-        P(NS red, EW green) = 0.4
-
-        If we choose NS green, EW red:
-        Log probability = log(0.6) = -0.51
-        Here, summing log probabilities wouldn't make sense because we're making a single choice between mutually exclusive options.
-
-    In our actual traffic light scenario:
-
-    We have multiple independent binary decisions (one for each traffic light and crosswalk).
-    Each decision (turn a light ON or OFF) doesn't affect the others directly.
-    We can have any combination of lights ON or OFF.
-
-    The actions for different traffic lights and crosswalks are separate decisions, so treating them as independent. 
-    Given that the actions are independent binary decisions, summing the log probabilities is a valid operation.
-
-    ######### FINAL VERSION #########
-    - actor_layers now output 3 values instead of 4: 2 for the traffic direction (which will be treated as a single decision) and 1 each for the two crosswalk decisions.
-    In the act method:
-        - We split the logits into traffic direction and crosswalk decisions.
-        - For the traffic direction, we use a Categorical distribution to select one of the four options (0, 1, 2, 3).
-        - For the crosswalks, we use Bernoulli distributions for each independent binary decision.
-        - We combine these into a 4-bit string, where the first two bits represent the traffic direction (in one-hot encoding) and the last two bits represent the crosswalk decisions.
-    
-    In the evaluate method:
-        - We split the logits and actions similarly.
-        - We evaluate the traffic direction action using a Categorical distribution.
-        - We evaluate the crosswalk actions using Bernoulli distributions.
-        - We combine the log probabilities (sum for each crosswalk, no sum for traffic direction) and calculate the entropy.
-"""
-
 ######## CNN model ########
 class CNNActorCritic(nn.Module):
-    def __init__(self, in_channels, action_dim, device, **kwargs):
+    def __init__(self, in_channels, action_dim, **kwargs):
         """
         CNN Actor-Critic network with configurable size (designed to be compatible with hyper-parameter tuning)
         we are applying conv2d, the state should be 2d with a bunch of channels.
         Choices: 
-            Config: Small: 
-                4 Conv layers
-                3 Linear layers
-
-            Config: Medium:
-                6 Conv layers
-                4 Linear layers
+            Small: 4 Conv layers, 3 Linear layers
+            Medium: 6 Conv layers, 5 Linear layers
 
         Regularization: Dropout and Batch Norm (mitigation of internal covariate shift)
         Conservatively using pooling layers. Every piece of information is important, however we also want to avoid overfitting and keep parameters modest. 
@@ -100,7 +26,6 @@ class CNNActorCritic(nn.Module):
         Even at high action durations, the model size is around 4.1M parameters. 
         """
         super(CNNActorCritic, self).__init__()
-        self.device = torch.device(device)
         self.in_channels = in_channels
         self.action_dim = action_dim 
         self.action_duration = kwargs.get('action_duration')
@@ -129,7 +54,7 @@ class CNNActorCritic(nn.Module):
                 nn.LeakyReLU(),
                 nn.Flatten(),
                 nn.Dropout(dropout_rate)
-            ).to(self.device)
+            )
             hidden_dim = 128
 
         else:  # medium
@@ -157,12 +82,12 @@ class CNNActorCritic(nn.Module):
                 nn.LeakyReLU(),
                 nn.Flatten(),
                 nn.Dropout(dropout_rate)
-            ).to(self.device)
+            )
             hidden_dim = 256
 
         # Calculate the size of the flattened CNN output
         with torch.no_grad():
-            sample_input = torch.zeros(1, self.in_channels, self.action_duration, self.per_timestep_state_dim).to(self.device) # E.g., (1,1,10,74) batch size of 1, 1 channel, 10 timesteps, 74 state dims
+            sample_input = torch.zeros(1, self.in_channels, self.action_duration, self.per_timestep_state_dim) # E.g., (1,1,10,74) batch size of 1, 1 channel, 10 timesteps, 74 state dims
             cnn_output_size = self.shared_cnn(sample_input).shape[1]
             #print(f"\n\nCNN output size: {cnn_output_size}\n\n")
 
@@ -175,7 +100,7 @@ class CNNActorCritic(nn.Module):
             nn.LeakyReLU(),
             nn.Dropout(dropout_rate),
             nn.Linear(hidden_dim // 2, self.action_dim)
-        ).to(device)
+        )
         
         # Critic-specific layers
         self.critic_layers = nn.Sequential(
@@ -186,7 +111,7 @@ class CNNActorCritic(nn.Module):
             nn.LeakyReLU(),
             nn.Dropout(dropout_rate),
             nn.Linear(hidden_dim // 2, 1)
-        ).to(device)
+        )
 
     def actor(self, state,):
         shared_features = self.shared_cnn(state)
@@ -204,7 +129,7 @@ class CNNActorCritic(nn.Module):
         - First action: 4-class classification for traffic light
         - Second and third actions: binary choices for crosswalks
         """
-        state_tensor = state.to(self.device).reshape(1, self.in_channels, self.action_duration, self.per_timestep_state_dim)
+        state_tensor = state.reshape(1, self.in_channels, self.action_duration, self.per_timestep_state_dim)
         action_logits = self.actor(state_tensor)
         print(f"\nAction logits: {action_logits}")
         
@@ -298,7 +223,6 @@ class GATv2ActorCritic(nn.Module):
 
     def __init__(self, in_channels, 
                  action_dim,
-                 device,
                  hidden_channels = None, 
                  out_channels = None, 
                  initial_heads = None, 
@@ -537,16 +461,18 @@ class GATv2ActorCritic(nn.Module):
         Propose up to max_proposals number of crosswalks.
         For use in policy gradient methods, the log probabilities of the actions are needed.
 
-        We are using reparameterization trick but is that a good assumption for the distribution of the actions?
-        problem with normal distribution is that it assumes a single mode. When sampling, likelihood of getting a sample far away from the mean is low (depends on std).
+        We are using reparameterization trick (which assumes that the the actions follow a certain continuous and differentiable distribution)
+        By default its normal distribution. The problem with normal distribution is that it assumes a single mode. When sampling, likelihood of getting a sample far away from the mean is low (depends on std).
         Instead, we use a mixture of Gaussians. 
             - Can model more complex distributions
             - Can capture multiple modes in the distribution
             - Flexibility: Can be parameterized to have different means and variances for each component
 
-        - Should thickness and location be independent? No. Particular thickness for a specific location is what is needed. 
-        - The distribution model should jointly model the two (location and thickness). 
+        Should thickness and location be independent? No. Particular thickness for a specific location is what is needed. 
+        Hence, the distribution jointly models the two (location and thickness). 
         """
+        if batch is None: # Assume a single graph is used to make inference at a time.
+            batch = torch.zeros(x.size(0), dtype=torch.long).to(x.device)
 
         # Get node embeddings by passing input through GAT layers
         node_embeddings = self.forward(x, edge_index, edge_attr, batch)

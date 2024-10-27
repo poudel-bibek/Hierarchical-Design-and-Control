@@ -22,7 +22,7 @@ def get_config():
         "seed": None,  # Random seed (default: None)
         "gpu": True,  # Use GPU if available (default: use CPU)
         "total_timesteps": 1500000,  # Total number of timesteps the simulation will run
-        "max_timesteps": 720,  # Maximum number of steps in one episode
+        "max_timesteps": 720,  # Maximum number of steps in one episode (for the lower level agent)
         "total_sweep_trials": 128,  # Total number of trials for the wandb sweep
         "memory_transfer_freq": 16,  # Frequency of memory transfer from worker to main process (Only applicable for lower level agent)
 
@@ -41,6 +41,7 @@ def get_config():
         "higher_initial_heads": 8,  # Number of attention heads in first GATv2 layer
         "higher_second_heads": 1,  # Number of attention heads in second GATv2 layer
         "higher_action_hidden_channels": 32,  # Number of hidden channels in action layers
+        "higher_update_freq": 128,  # Number of action timesteps between each policy update
         "higher_gmm_hidden_dim": 64,  # Hidden dimension for GMM layers
         "higher_num_mixtures": 3,  # Number of mixtures in GMM
 
@@ -63,7 +64,7 @@ def get_config():
         "lower_ent_coef": 0.01,  # Entropy coefficient
         "lower_vf_coef": 0.5,  # Value function coefficient
         "lower_batch_size": 32,  # Batch size
-        "lower_num_processes": 6,  # Number of parallel processes to use (Lower level agent has multiple workers)
+        "lower_num_processes": 1,  # Number of parallel processes to use (Lower level agent has multiple workers)
         "lower_kernel_size": 3,  # Kernel size for CNN
         "lower_model_size": "medium",  # Model size for CNN: 'small' or 'medium'
         "lower_dropout_rate": 0.2,  # Dropout rate for CNN

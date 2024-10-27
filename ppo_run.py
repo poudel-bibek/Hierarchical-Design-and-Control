@@ -117,7 +117,8 @@ def evaluate_controller(config, env):
                 'kernel_size': config['kernel_size'],
                 'dropout_rate': config['dropout_rate']
                 }
-
+            
+            # TODO, too many device usages. fix
             ppo_model = CNNActorCritic(n_channels, action_dim, device, **model_kwargs).to(device) 
             ppo_model.load_state_dict(torch.load(config['model_path'], map_location=device)) 
 
@@ -244,7 +245,7 @@ def calculate_performance(run_data, all_directions, step_length):
     for direction, avg_length in avg_queue_lengths.items():
         print(f"  {direction}: {avg_length:.2f}")
 
-def worker(rank, config, shared_policy_old, memory_queue, global_seed):
+def worker(rank, config, shared_policy_old, memory_queue, global_seed, worker_device):
     """
     The device for each worker is always CPU.
     At every iteration, 1 worker will carry out one episode.
@@ -260,8 +261,7 @@ def worker(rank, config, shared_policy_old, memory_queue, global_seed):
     np.random.seed(worker_seed)
     torch.manual_seed(worker_seed)
 
-    env = CraverControlEnv(config, worker_id=rank)
-    worker_device = torch.device("cuda") if config['gpu'] and torch.cuda.is_available() else torch.device("cpu")
+    lower_env = CraverControlEnv(config, worker_id=rank)
     memory_transfer_freq = config['memory_transfer_freq']  # Get from config
 
     # The central memory is a collection of memories from all processes.
@@ -269,7 +269,7 @@ def worker(rank, config, shared_policy_old, memory_queue, global_seed):
     local_memory = Memory()
     shared_policy_old = shared_policy_old.to(worker_device)
 
-    state, _ = env.reset()
+    state, _ = lower_env.reset()
     ep_reward = 0
     steps_since_update = 0
      
@@ -285,11 +285,11 @@ def worker(rank, config, shared_policy_old, memory_queue, global_seed):
         print(f"\nAction: in worker {rank}: {action}")
         # Perform action
         # These reward and next_state are for the action_duration timesteps.
-        next_state, reward, done, truncated, info = env.step(action)
+        next_state, reward, done, truncated, info = lower_env.step(action)
         ep_reward += reward
 
         # Store data in memory
-        local_memory.append(state, action, logprob, reward, done)
+        local_memory.append(torch.FloatTensor(state), action, logprob, reward, done)
         steps_since_update += 1
 
         if steps_since_update >= memory_transfer_freq or done or truncated:
@@ -305,7 +305,7 @@ def worker(rank, config, shared_policy_old, memory_queue, global_seed):
 
     # In PPO, we do not make use of the total reward. We only use the rewards collected in the memory.
     print(f"Worker {rank} finished. Total reward: {ep_reward}")
-    env.close()
+    lower_env.close()
     memory_queue.put((rank, None))  # Signal that this worker is done
 
 def train(train_config, is_sweep=False, sweep_config=None):
@@ -341,8 +341,8 @@ def train(train_config, is_sweep=False, sweep_config=None):
                 train_config[key] = value
         
     global_step = 0
-    device = torch.device("cuda:0" if torch.cuda.is_available() and train_config['gpu'] else "cpu")
-    print(f"Using device: {device}")
+    worker_device = torch.device("cuda") if config['gpu'] and torch.cuda.is_available() else torch.device("cpu")
+    print(f"Using device: {worker_device}")
 
     design_args = {
         'save_graph_images': True,
@@ -354,13 +354,13 @@ def train(train_config, is_sweep=False, sweep_config=None):
         'min_coordinate': train_config['min_coordinate'],
         'max_coordinate': train_config['max_coordinate'],
         'original_net_file': train_config['original_net_file'],
-    }
+        }
     
     # Dummy environments. Required for setup.
     environments = {
         'lower': CraverControlEnv(train_config, worker_id=None),
         'higher': CraverDesignEnv(design_args)
-    }
+        }
     
     for env_type, env in environments.items():
         print(f"\nEnvironment for {env_type} level agent:")
@@ -388,29 +388,9 @@ def train(train_config, is_sweep=False, sweep_config=None):
         'action_hidden_channels': train_config['higher_action_hidden_channels'],
         'gmm_hidden_dim': train_config['higher_gmm_hidden_dim'],
         'num_mixtures': train_config['higher_num_mixtures'],
-    }
+        }
 
     print(f"\nHigher level agent: \n\tIn channels: {higher_in_channels}, Action dimension: {higher_action_dim}\n")
-
-    environments['higher'].close()  # Don't need this anymore
-
-    higher_ppo = PPO(
-        higher_in_channels,
-        higher_action_dim,
-        device=device,
-        lr=train_config['higher_lr'],
-        gamma=train_config['higher_gamma'],
-        K_epochs=train_config['higher_K_epochs'],
-        eps_clip=train_config['higher_eps_clip'],
-        ent_coef=train_config['higher_ent_coef'],
-        vf_coef=train_config['higher_vf_coef'],
-        batch_size=train_config['higher_batch_size'],
-        num_processes=1,  # Higher-level agent only uses one process
-        gae_lambda=train_config['higher_gae_lambda'],
-        agent_type="higher",
-        **higher_model_kwargs
-    )
-
     # Lower level agent
     state_dim = environments['lower'].observation_space.shape # e.g., (10, 74) = (action_duration, per_timestep_state_dim)
     in_channels = 1
@@ -420,15 +400,33 @@ def train(train_config, is_sweep=False, sweep_config=None):
         'model_size': train_config['lower_model_size'],  
         'kernel_size': train_config['lower_kernel_size'],
         'dropout_rate': train_config['lower_dropout_rate']
-            }
+        }
         
     lower_action_dim = train_config['lower_action_dim'] 
     print(f"\nLower level agent: \n\tState dimension: {state_dim}, Action dimension: {lower_action_dim}")
+    # Dont need these anymore
+    environments['lower'].close() 
+    environments['higher'].close() 
 
-    environments['lower'].close() # Dont need this anymore
+    higher_ppo = PPO(
+        higher_in_channels,
+        higher_action_dim,
+        worker_device,
+        lr=train_config['higher_lr'],
+        gamma=train_config['higher_gamma'],
+        K_epochs=train_config['higher_K_epochs'],
+        eps_clip=train_config['higher_eps_clip'],
+        ent_coef=train_config['higher_ent_coef'],
+        vf_coef=train_config['higher_vf_coef'],
+        batch_size=train_config['higher_batch_size'],
+        gae_lambda=train_config['higher_gae_lambda'],
+        agent_type="higher",
+        **higher_model_kwargs
+        )
+
     lower_ppo = PPO(in_channels, 
         lower_action_dim, 
-        device, 
+        worker_device, 
         train_config['lower_lr'], 
         train_config['lower_gamma'], 
         train_config['lower_K_epochs'], 
@@ -436,7 +434,6 @@ def train(train_config, is_sweep=False, sweep_config=None):
         train_config['lower_ent_coef'], 
         train_config['lower_vf_coef'], 
         train_config['lower_batch_size'],
-        train_config['lower_num_processes'], # This agent has parallel processes (workers)
         train_config['lower_gae_lambda'],
         agent_type="lower",
         **model_kwargs_lower
@@ -460,27 +457,43 @@ def train(train_config, is_sweep=False, sweep_config=None):
         os.makedirs(save_dir, exist_ok=True)
         best_reward = float('-inf')
 
+    # Initialize higher level environment and get initial state
+    higher_env = CraverDesignEnv(design_args)
+    higher_state = higher_env.reset().to(worker_device)
+    higher_memory = Memory()
+
     # Instead of using total_episodes, we will use total_iterations. 
-    # In each iteration, multiple lower level agent actors interact with the environment for max_timesteps. i.e., each iteration will have num_processes episodes.
+    # Every iteration, num_process lower level agents interact with the environment for total_action_timesteps_per_episode steps (which further internally contains action_duration steps)
     # Each iteration is equivalent to a single timestep for the higher agent.
     total_iterations = train_config['total_timesteps'] // (train_config['max_timesteps'] * train_config['lower_num_processes'])
     lower_ppo.total_iterations = total_iterations # For lr annealing
-    train_config['total_action_timesteps_per_episode'] = train_config['max_timesteps'] // train_config['action_duration'] # Each actor will run for max_timesteps and each timestep will have action_duration steps.
+    train_config['total_action_timesteps_per_episode'] = train_config['max_timesteps'] // train_config['action_duration'] 
     
-    # Counter to keep track of how many times action has been taken 
+    # Counter to keep track of how many times action has been taken by all workers (lower level agent)
     action_timesteps = 0
     for iteration in range(total_iterations):
-
-        global_step = iteration * train_config['lower_num_processes'] + action_timesteps*train_config['action_duration']
+        
+        global_step = iteration * train_config['lower_num_processes']*train_config['total_action_timesteps_per_episode']*train_config['action_duration']
         print(f"\nStarting iteration: {iteration + 1}/{total_iterations} with {global_step} total steps so far\n")
 
-        # Create a manager to handle shared objects
-        manager = mp.Manager()
+        print(f"Higher state: {higher_state}")
+
+        # Higher level agent takes node features, edge index, edge attributes and batch (to make single large graph) as input 
+        # To produce padded fixed-sized actions, num_actual_proposals and total_log_prob are also returned.
+        higher_action, num_proposals, higher_logprob = higher_ppo.policy_old.act(higher_state.x, 
+                                                                  higher_state.edge_index, 
+                                                                  higher_state.edge_attr, 
+                                                                  None) # Only 1 graph is used to make inference at a time (for batch)
+        
+        higher_next_state, _, higher_done, _ = higher_env.step(higher_action)
+
+        # Lower-level agents get a new memory and manager each iteration.
+        manager = mp.Manager() # Manager to handle shared objects
         memory_queue = manager.Queue()
 
         processes = []
         for rank in range(train_config['lower_num_processes']):
-            p = mp.Process(target=worker, args=(rank, train_config, lower_ppo.policy_old, memory_queue, SEED)) # Create a process to execute the worker function
+            p = mp.Process(target=worker, args=(rank, train_config, lower_ppo.policy_old, memory_queue, SEED, worker_device)) # Create a process to execute the worker function
             p.start()
             processes.append(p)
 
@@ -564,33 +577,25 @@ def train(train_config, is_sweep=False, sweep_config=None):
         for p in processes:
             p.join()
 
+        # Store the higher-level transition (reward will be added after lower-level agents complete)
+        # Higher state is of torch geometric Data type.
+
+        higher_memory.append(higher_state, higher_action, higher_logprob, 0, higher_done) # state, action, logprob, reward, done
+
         # Higher-level agent update
         if iteration % train_config['higher_update_freq'] == 0:
-            higher_env = CraverDesignEnv(design_args)
-            higher_state = higher_env.reset()
-            higher_done = False
+            higher_ppo.update(higher_memory)
 
-            while not higher_done:
-                higher_action, _ = higher_ppo.policy_old.act(higher_state.x, higher_state.edge_index, higher_state.edge_attr, higher_state.batch)
-                higher_next_state, higher_reward, higher_done, _ = higher_env.step(higher_action)
+        higher_state = higher_next_state
 
-                higher_ppo.memory.states.append(higher_state)
-                higher_ppo.memory.actions.append(higher_action)
-                higher_ppo.memory.rewards.append(higher_reward)
-                higher_ppo.memory.is_terminals.append(higher_done)
+        #     if not is_sweep:
+        #         writer.add_scalar('Higher/Reward', higher_reward, global_step)
+        #         writer.add_scalar('Higher/Policy_Loss', higher_loss['policy_loss'], global_step)
+        #         writer.add_scalar('Higher/Value_Loss', higher_loss['value_loss'], global_step)
+        #         writer.add_scalar('Higher/Entropy_Loss', higher_loss['entropy_loss'], global_step)
+        #         writer.add_scalar('Higher/Total_Loss', higher_loss['total_loss'], global_step)
 
-                higher_state = higher_next_state
-
-            higher_loss = higher_ppo.update()
-
-            if not is_sweep:
-                writer.add_scalar('Higher/Reward', higher_reward, global_step)
-                writer.add_scalar('Higher/Policy_Loss', higher_loss['policy_loss'], global_step)
-                writer.add_scalar('Higher/Value_Loss', higher_loss['value_loss'], global_step)
-                writer.add_scalar('Higher/Entropy_Loss', higher_loss['entropy_loss'], global_step)
-                writer.add_scalar('Higher/Total_Loss', higher_loss['total_loss'], global_step)
-
-            higher_env.close()
+    # higher_env.close()
 
     if is_sweep:
         wandb.finish()
