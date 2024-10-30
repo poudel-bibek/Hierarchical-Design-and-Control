@@ -7,9 +7,9 @@ def get_config():
         "action_duration": 10,  # Duration of each action (default: 10.0)
         "auto_start": True,  # Automatically start the simulation
         "vehicle_input_trips": "./SUMO_files/original_vehtrips.xml",  # Original Input trips file
-        "vehicle_output_trips": "./SUMO_files/scaled_vehtrips.xml",  # Output trips file
+        "vehicle_output_trips": "./SUMO_files/scaled_trips/scaled_vehtrips.xml",  # Output trips file
         "pedestrian_input_trips": "./SUMO_files/original_pedtrips.xml",  # Original Input pedestrian trips file
-        "pedestrian_output_trips": "./SUMO_files/scaled_pedtrips.xml",  # Output pedestrian trips file
+        "pedestrian_output_trips": "./SUMO_files/scaled_trips/scaled_pedtrips.xml",  # Output pedestrian trips file
         "original_net_file": "./SUMO_files/original_craver_road.net.xml",  # Original net file
 
         # Demand scaling
@@ -44,6 +44,8 @@ def get_config():
         "higher_update_freq": 128,  # Number of action timesteps between each policy update
         "higher_gmm_hidden_dim": 64,  # Hidden dimension for GMM layers
         "higher_num_mixtures": 3,  # Number of mixtures in GMM
+        "higher_edge_dim": 2,  # Number of features per edge (location, width)
+        "higher_in_channels": 2,  # Number of input features per node (x and y coordinates)
 
         # Higher-level agent specific arguments
         "max_proposals": 10,  # Maximum number of crosswalk proposals

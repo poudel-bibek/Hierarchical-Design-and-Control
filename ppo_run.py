@@ -19,7 +19,7 @@ from models import CNNActorCritic, GATv2ActorCritic
 from wandb_sweep import HyperParameterTuner
 from ppo_alg import PPO, Memory
 from config import get_config
-
+from utils import create_new_sumocfg
 def save_config(config, SEED, model, save_path):
     """
     Save hyperparameters and model architecture to a JSON file.
@@ -36,12 +36,16 @@ def save_config(config, SEED, model, save_path):
     with open(save_path, 'w') as f:
         json.dump(config_to_save, f, indent=4)
 
-def evaluate_controller(config, env):
+def evaluate_controller(config, env, best_network_iteration):
     """
     For benchmarking.
     Evaluate either the traffic light or PPO as the controller.
     TODO: Make the evaluation N number of times each with different seeds. Report average results.
+
+    Give the best network iteration
     """
+
+    create_new_sumocfg(best_network_iteration)
 
     # Collect step data separated at each landmarks such as TL lights
     step_data = []
@@ -59,13 +63,13 @@ def evaluate_controller(config, env):
             sumo_cmd = ["sumo-gui" if config['gui'] else "sumo", 
                         "--start" , 
                         "--quit-on-end", 
-                        "-c", "./SUMO_files/craver.sumocfg", 
+                        "-c", "./SUMO_files/iterative_craver.sumocfg", 
                         '--step-length', str(config['step_length'])]
                             
         else:
             sumo_cmd = ["sumo-gui" if config['gui'] else "sumo", 
                         "--quit-on-end", 
-                        "-c", "./SUMO_files/craver.sumocfg", 
+                        "-c", "./SUMO_files/iterative_craver.sumocfg", 
                         '--step-length', str(config['step_length'])]
         
         traci.start(sumo_cmd)
@@ -245,7 +249,7 @@ def calculate_performance(run_data, all_directions, step_length):
     for direction, avg_length in avg_queue_lengths.items():
         print(f"  {direction}: {avg_length:.2f}")
 
-def worker(rank, config, shared_policy_old, memory_queue, global_seed, worker_device):
+def worker(rank, config, shared_policy_old, memory_queue, global_seed, worker_device, network_iteration):
     """
     The device for each worker is always CPU.
     At every iteration, 1 worker will carry out one episode.
@@ -261,7 +265,7 @@ def worker(rank, config, shared_policy_old, memory_queue, global_seed, worker_de
     np.random.seed(worker_seed)
     torch.manual_seed(worker_seed)
 
-    lower_env = CraverControlEnv(config, worker_id=rank)
+    lower_env = CraverControlEnv(config, worker_id=rank, network_iteration=network_iteration)
     memory_transfer_freq = config['memory_transfer_freq']  # Get from config
 
     # The central memory is a collection of memories from all processes.
@@ -375,8 +379,8 @@ def train(train_config, is_sweep=False, sweep_config=None):
             print(f"\tProposal space: {env.action_space['proposals']}")
 
     # Higher level agent
-    higher_in_channels = environments['higher'].torch_graph.num_node_features
-    higher_edge_dim = environments['higher'].torch_graph.edge_attr.size(1)
+    higher_in_channels = train_config['higher_in_channels']
+    higher_edge_dim = train_config['higher_edge_dim']
     higher_action_dim = design_args['max_proposals']
 
     higher_model_kwargs = {
@@ -410,7 +414,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
 
     higher_ppo = PPO(
         higher_in_channels,
-        higher_action_dim,
+        higher_action_dim, 
         worker_device,
         lr=train_config['higher_lr'],
         gamma=train_config['higher_gamma'],
@@ -485,7 +489,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
                                                                   higher_state.edge_attr, 
                                                                   None) # Only 1 graph is used to make inference at a time (for batch)
         
-        higher_next_state, _, higher_done, _ = higher_env.step(higher_action)
+        higher_next_state, _, higher_done, _ = higher_env.step(higher_action, iteration)
 
         # Lower-level agents get a new memory and manager each iteration.
         manager = mp.Manager() # Manager to handle shared objects
@@ -493,7 +497,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
 
         processes = []
         for rank in range(train_config['lower_num_processes']):
-            p = mp.Process(target=worker, args=(rank, train_config, lower_ppo.policy_old, memory_queue, SEED, worker_device)) # Create a process to execute the worker function
+            p = mp.Process(target=worker, args=(rank, train_config, lower_ppo.policy_old, memory_queue, SEED, worker_device, iteration)) # Create a process to execute the worker function
             p.start()
             processes.append(p)
 
@@ -518,7 +522,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
 
                     # Update lower level PPO every n times action has been taken
                     if action_timesteps % train_config['lower_update_freq'] == 0:
-                        loss = lower_ppo.update(all_memories)
+                        loss = lower_ppo.update(all_memories, agent_type='lower')
 
                         total_reward = sum(sum(memory.rewards) for memory in all_memories)
                         avg_reward = total_reward / train_config['lower_num_processes'] # Average reward per process in this iteration
@@ -584,7 +588,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
 
         # Higher-level agent update
         if iteration % train_config['higher_update_freq'] == 0:
-            higher_ppo.update(higher_memory)
+            higher_ppo.update(higher_memory, agent_type='higher')
 
         higher_state = higher_next_state
 

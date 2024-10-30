@@ -138,7 +138,7 @@ class PPO:
         return torch.tensor(advantages, dtype=torch.float32).to(self.device)
 
 
-    def update(self, memories):
+    def update(self, memories, agent_type='higher'):
         """
         Update the policy and value networks using the collected experiences.
         For lower level agent, memories = combined memories from all processes. 
@@ -146,14 +146,16 @@ class PPO:
         - Includes GAE
         - For the choice between KL divergence vs. clipping, we use clipping.
         """
-        # This works for both lower and higher level agents.
-        combined_memory = Memory()
-        for memory in memories:
-            combined_memory.actions.extend(memory.actions)
-            combined_memory.states.extend(memory.states)
-            combined_memory.logprobs.extend(memory.logprobs)
-            combined_memory.rewards.extend(memory.rewards)
-            combined_memory.is_terminals.extend(memory.is_terminals)
+        if agent_type == 'lower':
+            combined_memory = Memory()
+            for memory in memories:
+                combined_memory.actions.extend(memory.actions)
+                combined_memory.states.extend(memory.states)
+                combined_memory.logprobs.extend(memory.logprobs)
+                combined_memory.rewards.extend(memory.rewards)
+                combined_memory.is_terminals.extend(memory.is_terminals)
+        else: 
+            combined_memory = memories
 
         # Convert collected experiences to tensors
         old_states = torch.stack(combined_memory.states).detach().to(self.device)

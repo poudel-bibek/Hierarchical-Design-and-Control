@@ -1,8 +1,6 @@
 import torch
 import torch.nn as nn
 from torch.distributions import Categorical, Bernoulli
-import matplotlib.pyplot as plt
-import seaborn as sns
 from torch_geometric.nn import GATv2Conv
 import torch.nn.functional as F
 from torch_geometric.nn import global_mean_pool
