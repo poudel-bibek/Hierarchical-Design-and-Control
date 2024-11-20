@@ -145,8 +145,13 @@ class PPO:
         For higher level agent, memories = memories colelcted from a single process over multiple iterations.
         - Includes GAE
         - For the choice between KL divergence vs. clipping, we use clipping.
+    
+         However, the policy network expects a tensor.
+        Therefore, we need to convert the graph to a tensor.
         """
+
         if agent_type == 'lower':
+            print(f"\nUpdating {self.agent_type}-level policy")
             combined_memory = Memory()
             for memory in memories:
                 combined_memory.actions.extend(memory.actions)
@@ -154,84 +159,100 @@ class PPO:
                 combined_memory.logprobs.extend(memory.logprobs)
                 combined_memory.rewards.extend(memory.rewards)
                 combined_memory.is_terminals.extend(memory.is_terminals)
+            print(f"\nCombined memory: {combined_memory.states}")
+
+            # Convert collected experiences to tensors
+            old_states = torch.stack(combined_memory.states).detach().to(self.device)
+            old_actions = torch.stack(combined_memory.actions).detach().to(self.device)
+            old_logprobs = torch.stack(combined_memory.logprobs).detach().to(self.device)
+
+            # Compute values for all states 
+            with torch.no_grad():
+                values = self.policy.critic(old_states).squeeze().to(self.device)
+
+            # Compute GAE
+            advantages = self.compute_gae(combined_memory.rewards, values, combined_memory.is_terminals, self.gamma, self.gae_lambda)
+
+            # Advantage = how much better is it to take a specific action compared to the average action. 
+            # GAE = difference between the empirical return and the value function estimate.
+            # advantages + val = Reconstruction of empirical returns. Because we want the critic to predict the empirical returns.
+            returns = advantages + values
+
+            # Normalize the advantages (only for use in policy loss calculation) after they have been added to get returns.
+            advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8) # Small constant to prevent division by zero
+            
+            # Create a dataloader for mini-batching 
+            dataset = torch.utils.data.TensorDataset(old_states, old_actions, old_logprobs, advantages, returns)
+            dataloader = torch.utils.data.DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
+
+            avg_policy_loss = 0
+            avg_value_loss = 0
+            avg_entropy_loss = 0
+
+            # Optimize policy for K epochs
+            for _ in range(self.K_epochs):
+                for states_batch, actions_batch, old_logprobs_batch, advantages_batch, returns_batch in dataloader:
+
+                    # Evaluating old actions and values using current policy network
+                    logprobs, state_values, dist_entropy = self.policy.evaluate(states_batch, actions_batch)
+                    
+                    # Finding the ratio (pi_theta / pi_theta_old) for importance sampling (we want to use the samples obtained from old policy to get the new policy)
+                    ratios = torch.exp(logprobs - old_logprobs_batch.detach())
+
+                    # Finding Surrogate Loss
+                    surr1 = ratios * advantages_batch
+                    surr2 = torch.clamp(ratios, 1-self.eps_clip, 1+self.eps_clip) * advantages_batch
+                    
+                    # Calculate policy and value losses
+                    # TODO: Is the mean necessary here? In policy loss and entropy loss. Probably yes, for averaging across the batch.
+                    policy_loss = -torch.min(surr1, surr2).mean() # Equation 7 in the paper
+                    value_loss = ((state_values - returns_batch) ** 2).mean() # MSE 
+                    entropy_loss = dist_entropy.mean()
+                    
+                    # Total loss
+                    loss = policy_loss + self.vf_coef * value_loss - self.ent_coef * entropy_loss # Equation 9 in the paper
+                    
+                    # Take gradient step
+                    self.optimizer.zero_grad()
+                    loss.backward()
+                    self.optimizer.step()
+
+                    # Accumulate losses
+                    avg_policy_loss += policy_loss.item()
+                    avg_value_loss += value_loss.item()
+                    avg_entropy_loss += entropy_loss.item()
+            
+            num_batches = len(dataloader) * self.K_epochs
+            avg_policy_loss /= num_batches
+            avg_value_loss /= num_batches
+            avg_entropy_loss /= num_batches
+
+            # Copy new weights into old policy
+            self.policy_old.load_state_dict(self.policy.state_dict())
+            
+            print(f"\nPolicy updated with avg_policy_loss: {avg_policy_loss}\n") 
+
+            # Return the average batch loss per epoch
+            return {
+                'policy_loss': avg_policy_loss,
+                'value_loss': avg_value_loss,
+                'entropy_loss': avg_entropy_loss,
+                'total_loss': avg_policy_loss + self.vf_coef * avg_value_loss - self.ent_coef * avg_entropy_loss
+            }
+
         else: 
+
+            # For the higher level agent, the state is a graph (Pytorch Geometric Data object).
+            # Which is fine/ accepted by the policy network.
+            print(f"\nUpdating {self.agent_type}-level policy")
             combined_memory = memories
 
-        # Convert collected experiences to tensors
-        old_states = torch.stack(combined_memory.states).detach().to(self.device)
-        old_actions = torch.stack(combined_memory.actions).detach().to(self.device)
-        old_logprobs = torch.stack(combined_memory.logprobs).detach().to(self.device)
+            print(f"\nStates: {combined_memory.states}")
+            print(f"\nActions: {combined_memory.actions}")
+            print(f"\nLogprobs: {combined_memory.logprobs}")
+
+            #TODO: Finish this.
+
+
         
-        # Compute values for all states 
-        with torch.no_grad():
-            values = self.policy.critic(old_states).squeeze().to(self.device)
 
-        # Compute GAE
-        advantages = self.compute_gae(combined_memory.rewards, values, combined_memory.is_terminals, self.gamma, self.gae_lambda)
-
-        # Advantage = how much better is it to take a specific action compared to the average action. 
-        # GAE = difference between the empirical return and the value function estimate.
-        # advantages + val = Reconstruction of empirical returns. Because we want the critic to predict the empirical returns.
-        returns = advantages + values
-
-        # Normalize the advantages (only for use in policy loss calculation) after they have been added to get returns.
-        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8) # Small constant to prevent division by zero
-        
-        # Create a dataloader for mini-batching 
-        dataset = torch.utils.data.TensorDataset(old_states, old_actions, old_logprobs, advantages, returns)
-        dataloader = torch.utils.data.DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
-
-        avg_policy_loss = 0
-        avg_value_loss = 0
-        avg_entropy_loss = 0
-
-        # Optimize policy for K epochs
-        for _ in range(self.K_epochs):
-            for states_batch, actions_batch, old_logprobs_batch, advantages_batch, returns_batch in dataloader:
-
-                # Evaluating old actions and values using current policy network
-                logprobs, state_values, dist_entropy = self.policy.evaluate(states_batch, actions_batch)
-                
-                # Finding the ratio (pi_theta / pi_theta_old) for imporatnce sampling (we want to use the samples obtained from old policy to get the new policy)
-                ratios = torch.exp(logprobs - old_logprobs_batch.detach())
-
-                # Finding Surrogate Loss
-                surr1 = ratios * advantages_batch
-                surr2 = torch.clamp(ratios, 1-self.eps_clip, 1+self.eps_clip) * advantages_batch
-                
-                # Calculate policy and value losses
-                # TODO: Is the mean necessary here? In policy loss and entropy loss. Probably yes, for averaging across the batch.
-                policy_loss = -torch.min(surr1, surr2).mean() # Equation 7 in the paper
-                value_loss = ((state_values - returns_batch) ** 2).mean() # MSE 
-                entropy_loss = dist_entropy.mean()
-                
-                # Total loss
-                loss = policy_loss + self.vf_coef * value_loss - self.ent_coef * entropy_loss # Equation 9 in the paper
-                
-                # Take gradient step
-                self.optimizer.zero_grad()
-                loss.backward()
-                self.optimizer.step()
-
-                # Accumulate losses
-                avg_policy_loss += policy_loss.item()
-                avg_value_loss += value_loss.item()
-                avg_entropy_loss += entropy_loss.item()
-        
-        num_batches = len(dataloader) * self.K_epochs
-        avg_policy_loss /= num_batches
-        avg_value_loss /= num_batches
-        avg_entropy_loss /= num_batches
-
-        # Copy new weights into old policy
-        self.policy_old.load_state_dict(self.policy.state_dict())
-        
-        print(f"\nPolicy updated with avg_policy_loss: {avg_policy_loss}\n") 
-
-        # Return the average batch loss per epoch
-        return {
-            'policy_loss': avg_policy_loss,
-            'value_loss': avg_value_loss,
-            'entropy_loss': avg_entropy_loss,
-            'total_loss': avg_policy_loss + self.vf_coef * avg_value_loss - self.ent_coef * avg_entropy_loss
-        }

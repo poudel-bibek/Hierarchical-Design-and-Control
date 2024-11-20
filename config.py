@@ -10,7 +10,7 @@ def get_config():
         "vehicle_output_trips": "./SUMO_files/scaled_trips/scaled_vehtrips.xml",  # Output trips file
         "pedestrian_input_trips": "./SUMO_files/original_pedtrips.xml",  # Original Input pedestrian trips file
         "pedestrian_output_trips": "./SUMO_files/scaled_trips/scaled_pedtrips.xml",  # Output pedestrian trips file
-        "original_net_file": "./SUMO_files/original_craver_road.net.xml",  # Original net file
+        "original_net_file": "./SUMO_files/Craver_traffic_lights.net.xml",  # Original net file
 
         # Demand scaling
         "manual_demand_veh": None,  # Manually scale vehicle demand before starting the simulation (veh/hr)
@@ -22,7 +22,7 @@ def get_config():
         "seed": None,  # Random seed (default: None)
         "gpu": True,  # Use GPU if available (default: use CPU)
         "total_timesteps": 1500000,  # Total number of timesteps the simulation will run
-        "max_timesteps": 720,  # Maximum number of steps in one episode (for the lower level agent)
+        "max_timesteps": 50,  # Maximum number of steps in one episode (for the lower level agent)
         "total_sweep_trials": 128,  # Total number of trials for the wandb sweep
         "memory_transfer_freq": 16,  # Frequency of memory transfer from worker to main process (Only applicable for lower level agent)
 
@@ -41,7 +41,7 @@ def get_config():
         "higher_initial_heads": 8,  # Number of attention heads in first GATv2 layer
         "higher_second_heads": 1,  # Number of attention heads in second GATv2 layer
         "higher_action_hidden_channels": 32,  # Number of hidden channels in action layers
-        "higher_update_freq": 128,  # Number of action timesteps between each policy update
+        "higher_update_freq": 8,  # Number of action timesteps between each policy update
         "higher_gmm_hidden_dim": 64,  # Hidden dimension for GMM layers
         "higher_num_mixtures": 3,  # Number of mixtures in GMM
         "higher_edge_dim": 2,  # Number of features per edge (location, width)

@@ -1,8 +1,11 @@
 import torch
 import torch.nn as nn
+import seaborn as sns
+import matplotlib.pyplot as plt
 from torch.distributions import Categorical, Bernoulli
 from torch_geometric.nn import GATv2Conv
 import torch.nn.functional as F
+from torch_geometric.data import Data
 from torch_geometric.nn import global_mean_pool
 from torch.distributions import MixtureSameFamily, MultivariateNormal, Categorical
 
@@ -179,6 +182,9 @@ class CNNActorCritic(nn.Module):
         
         # Evaluate traffic direction actions
         traffic_probs = F.softmax(traffic_logits, dim=1)
+        #TODO:Visualize this?
+        print(f"\nTraffic probabilities: {traffic_probs}\n")
+
         traffic_dist = Categorical(traffic_probs)
         traffic_log_probs = traffic_dist.log_prob(traffic_actions)
         
@@ -254,6 +260,13 @@ class GATv2ActorCritic(nn.Module):
 
         """
 
+        # Store initialization parameters as instance variables
+        self.max_proposals = action_dim
+        self.min_thickness = min_thickness
+        self.max_thickness = max_thickness
+        self.num_mixtures = num_mixtures
+        self.dropout_rate = dropout_rate
+
         if hidden_channels is None:
             print(f"\nGAT initial hidden channels not specified !!\n")
         print(f"in channels: {in_channels}")
@@ -273,97 +286,96 @@ class GATv2ActorCritic(nn.Module):
 
         # These layers are passed through the readout layer. 
         #(without the readout layer, the expected input shape here is num_nodes * out_channels * second_heads and num_nodes can be different for each graph and cannot be pre-determined)
-        # Linear layer for predicting the number of proposals
-        self.num_proposals_layer = torch.nn.Linear(out_channels * second_heads, action_dim)
-
-        # To predict the GMM parameters that make the distribution of the actions.
-        # Stacked linear layers for GMM parameters (instead of separate layers for each)
-        # Output: num_mixtures * 5 values
-        #   - num_mixtures for mix logits (weights of each Gaussian), determines the weight of this Gaussian in the mixture
-        #   - num_mixtures * 2 for means (location and thickness), determines the center of the Gaussian 
-        #   - num_mixtures * 2 for covariances (diagonal, for simplicity), determines the spread of the Gaussian
-        # Using stacked linear layers for joint prediction of all GMM parameters
-        self.gmm_layers = nn.Sequential(
-            nn.Linear(out_channels * second_heads, gmm_hidden_dim),
-            nn.ReLU(),
-            nn.Linear(gmm_hidden_dim, num_mixtures * 5)  # 5 = 1 (mix_logit) + 2 (means) + 2 (covs)
-        )
-
-        # Store initialization parameters as instance variables
-        self.max_proposals = action_dim
-        self.min_thickness = min_thickness
-        self.max_thickness = max_thickness
-        self.num_mixtures = num_mixtures
-        self.activation = F.elu
-        self.dropout_rate = dropout_rate
-
-        # Encoder for processing actions while preserving their structure
-        # The raw actions (of shape (max_proposals, 2)) may not be in the most informative format for the critic to evaluate
-        # This encoder allows for a richer representation of actions. Since we have max_proposals with padding, we need to make sure the critic focuses on the relevant part of the total actions.
-        self.action_encoder = nn.Sequential(
-            nn.Linear(self.max_proposals * actions_per_node, action_hidden_channels), # max_proposals * 2
-            nn.ReLU(),
-            nn.Linear(action_hidden_channels, action_hidden_channels)
-        )
-
-        # This layer gets input the graph embedding and the action embedding. 
-        self.critic_layer = nn.Sequential(
-            # graph/ node embedding output is shaped (out_channels * second_heads) (1D output of the readout layer)
-            # Graph embedding + hidden_channels (output of the action encoder) to 64
-            nn.Linear(out_channels * second_heads + action_hidden_channels, 64),
-            nn.ReLU(),
-            nn.Linear(64, 1) # output a single value
-        )
-
+        
         # Temperature parameter (of the softmax function) for controlling exploration in action selection
         # A lower temperature (0.1) makes the distribution more peaked (more deterministic), while a higher temperature (2.0) makes it more uniform (more random).
         #self.temperature = nn.Parameter(torch.ones(1)) # this is a learnable parameter. No need for this to be a learnable. Other mechanisms to control exploration.
         self.temperature = 1.0 # fixed temperature
 
-    def get_gmm_distribution(self, node_embeddings):
-        """
-        Get the GMM distribution for the node embeddings.
-        """
-        gmm_params = self.gmm_layers(node_embeddings)
-        mix_logits, means, covs = gmm_params.split([self.num_mixtures, self.num_mixtures * 2, self.num_mixtures * 2], dim=-1)
+        # Finally. After the readout layer (upto that, things are shared), the output is passed to either an actor or a critic.
+        # Sequential layers for actor. Actor predicts GMM parameters and the number of times to sample from the GMM.
+        # Stacked linear layers for GMM parameters for joint prediction of all GMM parameters (instead of separate layers for each)
+        # Output: num_mixtures * 5 values
+        #   - num_mixtures for mix logits (weights of each Gaussian), determines the weight of this Gaussian in the mixture
+        #   - num_mixtures * 2 for means (location and thickness), determines the center of the Gaussian 
+        #   - num_mixtures * 2 for covariances (diagonal, for simplicity), determines the spread of the Gaussian
+
+        self.actor_gmm_layers = nn.Sequential(
+            nn.Linear(out_channels * second_heads, gmm_hidden_dim),
+            nn.ReLU(),
+            nn.Linear(gmm_hidden_dim, num_mixtures * 5)  # 5 = 1 (mix_logit) + 2 (means) + 2 (covs)
+        )
+
+        # Linear layer for predicting the number of proposals
+        self.actor_num_proposals_layer = torch.nn.Linear(out_channels * second_heads, action_dim)
+
+        # Sequential layers for critic
+        # This layer gets input the graph embedding and the action embedding. 
+        self.critic_layers = nn.Sequential(
+            # graph/ node embedding output is shaped (out_channels * second_heads) (1D output of the readout layer)
+            nn.Linear(out_channels * second_heads, 64),
+            nn.ReLU(),
+            nn.Linear(64, 1) # output a single value
+        )
+
+        self.elu = nn.ELU()
         
-        means = means.view(-1, self.num_mixtures, 2)
-        covs = F.softplus(covs).view(-1, self.num_mixtures, 2) # Ensure positive covariance
-
-        mix = Categorical(logits=mix_logits) # Categorical distribution for the mixture probabilities
-        covariance_matrices = torch.diag_embed(covs) # Create diagonal covariance matrices
-        comp = MultivariateNormal(means, covariance_matrices) # Multivariate normal distributions for each component
-        gmm = MixtureSameFamily(mix, comp) # Mixture of Gaussians distribution
-        return gmm
-
-    def forward(self, x, edge_index, edge_attr, batch):
+    def readout_layer(self, x, batch):
         """
-        x: (num_nodes, in_channels)
-        edge_index: Edge indices (2, num_edges). Denotes the connections between nodes. # e.g., edge_index = torch.tensor([[0, 1, 2, 3], [1, 0, 1, 1]])
-        edge_attr: Edge features (num_edges, edge_dim). 
+        As a number of approaches are possible, this is a separate function.
         """
+        # global_mean_pool to average across the nodes for each graph in a batch.
+        return global_mean_pool(x, batch)
 
-        x = self.activation(self.conv1(x, edge_index, edge_attr))
+
+    def actor(self, state):
+        """
+        This is the Actor forward pass, which consists of two parts (all in one head):
+        - GMM parameters prediction layers
+        - Number of proposals prediction layer (how many times to sample from the GMM)
+
+        Instead of accepting Data object, accepts 4 tensors:
+        - node features (x) = (num_nodes, in_channels)
+        - edge index (edge_index) = (2, num_edges) connections between nodes. # e.g., edge_index = torch.tensor([[0, 1, 2, 3], [1, 0, 1, 1]])
+        - edge attributes (edge_attr) = Edge features (num_edges, edge_dim)
+        - batch (batch) = 
+        """
+        
+        print(f"Data x device: {state.x.device}")
+        print(f"Model device: {next(self.parameters()).device}")
+
+        y = self.elu(self.conv1(state.x, state.edge_index, state.edge_attr))
 
         # Apply dropout to hidden representations
-        x = F.dropout(x, p=self.dropout_rate, training=self.training)
-        
+        y = F.dropout(y, p=self.dropout_rate, training=self.training)
+
         # The same edge_attr is used for both the first and second GAT layers. 
         # Apply second GAT layer with edge features (no activation here as it's the final layer)
         # Why are edge features passed again?
         # Preserving edge information: By passing the edge attributes to each layer, the model can maintain information about the edge features throughout the network depth. 
         # Different learned attention: Each GAT layer learns its own attention mechanism. By providing the edge features to each layer, you allow each layer to learn how to use these features differently
         # Residual-like connections for edges: In a sense, passing edge features to each layer creates a form of residual connection for edge information.         
-        x = self.conv2(x, edge_index, edge_attr)
+        y = self.conv2(y, state.edge_index, state.edge_attr)
 
-        # The output is going to be shaped (num_nodes, hidden_channels)
-        print(f"\nx: {x.shape}\n")
+        y = self.readout_layer(y, state.batch)
 
-        # Add a readout layer. Use global_mean_pool to agerage across the nodes for each graph in a batch.
-        # Consistent way to handle variable-sized graphs.
-        x = global_mean_pool(x, batch)
+        gmm_params = self.actor_gmm_layers(y)
+        num_proposals_logits = self.actor_num_proposals_layer(y)
 
-        return x  # Return the final node embeddings. Its still not pased through the linear layers here yet.
+        return gmm_params, num_proposals_logits
+
+    def critic(self, state):
+        """
+        This is the Critic forward pass.
+        """
+        x, edge_index, edge_attr, batch = state
+
+        y = nn.elu(self.conv1(x, edge_index, edge_attr))
+        y = F.dropout(y, p=self.dropout_rate, training=self.training)
+        y = self.conv2(y, edge_index, edge_attr)
+        y = self.readout_layer(y, batch)
+
+        return self.critic_layers(y)
     
     def gmm_entropy(self, gmm):
         """
@@ -390,29 +402,20 @@ class GATv2ActorCritic(nn.Module):
 
         This is a practical approach (avoids numerical integration)
         """
-        
         # Number of samples for Monte Carlo approximation
         num_samples = 10000
-        
-        # Sample from the GMM
         samples = gmm.sample((num_samples,))
         
         # Compute log probabilities
         log_probs = gmm.log_prob(samples)
-        
-        # Approximate entropy
-        entropy = -log_probs.mean()
-        
+        entropy = -log_probs.mean() # Approximate entropy
         return entropy
 
     def visualize_gmm(self, gmm, num_samples=20000, save_path=None):
         """
         Visualize the GMM distribution using Seaborn and Matplotlib.
         """
-        # Set the style for Seaborn
         sns.set_style("whitegrid")
-        
-        # Create a figure and axis
         fig, ax = plt.subplots(figsize=(10, 10))
         
         # Sample from the GMM
@@ -422,11 +425,8 @@ class GATv2ActorCritic(nn.Module):
         # Ensure samples are 2D
         if samples.dim() == 3:
             samples = samples.squeeze(1)
-        
-        # Create a scatter plot using Seaborn
+
         sns.scatterplot(x=samples[:, 0], y=samples[:, 1], alpha=0.5, ax=ax)
-        
-        # Set labels and title
         ax.set_xlabel("Location", fontsize=12)
         ax.set_ylabel("Thickness", fontsize=12)
         ax.set_title("Gaussian Mixture Model", fontsize=14)
@@ -442,18 +442,39 @@ class GATv2ActorCritic(nn.Module):
         #ax.set_yticks(y_ticks)
         #ax.set_yticklabels([f"{y:.1f}" for y in y_ticks])
         
-        # Add a colorbar to represent density
         sns.kdeplot(x=samples[:, 0], y=samples[:, 1], cmap="YlOrRd", fill=True, cbar=True, ax=ax)
-        
-        # Adjust layout and display the plot
         plt.tight_layout()
-        
         if save_path:
             plt.savefig(save_path, dpi=300, bbox_inches='tight')
             print(f"GMM distribution plot saved to {save_path}")
-        
         plt.close()
     
+    def get_gmm_distribution(self, state):
+        """
+        Construct the GMM distribution given the state.
+        Also get the actual number of proposals.
+        Since this is repeated, it's a function.
+        """
+        # Get GMM parameters and number of proposals (logits)
+        gmm_params, num_proposals_logits = self.actor(state)
+        print(f"\nnum_proposals_logits: {num_proposals_logits}\n")
+
+        # Apply temperature to control exploration-exploitation trade-off
+        num_proposals_probs = F.softmax(num_proposals_logits / self.temperature, dim=-1)  # Convert to probabilities for each index (total sum to 1) with temperature
+
+        # Construct the GMM distribution
+        mix_logits, means, covs = gmm_params.split([self.num_mixtures, self.num_mixtures * 2, self.num_mixtures * 2], dim=-1)
+        
+        means = means.view(-1, self.num_mixtures, 2)
+        covs = F.softplus(covs).view(-1, self.num_mixtures, 2) # Ensure positive covariance
+
+        mix = Categorical(logits=mix_logits) # Categorical distribution for the mixture probabilities
+        covariance_matrices = torch.diag_embed(covs) # Create diagonal covariance matrices
+        comp = MultivariateNormal(means, covariance_matrices) # Multivariate normal distributions for each component
+        gmm = MixtureSameFamily(mix, comp) # Mixture of Gaussians distribution
+
+        return gmm, num_proposals_probs
+
     def act(self, x, edge_index, edge_attr, batch):
         """
         Propose up to max_proposals number of crosswalks.
@@ -469,26 +490,16 @@ class GATv2ActorCritic(nn.Module):
         Should thickness and location be independent? No. Particular thickness for a specific location is what is needed. 
         Hence, the distribution jointly models the two (location and thickness). 
         """
-        if batch is None: # Assume a single graph is used to make inference at a time.
+        if batch is None:  # Assume a single graph is used to make an inference at a time.
             batch = torch.zeros(x.size(0), dtype=torch.long).to(x.device)
 
-        # Get node embeddings by passing input through GAT layers
-        node_embeddings = self.forward(x, edge_index, edge_attr, batch)
-        print(f"\ngraph/node embeddings: {node_embeddings}\n")
-        #print(f"\nnode_embeddings.mean(dim=0): {node_embeddings.mean(dim=0)}\n") # dim=0 is not required because of readout layer.
-
-        # Predict the number of proposals
-        num_proposals_logits = self.num_proposals_layer(node_embeddings) 
-        print(f"\nHERE: num_proposals_logits: {num_proposals_logits}\n")
-        # Apply temperature to control exploration-exploitation trade-off
-        num_proposals_probs = F.softmax(num_proposals_logits / self.temperature, dim=-1)  # Convert to probabilities for each index (total sum to 1) with temperature
+        # Stored as tuples with zeroth item being the actual data item.
+        gmm, num_proposals_probs = self.get_gmm_distribution(Data(x=x, edge_index=edge_index, edge_attr=edge_attr, batch=batch)) # Internally passes through the actor.
 
         # multinomial distribution is used to model the outcome of selecting one option from a set of mutually exclusive options, where each option has a specific probability of being chosen.
         # Sample the number of proposals (add 1 to ensure at least 1 proposal)
         num_actual_proposals = torch.multinomial(num_proposals_probs, 1).item() + 1 # The inner 1 to the number of draws
         print(f"\nnum_actual_proposals: {num_actual_proposals}\n")
-
-        gmm = self.get_gmm_distribution(node_embeddings)
 
         # Sample the num_actual_proposals number of proposals directly from the distribution
         samples = gmm.sample((num_actual_proposals,))
@@ -514,55 +525,28 @@ class GATv2ActorCritic(nn.Module):
 
         # The algorithm expects a single total log probability for the entire batch of actions. 
         total_log_prob = log_probs.sum()
-
         print(f"\ntotal_log_prob: {total_log_prob}\n")
 
         return output, num_actual_proposals, total_log_prob
 
-    def evaluate(self, state, actions):
+    def evaluate(self, state, action):
         """
-        Evaluate the state-action pair for PPO.
-        Returns action log probabilities, state values, and entropy.
-        state is the full state (x, edge_index, edge_attr, batch)
-        actions is the full action (max_proposals, 2)
+        - Evaluate the state (x, edge_index, edge_attr, batch)
+        - Return action (max_proposals, 2) log probabilities, state values, and entropy.
         """
-        x, edge_index, edge_attr, batch = state
 
-        # Get node embeddings
-        node_embeddings = self.forward(x, edge_index, edge_attr, batch)
-        print(f"\ngraph/node embeddings: {node_embeddings}\n")
-        
-        # Predict the number of proposals
-        num_proposals_logits = self.num_proposals_layer(node_embeddings)
-        print(f"\nHERE:num_proposals_logits: {num_proposals_logits}\n")
-
-        num_proposals_probs = F.softmax(num_proposals_logits / self.temperature, dim=-1)
-        
-        gmm = self.get_gmm_distribution(node_embeddings)
+        gmm, num_proposals_probs, returned_state = self.get_gmm_distribution(state)
 
         # Compute log probabilities of the actions
-        action_log_probs = gmm.log_prob(actions)
+        action_log_probs = gmm.log_prob(action)
 
         # Compute entropy (how uncertain or random the actions selection is)
         entropy = self.gmm_entropy(gmm) # already performs the mean.
         print(f"\nentropy: {entropy}\n")
 
-        # Process actions while preserving structure
-        # Actions are locations (in the range [0, 1]) and thicknesses. Should we sort them? 
-        print(f"\nHERE: actions: {actions}, flattened: {actions.flatten()}\n")
-
-
-
-        action_embedding = self.action_encoder(actions.flatten())
-        print(f"\naction_embedding: {action_embedding.shape}\n")
-        
-        # Concatenate graph embedding with the processed actions
-        state_action = torch.cat([node_embeddings.squeeze(0), action_embedding], dim=-1)
-        print(f"\nstate_action: {state_action.shape}\n")
-
         # Compute state value
-        state_value = self.critic_layer(state_action)
-        print(f"\nstate_value: {state_value.shape}\n")
+        state_value = self.critic(returned_state) # critic only takes state.
+        print(f"\nState Value: {returned_state.shape}\n")
         
         return action_log_probs, state_value, entropy, num_proposals_probs
     
@@ -570,31 +554,23 @@ class GATv2ActorCritic(nn.Module):
         """
         Count the total number of parameters in the model.
         """
-        # Shared parameters (GATv2Conv layers)
+        # Shared params (GATv2Conv layers)
         shared_params = sum(p.numel() for p in self.conv1.parameters()) + \
                         sum(p.numel() for p in self.conv2.parameters())
 
-        # Actor-specific parameters
-        actor_params = sum(p.numel() for p in self.num_proposals_layer.parameters())
+        # Actor-specific 
+        actor_params = sum(p.numel() for p in self.actor_gmm_layers.parameters()) + \
+                        sum(p.numel() for p in self.actor_num_proposals_layer.parameters())
 
-        # Critic-specific parameters
-        critic_params = sum(p.numel() for p in self.critic_layer.parameters()) + \
-                        sum(p.numel() for p in self.action_encoder.parameters())
+        # Critic-specific 
+        critic_params = sum(p.numel() for p in self.critic_layers.parameters())
 
-        # GMM parameters (shared between actor and critic)
-        gmm_params = sum(p.numel() for p in self.gmm_layers.parameters())
-
-        # Total parameters
-        total_params = shared_params + actor_params + critic_params + gmm_params
-
+        total_params = shared_params + actor_params + critic_params 
         return {
             "shared": shared_params,
-            "actor_total": shared_params + actor_params + gmm_params,
-            "critic_total": shared_params + critic_params + gmm_params,
-            "gmm": gmm_params,
-            "total": total_params
-        }
-
+            "actor_total": shared_params + actor_params,
+            "critic_total": shared_params + critic_params,
+            "total": total_params}
 
 ################ EXAMPLE USAGE #################
 """

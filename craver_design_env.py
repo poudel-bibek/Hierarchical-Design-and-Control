@@ -72,6 +72,7 @@ class CraverDesignEnv(gym.Env):
             save_graph_visualization(graph=self.iterative_pedestrian_graph, iteration='BASE_GRAPH')
             save_better_graph_visualization(graph=self.iterative_pedestrian_graph, iteration='BASE_GRAPH')
             save_better_graph_visualization(graph=self.original_pedestrian_graph, iteration='ORIGINAL')
+
         # Initialize normalizer values
         self.normalizer_x = None
         self.normalizer_y = None
@@ -80,8 +81,9 @@ class CraverDesignEnv(gym.Env):
     @property
     def action_space(self):
         """
-        Defines the action space for the environment.
+        
         """
+
         return spaces.Dict({
             'num_proposals': spaces.Discrete(self.max_proposals + 1),  # 0 to max_proposals
             'proposals': spaces.Box(
@@ -104,6 +106,7 @@ class CraverDesignEnv(gym.Env):
         """
         Extracts the pedestrian graph from the original SUMO network file, including walking areas, connections, and junctions.
         For our purposes:
+
         - What makes a node?
             - Junctions
             - Attributes: pos (x, y)
@@ -259,10 +262,11 @@ class CraverDesignEnv(gym.Env):
         print(f"\nBefore cleanup: {len(cleanup_graph.nodes())} nodes, {len(cleanup_graph.edges())} edges\n")
         
         # Nodes to remove
-        crosswalk_nodes = ['9727816950', '9727816844', '9727816623', 'cluster_9740157181_9740483933', '9740157192', 
-                           '9740484527', 'cluster_9740157181_9740483933','9727816850', 'cluster_9740411700_9740411702','9740157153']
+        #crosswalk_nodes = ['9727816950', '9727816844', '9727816623', 'cluster_9740157181_9740483933', '9740157192', 
+                          # '9740484527', 'cluster_9740157181_9740483933','9727816850', 'cluster_9740411700_9740411702','9740157153']
+        
         fringe_nodes = ['9727779406', '9740484031', '9740155241', '9740157194', '9740157209', '9740484521', '9740484518','9740157155']
-        nodes_to_remove = crosswalk_nodes + fringe_nodes
+        nodes_to_remove = fringe_nodes # + crosswalk_nodes
         
         # Remove the specified nodes and their associated edges
         cleanup_graph.remove_nodes_from(nodes_to_remove)

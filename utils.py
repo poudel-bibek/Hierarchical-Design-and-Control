@@ -283,7 +283,7 @@ def save_better_graph_visualization(graph, iteration,
         'grid': '#E4E7EB'
     }
 
-    fig, ax = plt.subplots(figsize=(24, 18))
+    fig, ax = plt.subplots(figsize=(16, 12))
     ax.set_facecolor('white')
     fig.patch.set_facecolor('white')
 
@@ -294,12 +294,12 @@ def save_better_graph_visualization(graph, iteration,
     x_min, x_max = min(x_coords), max(x_coords)
     y_min, y_max = min(y_coords), max(y_coords)
     padding = 0.1
-    bottom_padding = 0.2  # Extra space for bottom elements
     x_range = x_max - x_min
     y_range = y_max - y_min
+    
+    # Set axis limits with proper padding
     ax.set_xlim(x_min - x_range*padding, x_max + x_range*padding)
-    bottom_y = y_min - y_range*0.15
-    ax.set_ylim(bottom_y - y_range*0.05, y_max + y_range*padding)
+    ax.set_ylim(y_min - y_range*padding, y_max + y_range*padding)
 
     # Setup grid
     ax.grid(True, linestyle='--', color=colors['grid'], alpha=0.5)
@@ -324,7 +324,6 @@ def save_better_graph_visualization(graph, iteration,
             )
 
     # Draw nodes with glow effect
-    # First draw larger, more transparent nodes for glow
     nx.draw_networkx_nodes(
         graph, pos,
         node_color=colors['junction'],
@@ -333,7 +332,6 @@ def save_better_graph_visualization(graph, iteration,
         node_shape='o'
     )
     
-    # Then draw the actual nodes
     nx.draw_networkx_nodes(
         graph, pos,
         node_color=colors['junction'],
@@ -371,34 +369,29 @@ def save_better_graph_visualization(graph, iteration,
         plt.scatter([0], [0], c=colors['junction'], marker='o', s=node_size, label='Junction')
     ]
     
-    # Add legend on the left side
-    legend_elements = [
-        plt.Line2D([0], [0], color=colors['edge'], lw=edge_width, label='Path'),
-        plt.scatter([0], [0], c=colors['junction'], marker='o', s=node_size, label='Junction')
-    ]
-    legend = ax.legend(handles=legend_elements, loc='center',
-                      bbox_to_anchor=(0.2, 0.02), fontsize=font_size)
+    # Add legend at the bottom
+    ax.legend(handles=legend_elements, loc='lower left', fontsize=font_size)
 
-    # Add network stats in the middle
+    # Add network stats
     junction_count = len(graph.nodes())
     edge_count = graph.number_of_edges()
     stats = (f"Network Statistics\n"
             f"Junctions: {junction_count}\n"
             f"Total Paths: {edge_count}")
-    ax.text(0.5, 0.02, stats, transform=ax.transAxes, fontsize=font_size,
-            horizontalalignment='center', verticalalignment='bottom')
+    ax.text(0.5, -0.1, stats, transform=ax.transAxes, fontsize=font_size,
+            horizontalalignment='center', verticalalignment='top')
 
-    # Add scale bar on the right
+    # Add scale bar
     scale_bar_length = x_range/10
-    scale_x = x_min + x_range*0.7  # Positioned at 70% of x-range
-    scale_y = bottom_y
+    scale_x = x_max - scale_bar_length - x_range*0.05
+    scale_y = y_min + y_range*0.05
     
-    plt.plot([scale_x, scale_x + scale_bar_length], [scale_y, scale_y], 
-             color=colors['text'], linewidth=2)
+    ax.plot([scale_x, scale_x + scale_bar_length], [scale_y, scale_y], 
+            color=colors['text'], linewidth=2)
     
-    plt.text(scale_x + scale_bar_length/2, scale_y + y_range*0.02, 'Scale',
+    ax.text(scale_x + scale_bar_length/2, scale_y + y_range*0.02, 'Scale',
              ha='center', fontsize=font_size-2)
-    plt.text(scale_x + scale_bar_length/2, scale_y - y_range*0.02, f'{scale_bar_length:.1f}m',
+    ax.text(scale_x + scale_bar_length/2, scale_y - y_range*0.02, f'{scale_bar_length:.1f}m',
              ha='center', fontsize=font_size-2)
 
     # Remove axes
@@ -408,6 +401,8 @@ def save_better_graph_visualization(graph, iteration,
     ax.spines['right'].set_visible(False)
     ax.spines['bottom'].set_visible(False)
     ax.spines['left'].set_visible(False)
+
+    plt.tight_layout()
 
     # Save output
     os.makedirs('graph_iterations', exist_ok=True)

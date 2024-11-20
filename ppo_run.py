@@ -20,6 +20,7 @@ from wandb_sweep import HyperParameterTuner
 from ppo_alg import PPO, Memory
 from config import get_config
 from utils import create_new_sumocfg
+
 def save_config(config, SEED, model, save_path):
     """
     Save hyperparameters and model architecture to a JSON file.
@@ -475,20 +476,21 @@ def train(train_config, is_sweep=False, sweep_config=None):
     
     # Counter to keep track of how many times action has been taken by all workers (lower level agent)
     action_timesteps = 0
-    for iteration in range(total_iterations):
+    for iteration in range(1, total_iterations + 1): # Starting from 1 to prevent policy update in the very first iteration.
         
         global_step = iteration * train_config['lower_num_processes']*train_config['total_action_timesteps_per_episode']*train_config['action_duration']
-        print(f"\nStarting iteration: {iteration + 1}/{total_iterations} with {global_step} total steps so far\n")
+        print(f"\nStarting iteration: {iteration}/{total_iterations} with {global_step} total steps so far\n")
 
-        print(f"Higher state: {higher_state}")
+        print(f"Higher state: {higher_state}, device: {higher_state.x.device}")
 
         # Higher level agent takes node features, edge index, edge attributes and batch (to make single large graph) as input 
         # To produce padded fixed-sized actions, num_actual_proposals and total_log_prob are also returned.
         higher_action, num_proposals, higher_logprob = higher_ppo.policy_old.act(higher_state.x, 
-                                                                  higher_state.edge_index, 
-                                                                  higher_state.edge_attr, 
-                                                                  None) # Only 1 graph is used to make inference at a time (for batch)
+                                                                                higher_state.edge_index, 
+                                                                                higher_state.edge_attr, 
+                                                                                None) # Only 1 graph is used to make inference at a time (for batch)
         
+        #TODO: Next state needs processing.
         higher_next_state, _, higher_done, _ = higher_env.step(higher_action, iteration)
 
         # Lower-level agents get a new memory and manager each iteration.
@@ -586,11 +588,11 @@ def train(train_config, is_sweep=False, sweep_config=None):
 
         higher_memory.append(higher_state, higher_action, higher_logprob, 0, higher_done) # state, action, logprob, reward, done
 
-        # Higher-level agent update
+        # Higher-level agent update. It will be true for the first iteration as well.
         if iteration % train_config['higher_update_freq'] == 0:
             higher_ppo.update(higher_memory, agent_type='higher')
 
-        higher_state = higher_next_state
+        higher_state = higher_next_state.to(worker_device)
 
         #     if not is_sweep:
         #         writer.add_scalar('Higher/Reward', higher_reward, global_step)
