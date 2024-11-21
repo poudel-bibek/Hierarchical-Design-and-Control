@@ -8,17 +8,15 @@ import queue
 import torch
 import random
 import numpy as np
-import torch.multiprocessing as mp # wow we get this from torch itself
+import torch.multiprocessing as mp
 
 from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
-from craver_control_env import CraverControlEnv
-from craver_design_env import CraverDesignEnv
+from control_env import ControlEnv
+from design_env import DesignEnv
 from models import CNNActorCritic, GATv2ActorCritic
 
-from wandb_sweep import HyperParameterTuner
 from ppo_alg import PPO, Memory
-from config import get_config
 from utils import create_new_sumocfg
 
 def save_config(config, SEED, model, save_path):
@@ -250,68 +248,7 @@ def calculate_performance(run_data, all_directions, step_length):
     for direction, avg_length in avg_queue_lengths.items():
         print(f"  {direction}: {avg_length:.2f}")
 
-def worker(rank, config, shared_policy_old, memory_queue, global_seed, worker_device, network_iteration):
-    """
-    The device for each worker is always CPU.
-    At every iteration, 1 worker will carry out one episode.
-    memory_queue is used to store the memory of each worker and send it back to the main process.
-    shared_policy_old is used for importance sampling.
 
-    Although the worker runs simulation in CPU, the policy inference is done in GPU.
-    """
-
-    # Set seed for this worker
-    worker_seed = global_seed + rank
-    random.seed(worker_seed)
-    np.random.seed(worker_seed)
-    torch.manual_seed(worker_seed)
-
-    lower_env = CraverControlEnv(config, worker_id=rank, network_iteration=network_iteration)
-    memory_transfer_freq = config['memory_transfer_freq']  # Get from config
-
-    # The central memory is a collection of memories from all processes.
-    # A worker instance must have their own memory 
-    local_memory = Memory()
-    shared_policy_old = shared_policy_old.to(worker_device)
-
-    state, _ = lower_env.reset()
-    ep_reward = 0
-    steps_since_update = 0
-     
-    for _ in range(config['total_action_timesteps_per_episode']):
-        state_tensor = torch.FloatTensor(state).to(worker_device)
-
-        # Select action
-        with torch.no_grad():
-            action, logprob = shared_policy_old.act(state_tensor)
-            action = action.cpu()  # Explicitly Move to CPU, Incase they were on GPU
-            logprob = logprob.cpu() 
-
-        print(f"\nAction: in worker {rank}: {action}")
-        # Perform action
-        # These reward and next_state are for the action_duration timesteps.
-        next_state, reward, done, truncated, info = lower_env.step(action)
-        ep_reward += reward
-
-        # Store data in memory
-        local_memory.append(torch.FloatTensor(state), action, logprob, reward, done)
-        steps_since_update += 1
-
-        if steps_since_update >= memory_transfer_freq or done or truncated:
-            # Put local memory in the queue for the main process to collect
-            memory_queue.put((rank, local_memory))
-            local_memory = Memory()  # Reset local memory
-            steps_since_update = 0
-
-        if done or truncated:
-            break
-
-        state = next_state.flatten()
-
-    # In PPO, we do not make use of the total reward. We only use the rewards collected in the memory.
-    print(f"Worker {rank} finished. Total reward: {ep_reward}")
-    lower_env.close()
-    memory_queue.put((rank, None))  # Signal that this worker is done
 
 def train(train_config, is_sweep=False, sweep_config=None):
     """
@@ -351,7 +288,6 @@ def train(train_config, is_sweep=False, sweep_config=None):
 
     design_args = {
         'save_graph_images': True,
-        'save_network_xml': True,
         'save_gmm_plots': True,
         'max_proposals': train_config['max_proposals'],
         'min_thickness': train_config['min_thickness'],
@@ -363,8 +299,8 @@ def train(train_config, is_sweep=False, sweep_config=None):
     
     # Dummy environments. Required for setup.
     environments = {
-        'lower': CraverControlEnv(train_config, worker_id=None),
-        'higher': CraverDesignEnv(design_args)
+        'lower': ControlEnv(train_config, worker_id=None),
+        'higher': DesignEnv(design_args)
         }
     
     for env_type, env in environments.items():
@@ -463,7 +399,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
         best_reward = float('-inf')
 
     # Initialize higher level environment and get initial state
-    higher_env = CraverDesignEnv(design_args)
+    higher_env = DesignEnv(design_args)
     higher_state = higher_env.reset().to(worker_device)
     higher_memory = Memory()
 
@@ -491,6 +427,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
                                                                                 None) # Only 1 graph is used to make inference at a time (for batch)
         
         #TODO: Next state needs processing.
+        # Should all the actions of lower agent take place within the step of the higher agent?
         higher_next_state, _, higher_done, _ = higher_env.step(higher_action, iteration)
 
         # Lower-level agents get a new memory and manager each iteration.
@@ -583,7 +520,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
         for p in processes:
             p.join()
 
-        # Store the higher-level transition (reward will be added after lower-level agents complete)
+        # Store the higher-level transition (TODO: get and add reward for higher level agent)
         # Higher state is of torch geometric Data type.
 
         higher_memory.append(higher_state, higher_action, higher_logprob, 0, higher_done) # state, action, logprob, reward, done
@@ -607,36 +544,3 @@ def train(train_config, is_sweep=False, sweep_config=None):
         wandb.finish()
     else:
         writer.close()
-
-def main(config):
-    """
-    Keep main short.
-    We cannot create a bunch of connections in main and then pass them around. Because each new worker needs a separate pedestrian and vehicle trips file.
-    """
-
-    # Set the start method for multiprocessing. It does not create a process itself but sets the method for creating a process.
-    # Spawn means create a new process. There is a fork method as well which will create a copy of the current process.
-    mp.set_start_method('spawn', force=True) 
-    mp.set_sharing_strategy('file_system')
-
-    if config['evaluate']:  # Eval TL or PPO
-        if config['manual_demand_veh'] is None or config['manual_demand_ped'] is None:
-            print("Manual demand is None. Please specify a demand for both vehicles and pedestrians.")
-            return None
-        
-        else: 
-            env = CraverControlEnv(config)
-            run_data, all_directions = evaluate_controller(config, env)
-            calculate_performance(run_data, all_directions, config['step_length'])
-            env.close()
-
-    elif config['sweep']:
-        tuner = HyperParameterTuner(config)
-        tuner.start()
-
-    else:
-        train(config)  # Pass the config as train_config
-
-if __name__ == "__main__":
-    config = get_config()
-    main(config)

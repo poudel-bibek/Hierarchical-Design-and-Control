@@ -13,7 +13,7 @@ class HyperParameterTuner:
     def hyperparameter_tune_main(self):
         wandb.init(project=self.project) 
         config = wandb.config
-        from ppo_run import train # Importing here to avoid circular import error.
+        from design_agent import train # Importing here to avoid circular import error.
         train(self.args, is_sweep=True, config=config)
 
     def create_sweep_config(self):

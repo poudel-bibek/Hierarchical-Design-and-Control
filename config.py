@@ -1,4 +1,7 @@
 def get_config():
+    """
+    Set config here.
+    """
     config = {
         # Simulation
         "sweep": False,  # Use wandb sweeps for hyperparameter tuning
@@ -46,6 +49,7 @@ def get_config():
         "higher_num_mixtures": 3,  # Number of mixtures in GMM
         "higher_edge_dim": 2,  # Number of features per edge (location, width)
         "higher_in_channels": 2,  # Number of input features per node (x and y coordinates)
+        
 
         # Higher-level agent specific arguments
         "max_proposals": 10,  # Maximum number of crosswalk proposals
@@ -53,6 +57,8 @@ def get_config():
         "max_thickness": 10.0,  # Maximum thickness of crosswalks
         "min_coordinate": 0.0,  # Minimum coordinate for crosswalk placement
         "max_coordinate": 1.0,  # Maximum coordinate for crosswalk placement
+        "save_graph_images": True, # Save graph image every iteration.
+        "save_gmm_plots": True, # Save GMM visualization every iteration.
 
         # PPO (lower level agent)
         "lower_anneal_lr": True,  # Anneal learning rate
@@ -62,7 +68,7 @@ def get_config():
         "lower_gamma": 0.99,  # Discount factor
         "lower_K_epochs": 4,  # Number of epochs to update policy
         "lower_eps_clip": 0.2,  # Clip parameter for PPO
-        "save_freq": 2,  # Save model after every n updates (0 to disable)
+        "save_freq": 2,  # Save model after every n updates (0 to disable), for both design and control agents
         "lower_ent_coef": 0.01,  # Entropy coefficient
         "lower_vf_coef": 0.5,  # Value function coefficient
         "lower_batch_size": 32,  # Batch size
@@ -79,7 +85,90 @@ def get_config():
 
     return config
 
-"""
-Best found hyperparameters from the sweep:
-    
-"""
+def classify_and_return_args(train_config, worker_device):
+    """
+    Classify config and return. 
+    """
+
+    design_args = {
+        'save_graph_images': train_config['save_graph_images'],
+        'save_gmm_plots': train_config['save_gmm_plots'],
+        'max_proposals': train_config['max_proposals'],
+        'min_thickness': train_config['min_thickness'],
+        'max_thickness': train_config['max_thickness'],
+        'min_coordinate': train_config['min_coordinate'],
+        'max_coordinate': train_config['max_coordinate'],
+        'save_freq': train_config['save_freq'],
+        'original_net_file': train_config['original_net_file'],
+    }
+
+    control_args = {
+        'vehicle_input_trips': train_config['vehicle_input_trips'],
+        'vehicle_output_trips': train_config['vehicle_output_trips'],
+        'pedestrian_input_trips': train_config['pedestrian_input_trips'],
+        'pedestrian_output_trips': train_config['pedestrian_output_trips'],
+        'manual_demand_veh': train_config['manual_demand_veh'],
+        'manual_demand_ped': train_config['manual_demand_ped'],
+        'step_length': train_config['step_length'],
+        'action_duration': train_config['action_duration'],
+        'gui': train_config['gui'],
+        'auto_start': train_config['auto_start'],
+        'max_timesteps': train_config['max_timesteps'],
+        'demand_scale_min': train_config['demand_scale_min'],
+        'demand_scale_max': train_config['demand_scale_max'],
+        'memory_transfer_freq': train_config['memory_transfer_freq'],
+        'save_freq': train_config['save_freq'],
+    }
+
+    higher_model_kwargs = {
+        'hidden_channels': train_config['higher_hidden_channels'],
+        'out_channels': train_config['higher_out_channels'],
+        'initial_heads': train_config['higher_initial_heads'],
+        'second_heads': train_config['higher_second_heads'],
+        'edge_dim': train_config['higher_edge_dim'],
+        'action_hidden_channels': train_config['higher_action_hidden_channels'],
+        'gmm_hidden_dim': train_config['higher_gmm_hidden_dim'],
+        'num_mixtures': train_config['higher_num_mixtures'],
+    }
+
+    lower_model_kwargs = {
+        'action_duration': train_config['action_duration'],
+        'model_size': train_config['lower_model_size'],
+        'kernel_size': train_config['lower_kernel_size'],
+        'dropout_rate': train_config['lower_dropout_rate'],
+        'per_timestep_state_dim': 74, # Circular dependency, hardcoded here
+    }
+
+    higher_ppo_args = {
+        'model_dim': train_config['higher_in_channels'],
+        'action_dim': train_config['max_proposals'],  # Action dimension
+        'device': worker_device,
+        'lr': train_config['higher_lr'],
+        'gamma': train_config['higher_gamma'],
+        'K_epochs': train_config['higher_K_epochs'],
+        'eps_clip': train_config['higher_eps_clip'],
+        'ent_coef': train_config['higher_ent_coef'],
+        'vf_coef': train_config['higher_vf_coef'],
+        'batch_size': train_config['higher_batch_size'],
+        'gae_lambda': train_config['higher_gae_lambda'],
+        'agent_type': "higher",
+        'higher_model_kwargs': higher_model_kwargs
+    }
+
+    lower_ppo_args = {
+        'in_channels': 1, 
+        'action_dim': train_config['lower_action_dim'],
+        'device': worker_device,
+        'lr': train_config['lower_lr'],
+        'gamma': train_config['lower_gamma'],
+        'K_epochs': train_config['lower_K_epochs'],
+        'eps_clip': train_config['lower_eps_clip'],
+        'ent_coef': train_config['lower_ent_coef'],
+        'vf_coef': train_config['lower_vf_coef'],
+        'batch_size': train_config['lower_batch_size'],
+        'gae_lambda': train_config['lower_gae_lambda'],
+        'agent_type': "lower",
+        'lower_model_kwargs': lower_model_kwargs
+    }
+
+    return design_args, control_args, lower_ppo_args, higher_ppo_args

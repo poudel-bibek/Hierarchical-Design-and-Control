@@ -1,24 +1,91 @@
-import random
-import gymnasium as gym
-import numpy as np
-import xml.etree.ElementTree as ET
-import networkx as nx
-from itertools import tee
-from craver_config import (PHASES, DIRECTIONS_AND_EDGES, CONTROLLED_CROSSWALKS_DICT, initialize_lanes)
-import torch
-from torch_geometric.data import Data
-from models import GATv2ActorCritic  # Import the GAT model
 import os
+import random
 import shutil
+from itertools import tee
+
+import wandb
+wandb.require("core") # Bunch of improvements in using the core.
+
+import gymnasium as gym
+import networkx as nx
+import numpy as np
+import torch
+import torch.multiprocessing as mp
+import xml.etree.ElementTree as ET
 from gymnasium import spaces
+from torch_geometric.data import Data
+
+import traci
+import queue
+from ppo_alg import PPO, Memory
+from control_env import ControlEnv
+from sim_config import (PHASES, DIRECTIONS_AND_EDGES, 
+                       CONTROLLED_CROSSWALKS_DICT, initialize_lanes)
 from utils import *
+from torch.utils.tensorboard import SummaryWriter
 
-"""
-For normalizers, 
-analyse the entire graph to get the min and max values?
+def parallel_worker(rank, control_args, shared_policy_old, memory_queue, global_seed, worker_device, network_iteration):
+    """
+    At every iteration, a number of workers will each parallelly carry out one episode in control environment.
+    - Worker environment runs in CPU (SUMO runs in CPU).
+    - Worker policy inference runs in GPU.
+    - memory_queue is used to store the memory of each worker and send it back to the main process.
+    - shared_policy_old is used for importance sampling.
+    """
 
+    # Set seed for this worker
+    worker_seed = global_seed + rank
+    random.seed(worker_seed)
+    np.random.seed(worker_seed)
+    torch.manual_seed(worker_seed)
 
-"""
+    lower_env = ControlEnv(control_args, worker_id=rank, network_iteration=network_iteration)
+    memory_transfer_freq = control_args['memory_transfer_freq']  # Get from config
+
+    # The central memory is a collection of memories from all processes.
+    # A worker instance must have their own memory 
+    local_memory = Memory()
+    shared_policy_old = shared_policy_old.to(worker_device)
+
+    state, _ = lower_env.reset()
+    ep_reward = 0
+    steps_since_update = 0
+    
+    for _ in range(control_args['total_action_timesteps_per_episode']):
+        state_tensor = torch.FloatTensor(state).to(worker_device)
+
+        # Select action
+        with torch.no_grad():
+            action, logprob = shared_policy_old.act(state_tensor)
+            action = action.cpu()  # Explicitly Move to CPU, Incase they were on GPU
+            logprob = logprob.cpu() 
+
+        print(f"\nAction: in worker {rank}: {action}")
+        # Perform action
+        # These reward and next_state are for the action_duration timesteps.
+        next_state, reward, done, truncated, info = lower_env.step(action)
+        ep_reward += reward
+
+        # Store data in memory
+        local_memory.append(torch.FloatTensor(state), action, logprob, reward, done)
+        steps_since_update += 1
+
+        if steps_since_update >= memory_transfer_freq or done or truncated:
+            # Put local memory in the queue for the main process to collect
+            memory_queue.put((rank, local_memory))
+            local_memory = Memory()  # Reset local memory
+            steps_since_update = 0
+
+        if done or truncated:
+            break
+
+        state = next_state.flatten()
+
+    # In PPO, we do not make use of the total reward. We only use the rewards collected in the memory.
+    print(f"Worker {rank} finished. Total reward: {ep_reward}")
+    lower_env.close()
+    memory_queue.put((rank, None))  # Signal that this worker is done
+
 def pairwise(iterable):
     """
     Generates consecutive pairs from an iterable.
@@ -30,6 +97,7 @@ def pairwise(iterable):
 def clear_folders():
     """
     Clear existing folders (graph_iterations, network_iterations, gmm_iterations) if they exist.
+    Create new ones.
     """
     folders_to_clear = ['graph_iterations', './SUMO_files/network_iterations', 'gmm_iterations']
     for folder in folders_to_clear:
@@ -39,35 +107,41 @@ def clear_folders():
         os.makedirs(folder)
         print(f"Created new {folder} folder.")
 
-class CraverDesignEnv(gym.Env):
+class DesignEnv(gym.Env):
     """
-    For the higher level agent, modifies the net file based on the design decision.
-    No need to connect or close this environment. Will be limited to network file modifications.
+    Higher level.
+    - Modifies the net file based on design action.
+    - No need to connect to or close this environment. 
+    - Internally calls the parallel workers of the control environment.
+
     """
-    def __init__(self, config):
+    
+    def __init__(self, design_args, control_args, lower_ppo_args, is_sweep=False, is_eval=False):
         super().__init__()
-        self.config = config
-        self.max_proposals = config['max_proposals']
-        self.min_thickness = config['min_thickness']
-        self.max_thickness = config['max_thickness']
-        self.min_coordinate = config['min_coordinate']
-        self.max_coordinate = config['max_coordinate']
-        self.original_net_file = config['original_net_file']
+        self.control_args = control_args
+        self.is_sweep = is_sweep
+        self.is_eval = is_eval
+
+        self.max_proposals = design_args['max_proposals']
+        self.min_thickness = design_args['min_thickness']
+        self.max_thickness = design_args['max_thickness']
+        self.min_coordinate = design_args['min_coordinate']
+        self.max_coordinate = design_args['max_coordinate']
+        self.original_net_file = design_args['original_net_file']
 
         # Clear existing folders and create new ones
         clear_folders()
 
         # The crosswalks present initially. 
         self.crosswalks_to_remove = [crosswalk_id for _, data in CONTROLLED_CROSSWALKS_DICT.items() for crosswalk_id in data['ids']]
-        #self._clear_corridor(self.crosswalks_to_remove)
-        
+
         self.original_pedestrian_graph = self._extract_original_graph()
         self.iterative_pedestrian_graph = self._cleanup_corridor(self.original_pedestrian_graph)
 
         # Initialize normalizer values before visualization
         self._initialize_normalizers()
 
-        if self.config.get('save_graph_images', False):
+        if design_args['save_graph_images']:
             save_graph_visualization(graph=self.original_pedestrian_graph, iteration='ORIGINAL')
             save_graph_visualization(graph=self.iterative_pedestrian_graph, iteration='BASE_GRAPH')
             save_better_graph_visualization(graph=self.iterative_pedestrian_graph, iteration='BASE_GRAPH')
@@ -78,12 +152,17 @@ class CraverDesignEnv(gym.Env):
         self.normalizer_y = None
         self.normalizer_width = self.max_thickness
 
+        # The lower level agent
+        self.lower_ppo = PPO(**lower_ppo_args)
+        self.action_timesteps = 0 # keep track of how many times action has been taken by all lower level workers
+        self.writer = control_args['writer']
+        self.best_reward_lower = float('-inf')
+
     @property
     def action_space(self):
         """
         
         """
-
         return spaces.Dict({
             'num_proposals': spaces.Discrete(self.max_proposals + 1),  # 0 to max_proposals
             'proposals': spaces.Box(
@@ -161,17 +240,21 @@ class CraverDesignEnv(gym.Env):
         
         return G
 
-    def step(self, action, iteration):
+    def step(self, action, iteration, global_step):
         """
-        Implement the environment step here.
+        Every step in the design environment involves:
+        - Updating the network xml file based on the design action.
+        - A number of parallel workers (that utilize the new network file) to each carry out one episode in the control environment.
         """
+
+        # First complete the higher level agent's step.
         print(f"Action received: {action}")
         # Convert tensor action to proposals
         action = action.cpu().numpy()  # Convert to numpy array if it's not already
         num_proposals = np.count_nonzero(action.any(axis=1))  # Count non-zero rows
         proposals = action[:num_proposals]  # Only consider the actual proposals
 
-        # Apply the action to update the graph
+        # Apply the action to update get the latest SUMO network file
         self._apply_action(proposals, iteration)
 
         # Here you would typically:
@@ -184,7 +267,94 @@ class CraverDesignEnv(gym.Env):
         done = False
         info = {}
 
-        return observation, reward, done, info
+        # Then, for the lower level agent.
+        manager = mp.Manager()
+        self.memory_queue = manager.Queue()
+        processes = []
+        for rank in range(self.control_args['lower_num_processes']):
+            p = mp.Process(target=parallel_worker, args=(rank, self.control_args, self.shared_policy_old, self.memory_queue, self.global_seed, self.worker_device, iteration))
+            p.start()
+            processes.append(p)
+
+        if self.control_args['lower_anneal_lr']:
+            current_lr = self.lower_ppo.update_learning_rate(iteration)
+
+        all_memories = []
+        active_workers = set(range(self.control_args['lower_num_processes']))
+
+        while active_workers:
+            try:
+                rank, memory = self.memory_queue.get(timeout=60) # Add a timeout to prevent infinite waiting
+
+                if memory is None:
+                    active_workers.remove(rank)
+                else:
+                    all_memories.append(memory)
+                    print(f"Memory from worker {rank} received. Memory size: {len(memory.states)}")
+
+                    self.action_timesteps += len(memory.states)
+                    # Update lower level PPO every n times action has been taken
+                    if self.action_timesteps % self.control_args['lower_update_freq'] == 0:
+                        loss = self.lower_ppo.update(all_memories, agent_type='lower')
+
+                        total_lower_reward = sum(sum(memory.rewards) for memory in all_memories)
+                        avg_lower_reward = total_lower_reward / self.control_args['lower_num_processes'] # Average reward per process in this iteration
+                        print(f"\nAverage Reward per process: {avg_lower_reward:.2f}\n")
+                        
+                        # clear memory to prevent memory growth (after the reward calculation)
+                        for memory in all_memories:
+                            memory.clear_memory()
+
+                        # reset all memories
+                        del all_memories #https://pytorch.org/docs/stable/multiprocessing.html
+                        all_memories = []
+
+                        # logging after update
+                        if loss is not None:
+                            if self.is_sweep: # Wandb for hyperparameter tuning
+                                wandb.log({     "iteration": iteration,
+                                                "lower_avg_reward": avg_lower_reward, # Set as maximize in the sweep config
+                                                "lower_policy_loss": loss['policy_loss'],
+                                                "lower_value_loss": loss['value_loss'], 
+                                                "lower_entropy_loss": loss['entropy_loss'],
+                                                "lower_total_loss": loss['total_loss'],
+                                                "lower_current_lr": current_lr if self.control_args['lower_anneal_lr'] else self.control_args['lr'],
+                                                "global_step": global_step          })
+                                
+                            else: # Tensorboard for regular training
+                                total_updates = int(self.action_timesteps / self.control_args['lower_update_freq'])
+                                self.writer.add_scalar('Lower/Average_Reward', avg_lower_reward, global_step)
+                                self.writer.add_scalar('Lower/Total_Policy_Updates', total_updates, global_step)
+                                self.writer.add_scalar('Lower/Policy_Loss', loss['policy_loss'], global_step)
+                                self.writer.add_scalar('Lower/Value_Loss', loss['value_loss'], global_step)
+                                self.writer.add_scalar('Lower/Entropy_Loss', loss['entropy_loss'], global_step)
+                                self.writer.add_scalar('Lower/Total_Loss', loss['total_loss'], global_step)
+                                self.writer.add_scalar('Lower/Current_LR', current_lr, global_step)
+                                print(f"Logged lower agent data at step {global_step}")
+
+                                # Save model every n times it has been updated (may not every iteration)
+                                if self.control_args['save_freq'] > 0 and total_updates % self.control_args['save_freq'] == 0:
+                                    torch.save(self.lower_ppo.policy.state_dict(), os.path.join(self.control_args['save_dir'], f'control_model_iteration_{iteration+1}.pth'))
+
+                                # Save best model so far
+                                if avg_lower_reward > self.best_reward_lower:
+                                    torch.save(self.lower_ppo.policy.state_dict(), os.path.join(self.control_args['save_dir'], 'best_control_model.pth'))
+                                    self.best_reward_lower = avg_lower_reward
+                        
+                        else: # For some reason..
+                            print("Warning: loss is None")
+
+            except queue.Empty:
+                print("Timeout waiting for worker. Continuing...")
+        
+        # At the end of an iteration, wait for all processes to finish
+        # The join() method is called on each process in the processes list. This ensures that the main program waits for all processes to complete before continuing.
+        for p in processes:
+            p.join()
+
+        average_higher_reward = self._get_reward(iteration)
+
+        return observation, average_higher_reward, done, info
 
     def _apply_action(self, proposals, iteration):
         """
@@ -215,11 +385,20 @@ class CraverDesignEnv(gym.Env):
         # After updating the graph, we need to update the PyTorch Geometric Data object
         self.iterative_torch_graph = self._convert_to_torch_geometric()
 
-        if self.config.get('save_network_xml', False):
-            self._save_graph_as_xml(iteration)
+        
+        self._save_graph_as_xml(iteration)
 
-        if self.config.get('save_graph_images', False):
+        if self.design_args['save_graph_images']:
             save_graph_visualization(self.iterative_pedestrian_graph, iteration)
+    
+    def _get_reward(self, iteration):
+        """
+        Design reward based on:
+        - Pedestrians: how much time (on average) did it take for pedestrians to reach the nearest crosswalk
+
+        """
+        return 0
+
 
     def reset(self):
         """
@@ -418,7 +597,6 @@ class CraverDesignEnv(gym.Env):
 # import argparse
 # parser = argparse.ArgumentParser(description="CraverDesignEnv arguments")
 # parser.add_argument('--save_graph_images', action='store_true', help='Save graph images')
-# parser.add_argument('--save_network_xml', action='store_true', help='Save network XML files')
 # parser.add_argument('--save_gmm_plots', action='store_true', help='Save GMM distribution plots')
 # parser.add_argument('--max_proposals', type=int, default=10, help='Maximum number of crosswalk proposals')
 # parser.add_argument('--min_thickness', type=float, default=0.1, help='Minimum thickness of crosswalks')
@@ -430,7 +608,6 @@ class CraverDesignEnv(gym.Env):
 """
 design_args = {
     'save_graph_images': True,
-    'save_network_xml': True,
     'save_gmm_plots': True,
     'max_proposals': 10,
     'min_thickness': 0.1,
@@ -439,7 +616,7 @@ design_args = {
     'max_coordinate': 1.0,
 }
 
-env = CraverDesignEnv(design_args)
+env = DesignEnv(design_args)
 
 # Print information about the extracted graph and action space
 print(f"Number of nodes: {env.iterative_torch_graph.num_nodes}")
