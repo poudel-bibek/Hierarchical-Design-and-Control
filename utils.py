@@ -283,7 +283,7 @@ def save_better_graph_visualization(graph, iteration,
         'grid': '#E4E7EB'
     }
 
-    fig, ax = plt.subplots(figsize=(16, 12))
+    fig, ax = plt.subplots(figsize=(16, 16))
     ax.set_facecolor('white')
     fig.patch.set_facecolor('white')
 

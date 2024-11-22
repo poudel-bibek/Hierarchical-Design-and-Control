@@ -44,7 +44,7 @@ def get_config():
         "higher_initial_heads": 8,  # Number of attention heads in first GATv2 layer
         "higher_second_heads": 1,  # Number of attention heads in second GATv2 layer
         "higher_action_hidden_channels": 32,  # Number of hidden channels in action layers
-        "higher_update_freq": 8,  # Number of action timesteps between each policy update
+        "higher_update_freq": 2,  # Number of action timesteps between each policy update
         "higher_gmm_hidden_dim": 64,  # Hidden dimension for GMM layers
         "higher_num_mixtures": 3,  # Number of mixtures in GMM
         "higher_edge_dim": 2,  # Number of features per edge (location, width)
@@ -77,6 +77,7 @@ def get_config():
         "lower_model_size": "medium",  # Model size for CNN: 'small' or 'medium'
         "lower_dropout_rate": 0.2,  # Dropout rate for CNN
         "lower_action_dim": 6,  # Number of action logits (not the same as number of actions. think)
+        "lower_in_channels": 1, # in_channels for cnn
 
         # Evaluation
         "evaluate": None,  # Evaluation mode: 'tl' (traffic light), 'ppo', or None
@@ -118,6 +119,13 @@ def classify_and_return_args(train_config, worker_device):
         'demand_scale_max': train_config['demand_scale_max'],
         'memory_transfer_freq': train_config['memory_transfer_freq'],
         'save_freq': train_config['save_freq'],
+        'writer': None, # Need dummy values for dummy envs init.
+        'save_dir': None,
+        'global_seed': None,
+        'total_action_timesteps_per_episode': None,
+        'lower_num_processes': train_config['lower_num_processes'],
+        'lower_anneal_lr': train_config['lower_anneal_lr'],
+        'lower_update_freq': train_config['lower_update_freq'],
     }
 
     higher_model_kwargs = {
@@ -136,7 +144,7 @@ def classify_and_return_args(train_config, worker_device):
         'model_size': train_config['lower_model_size'],
         'kernel_size': train_config['lower_kernel_size'],
         'dropout_rate': train_config['lower_dropout_rate'],
-        'per_timestep_state_dim': 74, # Circular dependency, hardcoded here
+        'per_timestep_state_dim': 40, # Circular dependency, hardcoded here
     }
 
     higher_ppo_args = {
@@ -152,11 +160,11 @@ def classify_and_return_args(train_config, worker_device):
         'batch_size': train_config['higher_batch_size'],
         'gae_lambda': train_config['higher_gae_lambda'],
         'agent_type': "higher",
-        'higher_model_kwargs': higher_model_kwargs
+        'model_kwargs': higher_model_kwargs
     }
 
     lower_ppo_args = {
-        'in_channels': 1, 
+        'model_dim': train_config['lower_in_channels'], 
         'action_dim': train_config['lower_action_dim'],
         'device': worker_device,
         'lr': train_config['lower_lr'],
@@ -168,7 +176,7 @@ def classify_and_return_args(train_config, worker_device):
         'batch_size': train_config['lower_batch_size'],
         'gae_lambda': train_config['lower_gae_lambda'],
         'agent_type': "lower",
-        'lower_model_kwargs': lower_model_kwargs
+        'model_kwargs': lower_model_kwargs
     }
 
     return design_args, control_args, lower_ppo_args, higher_ppo_args

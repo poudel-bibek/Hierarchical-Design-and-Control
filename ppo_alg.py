@@ -1,6 +1,8 @@
 import torch
 import torch.optim as optim
+from torch_geometric.data import Batch
 from models import CNNActorCritic, GATv2ActorCritic
+
 
 class Memory:
     """
@@ -31,6 +33,39 @@ class Memory:
         del self.rewards[:]
         del self.is_terminals[:]
 
+class GraphDataset(torch.utils.data.Dataset):
+    """
+    To handle the batching of graph data for the higher-level agent
+    """
+    def __init__(self, states, actions, logprobs, advantages, returns):
+        self.states = states  # List of Data objects
+        self.actions = actions
+        self.logprobs = logprobs
+        self.advantages = advantages
+        self.returns = returns
+
+    def __len__(self):
+        return len(self.states)
+
+    def __getitem__(self, idx):
+        return (
+            self.states[idx],
+            self.actions[idx],
+            self.logprobs[idx],
+            self.advantages[idx],
+            self.returns[idx]
+        )
+
+def collate_fn(data_list):
+    states, actions, logprobs, advantages, returns = zip(*data_list)
+    batch_states = Batch.from_data_list(states)
+    actions = torch.stack(actions)
+    logprobs = torch.stack(logprobs)
+    advantages = torch.stack(advantages)
+    returns = torch.stack(returns)
+    return batch_states, actions, logprobs, advantages, returns
+
+
 class PPO:
     """
     This implementation is parallelized using Multiprocessing i.e. multiple CPU cores each running a separate process.
@@ -56,7 +91,7 @@ class PPO:
                  batch_size, 
                  gae_lambda, 
                  agent_type,
-                 **model_kwargs):
+                 model_kwargs):
         
         self.model_dim = model_dim
         self.action_dim = action_dim
@@ -137,7 +172,6 @@ class PPO:
 
         return torch.tensor(advantages, dtype=torch.float32).to(self.device)
 
-
     def update(self, memories, agent_type='higher'):
         """
         Update the policy and value networks using the collected experiences.
@@ -159,27 +193,26 @@ class PPO:
                 combined_memory.logprobs.extend(memory.logprobs)
                 combined_memory.rewards.extend(memory.rewards)
                 combined_memory.is_terminals.extend(memory.is_terminals)
-            print(f"\nCombined memory: {combined_memory.states}")
 
+            old_states = torch.stack(combined_memory.states).detach().to(self.device)
+            with torch.no_grad():
+                values = self.policy.critic(old_states).squeeze().to(self.device) 
         else: 
 
-            # For the higher level agent, the state is a graph (Pytorch Geometric Data object).
-            # Which is fine/ accepted by the policy network.
+            # For the higher level agent, Each state is a dict with keys: 'x', 'edge_index', 'edge_attr', 'batch_size'
             print(f"\nUpdating {self.agent_type}-level policy")
             combined_memory = memories
+
+            old_states = combined_memory.states 
+            # Create batch from states
+            states_batch = Batch.from_data_list(old_states)
+            
+            with torch.no_grad():
+                values = self.policy.critic(states_batch).squeeze()
 
         print(f"\nStates: {combined_memory.states}")
         print(f"\nActions: {combined_memory.actions}")
         print(f"\nLogprobs: {combined_memory.logprobs}")
-
-        # Convert collected experiences to tensors
-        old_states = torch.stack(combined_memory.states).detach().to(self.device)
-        old_actions = torch.stack(combined_memory.actions).detach().to(self.device)
-        old_logprobs = torch.stack(combined_memory.logprobs).detach().to(self.device)
-
-        # Compute values for all states 
-        with torch.no_grad():
-            values = self.policy.critic(old_states).squeeze().to(self.device)
 
         # Compute GAE
         advantages = self.compute_gae(combined_memory.rewards, values, combined_memory.is_terminals, self.gamma, self.gae_lambda)
@@ -192,9 +225,17 @@ class PPO:
         # Normalize the advantages (only for use in policy loss calculation) after they have been added to get returns.
         advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8) # Small constant to prevent division by zero
         
+        # Process actions and logprobs (same for both agents)
+        old_actions = torch.stack(combined_memory.actions).detach().to(self.device)
+        old_logprobs = torch.stack(combined_memory.logprobs).detach().to(self.device)
+
         # Create a dataloader for mini-batching 
-        dataset = torch.utils.data.TensorDataset(old_states, old_actions, old_logprobs, advantages, returns)
-        dataloader = torch.utils.data.DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
+        if agent_type == 'lower':
+            dataset = torch.utils.data.TensorDataset(old_states, old_actions, old_logprobs, advantages, returns)
+            dataloader = torch.utils.data.DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
+        else:
+            dataset = GraphDataset(old_states, old_actions, old_logprobs, advantages, returns)
+            dataloader = torch.utils.data.DataLoader(dataset, batch_size=self.batch_size, shuffle=True, collate_fn=collate_fn)
 
         avg_policy_loss = 0
         avg_value_loss = 0

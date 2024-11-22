@@ -634,7 +634,7 @@ class ControlEnv(gym.Env):
         #         crosswalk_info.append(len(self.corrected_occupancy_map['crosswalks'][crosswalk_id]['rerouted']))
         # crosswalk_info = np.asarray(crosswalk_info, dtype=np.float32)
 
-        print(f"\nObservation: {observation.shape}")
+        #print(f"\nObservation: {observation.shape}")
         return observation
     
     def _get_tl_switch_state(self, east_to_north_switch, north_to_east_switch, current_action_step):
@@ -674,7 +674,7 @@ class ControlEnv(gym.Env):
         # First get the string together. 
         # For the TL control. 
         current_tl_action = action[0].item() # 0, 1, 2, 3
-        print(f"\nCurrent Action: {action}, TL action: {current_tl_action} Previous TL Action: {previous_tl_action}")
+        #print(f"\nCurrent Action: {action}, TL action: {current_tl_action} Previous TL Action: {previous_tl_action}")
 
         if previous_tl_action == None: # First action 
             previous_tl_action = current_tl_action # Assume that there was no switch
@@ -697,7 +697,7 @@ class ControlEnv(gym.Env):
         crosswalk_state_str = (crosswalk_state['A'] + crosswalk_state['B'] + 'r' + crosswalk_state['C'] + 'r' + crosswalk_state['D'])
         
         state = tl_state + crosswalk_state_str
-        print(f"\nState: {state}\n")
+        #print(f"\nState: {state}\n")
         traci.trafficlight.setRedYellowGreenState(self.tl_ids[0], state)
 
     def _get_reward(self, current_tl_action):

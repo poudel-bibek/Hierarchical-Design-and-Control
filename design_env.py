@@ -22,16 +22,19 @@ from control_env import ControlEnv
 from sim_config import (PHASES, DIRECTIONS_AND_EDGES, 
                        CONTROLLED_CROSSWALKS_DICT, initialize_lanes)
 from utils import *
-from torch.utils.tensorboard import SummaryWriter
+from models import CNNActorCritic
 
-def parallel_worker(rank, control_args, shared_policy_old, memory_queue, global_seed, worker_device, network_iteration):
+def parallel_worker(rank, control_args, model_init_params, policy_old_dict, memory_queue, global_seed, worker_device, network_iteration):
     """
     At every iteration, a number of workers will each parallelly carry out one episode in control environment.
     - Worker environment runs in CPU (SUMO runs in CPU).
     - Worker policy inference runs in GPU.
     - memory_queue is used to store the memory of each worker and send it back to the main process.
-    - shared_policy_old is used for importance sampling.
+    - A shared policy_old (dict copy passed here) is used for importance sampling.
     """
+
+    shared_policy_old = CNNActorCritic(model_init_params['model_dim'], model_init_params['action_dim'], **model_init_params['kwargs'])
+    shared_policy_old.load_state_dict(policy_old_dict)
 
     # Set seed for this worker
     worker_seed = global_seed + rank
@@ -119,6 +122,8 @@ class DesignEnv(gym.Env):
     def __init__(self, design_args, control_args, lower_ppo_args, is_sweep=False, is_eval=False):
         super().__init__()
         self.control_args = control_args
+        self.design_args = design_args
+        self.lower_ppo_args = lower_ppo_args
         self.is_sweep = is_sweep
         self.is_eval = is_eval
 
@@ -153,10 +158,16 @@ class DesignEnv(gym.Env):
         self.normalizer_width = self.max_thickness
 
         # The lower level agent
-        self.lower_ppo = PPO(**lower_ppo_args)
+        self.lower_ppo = PPO(**self.lower_ppo_args)
         self.action_timesteps = 0 # keep track of how many times action has been taken by all lower level workers
-        self.writer = control_args['writer']
+        self.writer = self.control_args['writer']
         self.best_reward_lower = float('-inf')
+
+        # Removing unpicklable object (writer) from control_args
+        self.control_args_worker = {k: v for k, v in self.control_args.items() if k != 'writer'}
+        self.model_init_params_worker = {'model_dim': self.lower_ppo.policy.in_channels,
+                                     'action_dim': self.lower_ppo.action_dim,
+                                     'kwargs': self.lower_ppo_args['model_kwargs']}
 
     @property
     def action_space(self):
@@ -254,25 +265,39 @@ class DesignEnv(gym.Env):
         num_proposals = np.count_nonzero(action.any(axis=1))  # Count non-zero rows
         proposals = action[:num_proposals]  # Only consider the actual proposals
 
-        # Apply the action to update get the latest SUMO network file
-        self._apply_action(proposals, iteration)
+        print(f"\n\nProposals: {proposals}\n\n")
+
+        # Apply the action to output the latest SUMO network file as well as modify the iterative_torch_graph.
+        self.iterative_torch_graph = self._apply_action(proposals, iteration)
 
         # Here you would typically:
         # 1. Calculate the reward
         # 2. Determine if the episode is done
         # 3. Collect any additional info for the info dict
 
-        observation = self.iterative_torch_graph
         reward = 0  # You need to implement a proper reward function
         done = False
         info = {}
 
         # Then, for the lower level agent.
         manager = mp.Manager()
-        self.memory_queue = manager.Queue()
+        memory_queue = manager.Queue()
         processes = []
+        
         for rank in range(self.control_args['lower_num_processes']):
-            p = mp.Process(target=parallel_worker, args=(rank, self.control_args, self.shared_policy_old, self.memory_queue, self.global_seed, self.worker_device, iteration))
+            p = mp.Process(
+                target=parallel_worker,
+                args=(
+                    rank,
+                    self.control_args_worker,
+                    self.model_init_params_worker,
+                    self.lower_ppo.policy_old.state_dict(),
+                    memory_queue,
+                    self.control_args['global_seed'],
+                    self.lower_ppo_args['device'],
+                    iteration
+                )
+            )
             p.start()
             processes.append(p)
 
@@ -284,7 +309,7 @@ class DesignEnv(gym.Env):
 
         while active_workers:
             try:
-                rank, memory = self.memory_queue.get(timeout=60) # Add a timeout to prevent infinite waiting
+                rank, memory = memory_queue.get(timeout=60) # Add a timeout to prevent infinite waiting
 
                 if memory is None:
                     active_workers.remove(rank)
@@ -353,8 +378,12 @@ class DesignEnv(gym.Env):
             p.join()
 
         average_higher_reward = self._get_reward(iteration)
-
-        return observation, average_higher_reward, done, info
+        next_state = Data(x=self.iterative_torch_graph.x,
+                           edge_index=self.iterative_torch_graph.edge_index,
+                           edge_attr=self.iterative_torch_graph.edge_attr)
+                      
+        
+        return next_state, average_higher_reward, done, info
 
     def _apply_action(self, proposals, iteration):
         """
@@ -364,7 +393,7 @@ class DesignEnv(gym.Env):
         When a location is proposed, its actually the location of where an edge should be added.
         i.e., corresponding node positions along the corridor should be found and connected.
         """
-        for i, (location, thickness) in enumerate(proposals):
+        for i, (location, thickness) in enumerate(proposals.squeeze(0)):
             # Denormalize the location (x-coordinate) and thickness
             denorm_location = self.normalizer_x['min'] + location * (self.normalizer_x['max'] - self.normalizer_x['min'])
             denorm_thickness = thickness * self.normalizer_width
@@ -383,13 +412,15 @@ class DesignEnv(gym.Env):
                     self.iterative_pedestrian_graph.add_edge(new_node_id, node, width=denorm_thickness)
 
         # After updating the graph, we need to update the PyTorch Geometric Data object
-        self.iterative_torch_graph = self._convert_to_torch_geometric()
+        torch_graph = self._convert_to_torch_geometric(self.iterative_pedestrian_graph)
 
-        
         self._save_graph_as_xml(iteration)
 
         if self.design_args['save_graph_images']:
             save_graph_visualization(self.iterative_pedestrian_graph, iteration)
+            save_better_graph_visualization(self.iterative_pedestrian_graph, iteration)
+
+        return torch_graph
     
     def _get_reward(self, iteration):
         """
@@ -412,10 +443,14 @@ class DesignEnv(gym.Env):
         self.iterative_pedestrian_graph = self.original_pedestrian_graph.copy()
         
         # Recreate the PyTorch Geometric Data object
-        self.iterative_torch_graph = self._convert_to_torch_geometric()
+        self.iterative_torch_graph = self._convert_to_torch_geometric(self.iterative_pedestrian_graph)
         
-        # nodes, edge_index, edge_attr 
-        return self.iterative_torch_graph
+        # Return initial state as a single batch
+        state = Data(x=self.iterative_torch_graph.x,
+                      edge_index=self.iterative_torch_graph.edge_index,
+                      edge_attr=self.iterative_torch_graph.edge_attr)
+        
+        return state
 
     def close(self):
         """
@@ -425,39 +460,63 @@ class DesignEnv(gym.Env):
     
     def _cleanup_corridor(self, graph):
         """
-        Cleanup the corridor.
-        1. Do we want the design agent to ever see the original graph?
-            - No because we will be benchmarking against it. 
-            - Hence clear the corridor of all existing crosswalks.
-        
-        2. Remove nodes and edges too far away from the corridor (based on y values).
+        This step creates a base graph upon which additional edges are added/ removed during training.
+        Multiple things happen (Requires some manual input):
 
-        3. Remove some fringe nodes. That exist because some vehicle roads allow pedestrians.
-        This step creates a base graph upon which additional edges are added.
-        This step requires some manual input.
+        0. Primary cleanup:
+            - In the original graph, more than 2 nodes may exist to create a crosswalk.
+            - We need to remove these nodes in the middle.
+
+        1. Clear existing crosswalks in the corridor (NOT DONE RIGHT NOW)
+            - In the case where we want to start the design agent from scratch, we need to clear the corridor of all existing crosswalks.
+            - Since we are benchmarking against the original graph, we do not want the design agent to ever see the original graph in its learning process.
+
+        2. Remove nodes and edges too far away from the corridor (based on y values)
+            - Clear the corridor of any nodes and edges that are irrelevant to the pedestrian walkway.
+        
+        3. Remove isolated and fringe nodes. 
+            - They exist because some vehicle roads allow pedestrians.
         """
 
         cleanup_graph = graph.copy()
         print(f"\nBefore cleanup: {len(cleanup_graph.nodes())} nodes, {len(cleanup_graph.edges())} edges\n")
+
+        # 0. primary cleanup (creating a direct connection between these pairs of nodes)
+        middle_nodes = ['9727816850','9727816844', '9727816623', '9740157155', 'cluster_9740157181_9740483933','9740157194','9740157192', '9740157209','9740157207','9740484527']
+        cleanup_graph.remove_nodes_from(middle_nodes) # remove the middle nodes
+
+        clean_connections = [('9727816846','9727816851'), ('9727816625','9666274798'), ('9740157158','9666274886'), ('9740483934','9655154530'),('9740157204','9740157195'), ('9740484420','9740157210'), ('9740484528','9740484524')]
+        for edge in clean_connections:
+            cleanup_graph.add_edge(edge[0], edge[1], width=3.0)
+
+        # 1. Get all nodes from clean_connections and remove
+        nodes_to_remove_1 = [node for connection in clean_connections for node in connection]
+        cleanup_graph.remove_nodes_from(nodes_to_remove_1)
+
+
+        # 2.
+        # remove everything with y-coordinates outside 10% and 90% range
+        # y_coords = [data['pos'][1] for _, data in cleanup_graph.nodes(data=True)]
+        # min_y, max_y = min(y_coords), max(y_coords)
         
-        # Nodes to remove
-        #crosswalk_nodes = ['9727816950', '9727816844', '9727816623', 'cluster_9740157181_9740483933', '9740157192', 
-                          # '9740484527', 'cluster_9740157181_9740483933','9727816850', 'cluster_9740411700_9740411702','9740157153']
-        
-        fringe_nodes = ['9727779406', '9740484031', '9740155241', '9740157194', '9740157209', '9740484521', '9740484518','9740157155']
-        nodes_to_remove = fringe_nodes # + crosswalk_nodes
-        
-        # Remove the specified nodes and their associated edges
-        cleanup_graph.remove_nodes_from(nodes_to_remove)
-        
-        # Remove any isolated nodes that might have been created
-        cleanup_graph.remove_nodes_from(list(nx.isolates(cleanup_graph)))
-        
-        # remove the edges associated with the removed nodes
-        cleanup_graph.remove_edges_from(cleanup_graph.edges(nodes_to_remove))
-        
+        # y_range = max_y - min_y
+        # y_lower = min_y + y_range * 0.1
+        # y_upper = min_y + y_range * 0.9
+        # nodes_to_remove_2 = [node for node, data in cleanup_graph.nodes(data=True)
+        #                   if data['pos'][1] < y_lower or data['pos'][1] > y_upper]
+                
+        # cleanup_graph.remove_nodes_from(nodes_to_remove_2)
+        # cleanup_graph.remove_edges_from(cleanup_graph.edges(nodes_to_remove_2))
+
+        # 3.
+        fringe_nodes = ['9727779406','9740484031','cluster_9740411700_9740411702','9740155241','9740484518', '9740484521']
+        isolated_nodes = list(nx.isolates(cleanup_graph))
+        isolated_and_fringe_nodes = fringe_nodes + isolated_nodes
+
+        cleanup_graph.remove_nodes_from(isolated_and_fringe_nodes)
+        cleanup_graph.remove_edges_from(cleanup_graph.edges(isolated_and_fringe_nodes)) 
+
         print(f"\nAfter cleanup: {len(cleanup_graph.nodes())} nodes, {len(cleanup_graph.edges())} edges\n")
-        
         return cleanup_graph
     
     def _find_closest_nodes(self, x_location):
@@ -473,14 +532,14 @@ class DesignEnv(gym.Env):
         
         return closest_nodes
     
-    def _convert_to_torch_geometric(self):
+    def _convert_to_torch_geometric(self, graph):
         """
         Converts the NetworkX graph to a PyTorch Geometric Data object.
         Normalizes the coordinates to lie between 0 and 1 and scales the width values proportionally.
         """
         # Extract node features (x, y coordinates)
         node_features = []
-        for node, data in self.iterative_pedestrian_graph.nodes(data=True):
+        for node, data in graph.nodes(data=True):
             node_features.append([data['pos'][0], data['pos'][1]])
 
         # Convert to tensor

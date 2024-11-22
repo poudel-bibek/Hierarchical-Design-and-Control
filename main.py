@@ -66,7 +66,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
     dummy_envs['higher'].close()
 
     # Actual agents
-    print(f"\nHigher level agent: \n\tIn channels: {train_config['higher_in_channels']}, Action dimension: {train_config['higher_action_dim']}\n")
+    print(f"\nHigher level agent: \n\tIn channels: {train_config['higher_in_channels']}, Action dimension: {train_config['max_proposals']}\n")
     print(f"\nLower level agent: \n\tState dimension: {dummy_envs['lower'].observation_space.shape}, Action dimension: {train_config['lower_action_dim']}")
 
     higher_ppo = PPO(**higher_ppo_args)
@@ -76,8 +76,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
     log_dir = os.path.join('runs', current_time)
     os.makedirs('runs', exist_ok=True)
     writer = SummaryWriter(log_dir=log_dir)
-    control_args['writer'] = writer
-
+    
     # Save hyperparameters 
     config_path = os.path.join(log_dir, f'config_{current_time}.json')
     save_config(train_config, SEED, config_path)
@@ -87,34 +86,34 @@ def train(train_config, is_sweep=False, sweep_config=None):
     save_dir = os.path.join('saved_models', current_time)
     os.makedirs(save_dir, exist_ok=True)
     best_reward_higher = float('-inf')
-    control_args['save_dir'] = save_dir
 
-    # Initialize higher level environment and get initial state
-    higher_env = DesignEnv(design_args, control_args, lower_ppo_args, is_sweep=is_sweep, is_eval=False)
-    higher_state = higher_env.reset().to(worker_device)
-    higher_memory = Memory()
+    control_args.update({'writer': writer})
+    control_args.update({'save_dir': save_dir})
+    control_args.update({'global_seed': SEED})
+    control_args.update({'total_action_timesteps_per_episode': train_config['max_timesteps'] // train_config['action_duration']})
 
     # Instead of using total_episodes, we will use total_iterations. 
     # Every iteration, num_process lower level agents interact with the environment for total_action_timesteps_per_episode steps (which further internally contains action_duration steps)
     # Each iteration is equivalent to a single timestep for the higher agent.
     total_iterations = train_config['total_timesteps'] // (train_config['max_timesteps'] * train_config['lower_num_processes'])
-    higher_env.lower_ppo.total_iterations = total_iterations # For lr annealing
-    control_args['total_action_timesteps_per_episode'] = train_config['max_timesteps'] // train_config['action_duration']
     global_step = 0
+
+    # Initialize higher level environment and get initial state
+    higher_env = DesignEnv(design_args, control_args, lower_ppo_args, is_sweep=is_sweep, is_eval=False)
+    higher_env.lower_ppo.total_iterations = total_iterations # For lr annealing
+    higher_state = higher_env.reset() # state includes batch.
+    higher_memory = Memory()
 
     for iteration in range(1, total_iterations + 1): # Starting from 1 to prevent policy update in the very first iteration.
         
-        global_step = iteration * train_config['lower_num_processes']*train_config['total_action_timesteps_per_episode']*train_config['action_duration']
+        global_step = iteration * train_config['lower_num_processes']*control_args['total_action_timesteps_per_episode']*train_config['action_duration']
         print(f"\nStarting iteration: {iteration}/{total_iterations} with {global_step} total steps so far\n")
-        print(f"Higher state: {higher_state}, device: {higher_state.x.device}")
+        #print(f"Higher state: {higher_state}")
 
         # Higher level agent takes node features, edge index, edge attributes and batch (to make single large graph) as input 
         # To produce padded fixed-sized actions num_actual_proposals is also returned.
-        higher_action, num_actual_proposals, higher_logprob = higher_ppo.policy_old.act(higher_state.x, 
-                                                                                higher_state.edge_index, 
-                                                                                higher_state.edge_attr, 
-                                                                                None) # None when only 1 graph is used to make inference at a time
-
+        higher_action, num_actual_proposals, higher_logprob = higher_ppo.policy_old.act(higher_state, iteration, visualize=True) 
+        
         # Since the higher agent internally takes a step where a number of parallel lower agents take their own steps, 
         # We return things relevant to both the higher and lower agents. First, for higher.
         higher_next_state, higher_reward, higher_done, higher_info = higher_env.step(higher_action, iteration, global_step)
@@ -124,7 +123,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
             higher_ppo.update(higher_memory, agent_type='higher')
             higher_memory.clear_memory()
 
-        higher_state = higher_next_state.to(worker_device)
+        higher_state = higher_next_state
 
         # Log higher level agent stuff.
         if is_sweep:
@@ -160,7 +159,7 @@ def main(config):
 
     # Set the start method for multiprocessing. It does not create a process itself but sets the method for creating a process.
     # Spawn means create a new process. There is a fork method as well which will create a copy of the current process.
-    mp.set_start_method('spawn', force=True) 
+    mp.set_start_method('spawn') 
     mp.set_sharing_strategy('file_system')
 
     if config['evaluate']: 
