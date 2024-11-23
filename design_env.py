@@ -393,6 +393,7 @@ class DesignEnv(gym.Env):
         When a location is proposed, its actually the location of where an edge should be added.
         i.e., corresponding node positions along the corridor should be found and connected.
         """
+
         for i, (location, thickness) in enumerate(proposals.squeeze(0)):
             # Denormalize the location (x-coordinate) and thickness
             denorm_location = self.normalizer_x['min'] + location * (self.normalizer_x['max'] - self.normalizer_x['min'])
@@ -414,7 +415,7 @@ class DesignEnv(gym.Env):
         # After updating the graph, we need to update the PyTorch Geometric Data object
         torch_graph = self._convert_to_torch_geometric(self.iterative_pedestrian_graph)
 
-        self._save_graph_as_xml(iteration)
+        self._save_graph_as_xml(self.iterative_pedestrian_graph, iteration)
 
         if self.design_args['save_graph_images']:
             save_graph_visualization(self.iterative_pedestrian_graph, iteration)
@@ -444,6 +445,7 @@ class DesignEnv(gym.Env):
         
         # Recreate the PyTorch Geometric Data object
         self.iterative_torch_graph = self._convert_to_torch_geometric(self.iterative_pedestrian_graph)
+        
         
         # Return initial state as a single batch
         state = Data(x=self.iterative_torch_graph.x,
@@ -537,31 +539,36 @@ class DesignEnv(gym.Env):
         Converts the NetworkX graph to a PyTorch Geometric Data object.
         Normalizes the coordinates to lie between 0 and 1 and scales the width values proportionally.
         """
+        # Create a mapping from node IDs to indices
+        node_id_to_index = {node_id: idx for idx, node_id in enumerate(graph.nodes())}
+
         # Extract node features (x, y coordinates)
         node_features = []
-        for node, data in graph.nodes(data=True):
+        for node_id in graph.nodes():
+            data = graph.nodes[node_id]
             node_features.append([data['pos'][0], data['pos'][1]])
 
-        # Convert to tensor
         x = torch.tensor(node_features, dtype=torch.float)
-        
-        # Normalize features
         x = self._normalize_features(x)
         
         # Extract edge indices and attributes
         edge_index = []
         edge_attr = []
-        for edge in self.iterative_pedestrian_graph.edges(data=True):
-            source = list(self.iterative_pedestrian_graph.nodes()).index(edge[0])
-            target = list(self.iterative_pedestrian_graph.nodes()).index(edge[1])
+        for source_id, target_id, edge_data in graph.edges(data=True):
+            source = node_id_to_index[source_id]
+            target = node_id_to_index[target_id]
             edge_index.append([source, target])
-            edge_index.append([target, source])  # Add reverse edge for undirected graph
+            edge_index.append([target, source]) # Add reverse edge (for undirected graph)
             
-            width = edge[2]['width']
+            width = edge_data['width']
             # Normalize edge width
             normalized_width = width / self.normalizer_width
-            edge_attr.append([normalized_width, 0.0])  # Add a dummy feature (0.0) alongside normalized width
-            edge_attr.append([normalized_width, 0.0])  # For the reverse edge
+
+            # Get source node's x coordinate and add it to edge attribute.
+            # TODO: come back to this.
+            source_x = (graph.nodes[source_id]['pos'][0] - self.normalizer_x['min']) / (self.normalizer_x['max'] - self.normalizer_x['min'])
+            edge_attr.append([normalized_width, source_x])  # Add source x-coordinate alongside normalized width
+            edge_attr.append([normalized_width, source_x])  # For the reverse edge as well.
         
         edge_index = torch.tensor(edge_index, dtype=torch.long).t().contiguous()
         edge_attr = torch.tensor(edge_attr, dtype=torch.float)
@@ -580,17 +587,15 @@ class DesignEnv(gym.Env):
         x_coords = features[:, 0]
         y_coords = features[:, 1]
 
-        # Compute normalizers
         self.normalizer_x = {'min': x_coords.min(), 'max': x_coords.max()}
         self.normalizer_y = {'min': y_coords.min(), 'max': y_coords.max()}
 
-        # Normalize features
         normalized_x = (x_coords - self.normalizer_x['min']) / (self.normalizer_x['max'] - self.normalizer_x['min'])
         normalized_y = (y_coords - self.normalizer_y['min']) / (self.normalizer_y['max'] - self.normalizer_y['min'])
 
         return torch.stack([normalized_x, normalized_y], dim=1)
     
-    def _save_graph_as_xml(self, iteration):
+    def _save_graph_as_xml(self, graph, iteration):
         """
         Saves the current state of the graph in netrowkx as a SUMO network XML file.
         when saving, changes made from previous iterations are discarded. i.e., only the changes of this iteration on the base graph are saved.
@@ -607,17 +612,17 @@ class DesignEnv(gym.Env):
             root.remove(crosswalk)
 
         # Add new crosswalks based on the updated graph
-        for node, data in self.iterative_pedestrian_graph.nodes(data=True):
+        for node, data in graph.nodes(data=True):
 
             # Find non-crosswalk neighbors
-            non_crosswalk_neighbors = [j for j in self.iterative_pedestrian_graph.neighbors(node)]
+            non_crosswalk_neighbors = [j for j in graph.neighbors(node)]
             
             if non_crosswalk_neighbors:
                 # Find the nearest junction
                 nearest_junction = min(
                     non_crosswalk_neighbors,
-                    key=lambda j: ((data['pos'][0] - self.iterative_pedestrian_graph.nodes[j]['pos'][0])**2 +
-                                    (data['pos'][1] - self.iterative_pedestrian_graph.nodes[j]['pos'][1])**2)**0.5
+                    key=lambda j: ((data['pos'][0] - graph.nodes[j]['pos'][0])**2 +
+                                    (data['pos'][1] - graph.nodes[j]['pos'][1])**2)**0.5
                 )
 
                 # Create a new crossing element
@@ -651,109 +656,3 @@ class DesignEnv(gym.Env):
             # Fallback values if the graph is empty
             self.normalizer_x = {'min': 0.0, 'max': 1.0}
             self.normalizer_y = {'min': 0.0, 'max': 1.0}
-
-############ EXAMPLE USAGE ############
-# import argparse
-# parser = argparse.ArgumentParser(description="CraverDesignEnv arguments")
-# parser.add_argument('--save_graph_images', action='store_true', help='Save graph images')
-# parser.add_argument('--save_gmm_plots', action='store_true', help='Save GMM distribution plots')
-# parser.add_argument('--max_proposals', type=int, default=10, help='Maximum number of crosswalk proposals')
-# parser.add_argument('--min_thickness', type=float, default=0.1, help='Minimum thickness of crosswalks')
-# parser.add_argument('--max_thickness', type=float, default=1.0, help='Maximum thickness of crosswalks')
-# parser.add_argument('--min_coordinate', type=float, default=0.0, help='Minimum coordinate for crosswalk placement')
-# parser.add_argument('--max_coordinate', type=float, default=1.0, help='Maximum coordinate for crosswalk placement')
-# args = parser.parse_args()
-
-"""
-design_args = {
-    'save_graph_images': True,
-    'save_gmm_plots': True,
-    'max_proposals': 10,
-    'min_thickness': 0.1,
-    'max_thickness': 10.0,
-    'min_coordinate': 0.0,
-    'max_coordinate': 1.0,
-}
-
-env = DesignEnv(design_args)
-
-# Print information about the extracted graph and action space
-print(f"Number of nodes: {env.iterative_torch_graph.num_nodes}")
-print(f"Number of edges: {env.iterative_torch_graph.num_edges}")
-print(f"Node feature shape: {env.iterative_torch_graph.x.shape}")
-print(f"Edge index shape: {env.iterative_torch_graph.edge_index.shape}")
-print(f"Edge attribute shape: {env.iterative_torch_graph.edge_attr.shape}")
-print(f"Action space: {env.action_space}")
-
-# Initialize the GAT model
-in_channels = env.iterative_torch_graph.num_node_features
-hidden_channels = 64
-out_channels = 32
-initial_heads = 8
-second_heads = 1
-edge_dim = env.iterative_torch_graph.edge_attr.size(1)
-action_hidden_channels = 32
-action_dim = 10  # Adjust this based on your requirements
-gmm_hidden_dim = 64
-num_mixtures = 3
-
-gat_model = GATv2ActorCritic(
-    in_channels=in_channels,
-    hidden_channels=hidden_channels,
-    out_channels=out_channels,
-    initial_heads=initial_heads,
-    second_heads=second_heads,
-    edge_dim=edge_dim,
-    action_hidden_channels=action_hidden_channels,
-    action_dim=action_dim,
-    gmm_hidden_dim=gmm_hidden_dim,
-    num_mixtures=num_mixtures
-)
-
-# Run through 5 iterations
-for iteration in range(5):
-    print(f"\n--- Iteration {iteration + 1} ---")
-    
-    # Use the GAT model to process the graph
-    x, edge_index, edge_attr = env.iterative_torch_graph.x, env.iterative_torch_graph.edge_index, env.iterative_torch_graph.edge_attr
-    batch = torch.zeros(env.iterative_torch_graph.num_nodes, dtype=torch.long)  # Assuming a single graph
-
-    # Generate crosswalk proposals
-    proposed_crosswalks, num_actual_proposals, total_log_prob = gat_model.act(x, edge_index, edge_attr, batch)
-
-    print(f"Number of actual proposals: {num_actual_proposals}")
-    print(f"Total log probability of the action: {total_log_prob.item()}")
-    print("Proposed crosswalks:")
-    for i, (location, thickness) in enumerate(proposed_crosswalks):
-        if i < num_actual_proposals:
-            print(f"  Proposal {i+1}: Location: {location:.4f}, Thickness: {thickness:.2f}")
-
-    # Evaluate the proposed action
-    state = (x, edge_index, edge_attr, batch)
-    action = proposed_crosswalks
-
-    action_log_probs, state_value, entropy, num_proposals_probs = gat_model.evaluate(state, action)
-
-    print(f"State value: {state_value.item()}")
-    print(f"Entropy: {entropy.item()}")
-
-    # Visualize and save the GMM distribution
-    if design_args.get('save_gmm_plots', False):
-        print("Saving GMM distribution plot...")
-        gmm = gat_model.get_gmm_distribution(gat_model.forward(x, edge_index, edge_attr, batch))
-        os.makedirs('gmm_iterations', exist_ok=True)
-        gat_model.visualize_gmm(gmm, save_path=f'gmm_iterations/gmm_distribution_iteration_{iteration}.png')
-
-    # Update the environment
-    observation, reward, done, info = env.step(proposed_crosswalks)
-
-    if done:
-        print("Environment signaled done. Resetting...")
-        env.reset()
-
-# After running all iterations, print the final normalizer values:
-print("\nFinal Normalizer values:")
-print(f"X-coordinate: {env.normalizer_x}")
-print(f"Y-coordinate: {env.normalizer_y}")
-print(f"Width: {env.normalizer_width}")
-"""

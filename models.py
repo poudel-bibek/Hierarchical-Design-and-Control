@@ -322,7 +322,7 @@ class GATv2ActorCritic(nn.Module):
         # global_mean_pool to average across the nodes for each graph in a batch.
         return global_mean_pool(x, batch)
 
-    def actor(self, state_batch):
+    def actor(self, states_batch):
         """
         Forward pass: consists of two parts (all in one head)
         - GMM parameters prediction 
@@ -334,7 +334,7 @@ class GATv2ActorCritic(nn.Module):
         - edge attributes (edge_attr) = Edge features (num_edges, edge_dim)
         - batch (batch) = 
         """
-        y = self.elu(self.conv1(state_batch.x, state_batch.edge_index, state_batch.edge_attr))
+        y = self.elu(self.conv1(states_batch.x, states_batch.edge_index, states_batch.edge_attr))
         y = F.dropout(y, p=self.dropout_rate, training=self.training)
 
         # The same edge_attr is used for both the first and second GAT layers. 
@@ -343,78 +343,71 @@ class GATv2ActorCritic(nn.Module):
         # Preserving edge information: By passing the edge attributes to each layer, the model can maintain information about the edge features throughout the network depth. 
         # Different learned attention: Each GAT layer learns its own attention mechanism. By providing the edge features to each layer, you allow each layer to learn how to use these features differently
         # Residual-like connections for edges: In a sense, passing edge features to each layer creates a form of residual connection for edge information.         
-        y = self.conv2(y, state_batch.edge_index, state_batch.edge_attr)
-        y = self.readout_layer(y, state_batch.batch)
+        y = self.conv2(y, states_batch.edge_index, states_batch.edge_attr)
+        y = self.readout_layer(y, states_batch.batch)
 
         gmm_params = self.actor_gmm_layers(y)
         num_proposals_logits = self.actor_num_proposals_layer(y)
 
         return gmm_params, num_proposals_logits
 
-    def critic(self, state_batch):
+    def critic(self, states_batch):
         """
         Critic forward pass.
         """
 
-        y = self.elu(self.conv1(state_batch.x, state_batch.edge_index, state_batch.edge_attr))
+        y = self.elu(self.conv1(states_batch.x, states_batch.edge_index, states_batch.edge_attr))
         y = F.dropout(y, p=self.dropout_rate, training=self.training)
-        y = self.conv2(y, state_batch.edge_index, state_batch.edge_attr)
-        y = self.readout_layer(y, state_batch.batch)
+        y = self.conv2(y, states_batch.edge_index, states_batch.edge_attr)
+        y = self.readout_layer(y, states_batch.batch)
 
         return self.critic_layers(y).squeeze(-1)  # Ensure output is of shape (batch_size,)
-    
-            # For testing: duplicate data 3 times to create multiple batches
-        # batch_size = 3
-        # num_nodes = state_batch['x'].size(0)
-        # batch = torch.cat([
-        #     torch.zeros(num_nodes, dtype=torch.long), # 0 
-        #     torch.ones(num_nodes, dtype=torch.long), # 1
-        #     2 * torch.ones(num_nodes, dtype=torch.long) # 2
-        # ])
-        
-        # # Duplicate node features, edge indices and edge attributes 3 times
-        # state_batch['x'] = state_batch['x'].repeat(3,1)
-        
-        # # For edge_index, need to offset node indices for each batch
-        # edge_index_offset1 = state_batch['edge_index'] + num_nodes
-        # edge_index_offset2 = state_batch['edge_index'] + (2 * num_nodes)
-        # state_batch['edge_index'] = torch.cat([
-        #     state_batch['edge_index'],
-        #     edge_index_offset1,
-        #     edge_index_offset2
-        # ], dim=1)
-        
-        # state_batch['edge_attr'] = state_batch['edge_attr'].repeat(3,1)
-        # state_batch['batch_size'] = 3  # Update batch size
-        # device = next(self.parameters()).device
-        ### end testing
 
-    def get_gmm_distribution(self, state_batch):
+    def get_gmm_distribution(self, states_batch):
         """
         Returns:
         - gmm (MixtureSameFamily): The GMM distribution.
         - num_proposals_probs (Tensor): Probabilities for the number of proposals.
         """
-        device = next(self.parameters()).device
-
+        
         # From given batch_size, make GAT batch.
         # A GAT batch with batch_size = 1 looks like [0, 0, 0, 0, ... num_nodes times]
         # A GAT batch with batch_size = 4 looks like [0, 0, 1, 1, 2, 2, 3, 3, ... num_nodes times]
         # GAT batch (required when graph passes through GAT policy) is different from gradient mini-batch.
-        batch_size = state_batch.num_graphs  # Get number of graphs in the batch
-        state_batch = state_batch.to(device)
+        batch_size = states_batch.num_graphs  # Get number of graphs in the batch
+        print(f"\n\nHERE: Batch size: {batch_size}\n\n")
 
         # actor returns stuff for entire batch. (batchsize, num_mixtures * 5) and (batchsize, max_proposals)
-        gmm_params, num_proposals_logits = self.actor(state_batch)
+        gmm_params, num_proposals_logits = self.actor(states_batch)
         
         # Apply temperature to control exploration-exploitation
         num_proposals_probs_batch = F.softmax(num_proposals_logits / self.temperature, dim=-1)  # Convert to probabilities for each index (total sum to 1) with temperature
 
+        print(f"\n\nGMM params: {gmm_params}\n\n")
         # Split parameters for each batch element
         mix_logits, means, covs = gmm_params.split([self.num_mixtures, self.num_mixtures * 2, self.num_mixtures * 2], dim=-1)
         means = means.view(batch_size, self.num_mixtures, 2)
+
+        # The dimensions of means and covariances are (batch_size, num_mixtures, 2)
+        print(f"\n\nBefore transformation: Means: {means}\n Covariances: {covs}\n")
+        # Transform to correct ranges here (instead of applying transformations after getting the gmm distribution or after sampling)
+        # First component (location) -> [0, 1]. Second component (thickness) -> [min_thickness, max_thickness]
+        # Using sigmoid in both cases. TODO: Is a sigmoid normalization what we want?
+        means = means.clone() # Create a new tensor instead of modifying in-place
+        means[:, :, 0] = torch.sigmoid(means[:, :, 0].clone()) # ... means match all leading dimensions and select 0 from last dimension
+        means[:, :, 1] = self.min_thickness + torch.sigmoid(means[:, :, 1].clone()) * (self.max_thickness - self.min_thickness)
+
         covs = F.softplus(covs).view(batch_size, self.num_mixtures, 2) # Ensure positive covariance
-        
+        # similarly for covariances. Covariance scaling affects how spread out or peaked the distribution is.
+        scaling_factor = 1 / 32
+        # Scale location covariance to be proportional to [0, 1] range
+        covs = covs.clone() # Create a new tensor instead of modifying in-place
+        covs[:, :, 0] = covs[:, :, 0] * scaling_factor # location range not squared because its implicitly handeled (1-0)² = 1
+
+        # Scale thickness covariance to be proportional to thickness range. Covariance matrices deal with squared deviations from the mean
+        covs[:, :, 1] = covs[:, :, 1] * (self.max_thickness - self.min_thickness) ** 2 * scaling_factor
+        print(f"\n\nAfter transformation: Means: {means}\n Covariances: {covs}\n")
+
         # Create GMM distribution for each batch element
         gmm_batch = []
         for b in range(batch_size):
@@ -426,7 +419,7 @@ class GATv2ActorCritic(nn.Module):
 
         return gmm_batch, num_proposals_probs_batch
     
-    def act(self, state_batch, iteration=None, visualize=False):
+    def act(self, states_batch, iteration=None, visualize=False):
         """
         Sample actions from the policy given the state (propose upto max_proposals number of crosswalks).
         For use in policy gradient methods, the log probabilities of the actions are needed.
@@ -444,82 +437,95 @@ class GATv2ActorCritic(nn.Module):
         multinomial distribution is used to model the outcome of selecting one option from a set of mutually exclusive options, where each option has a specific probability of being chosen.
         """
 
-        # If a single instance is passed, wrap it around a list and make a batch.
-        if isinstance(state_batch, Data):
-            state_batch = Batch.from_data_list([state_batch])
+        # If a single instance is passed (happens only in act), wrap it around a list and make a batch.
+        if isinstance(states_batch, Data):
+            states_batch = Batch.from_data_list([states_batch])
 
-        batch_size = state_batch.num_graphs 
-
+        batch_size = states_batch.num_graphs 
+        device = next(self.parameters()).device
+        print(f"\n\nState batch size: {states_batch.size()}\n\n")
         # Get GMM parameters and number of proposals distributions
-        gmm_batch, num_proposals_probs_batch = self.get_gmm_distribution(state_batch)
-        
-        # This visualization is only meaningful during act (i.e., when single graph is passed)
-        if visualize and iteration is not None:
-            self.visualize_gmm(gmm_batch[0], iteration=iteration)
-        
+        gmm_batch, num_proposals_probs_batch = self.get_gmm_distribution(states_batch.to(device))
+        # MixtureSameFamily combines Categorical distribution with torch.Size([3]) for the mixture weights
+        # Categorical Distribution: Determines the probability of selecting each component (mixing weights). In this case, we have 3 weights that sum to 1.
+        # MultivariateNormal distribution with: loc (means) of size torch.Size([3, 2]) and covariance_matrix of size torch.Size([3, 2, 2])
+        print("\n\nGMM Distribution Details:")
+        for i, gmm in enumerate(gmm_batch):
+            print(f"\nBatch element {i}:")
+            print(f"Mixture weights: {torch.exp(gmm.mixture_distribution.logits)}")  # Convert logits to probabilities
+            print(f"Component means: {gmm.component_distribution.loc}")
+            print(f"Component covariances:\n{gmm.component_distribution.covariance_matrix}\n")
+
         # Sample number of proposals for each batch element (add 1 to ensure at least 1 proposal)
         num_actual_proposals = torch.multinomial(num_proposals_probs_batch, 1).squeeze(-1) + 1
+        print(f"\n\nnum_actual_proposals: {num_actual_proposals.shape, num_actual_proposals}\n\n")
+
+        # Initialize output tensors (2 because location and thickness)
+        proposals = torch.full((batch_size, self.max_proposals, 2), -1, device=device) # Initialize with -1 so that its easier to infer the actual proposals in critic without passing them around.
+        log_probs = torch.zeros(batch_size, device=device)
         
-        # Initialize output tensor for all batches (2 because location and thickness)
-        output = torch.full((batch_size, self.max_proposals, 2), 0.0)
-        total_log_probs = torch.zeros(batch_size)
-        
-        # Process each batch element
         for b in range(batch_size):
+
             # Sample proposals for this batch element
-            n_proposals = num_actual_proposals[b].item()
-            samples = gmm_list[b].sample((n_proposals,))
-            
-            # Split into locations and thicknesses
+            samples = gmm_batch[b].sample((num_actual_proposals[b].item(),))
             locations, thicknesses = samples.split(1, dim=-1)
             
-            # Normalize locations to be between 0 and 1
-            locations = torch.sigmoid(locations)
-            
-            # Scale thicknesses to be between min_thickness and max_thickness
-            # First, sigmoid normalizes to [0, 1], then we scale and shift to [min_thickness, max_thickness]
-            thicknesses = self.min_thickness + torch.sigmoid(thicknesses) * (self.max_thickness - self.min_thickness)
-            
+            # Visualization is only meaningful during act (i.e., not during evaluation)
+            if visualize and iteration is not None:
+                markers = (locations.squeeze().detach().cpu().numpy(), thicknesses.squeeze().detach().cpu().numpy())
+                self.visualize_gmm(gmm_batch[b], markers=markers, batch_index=b, thickness_range=(self.min_thickness, self.max_thickness), location_range=(0, 1), iteration=iteration)
+
             # Store in output tensor
-            output[b, :n_proposals, 0] = locations.squeeze()
-            output[b, :n_proposals, 1] = thicknesses.squeeze()
+            proposals[b, :num_actual_proposals[b], 0] = locations.squeeze()
+            proposals[b, :num_actual_proposals[b], 1] = thicknesses.squeeze()
             
             # Compute log probabilities for this batch element
-            log_probs = gmm_list[b].log_prob(samples)
-            total_log_probs[b] = log_probs.sum()
-        
-        return output, num_actual_proposals, total_log_probs
+            log_probs[b] = gmm_batch[b].log_prob(samples).sum()
+
+        return proposals, num_actual_proposals, log_probs
     
     def evaluate(self, states_batch, actions_batch):
         """
+        Args:
+            states_batch (Batch): Batch of states, each state a Data object.
+            actions_batch (Tensor): Batch of actions [batch_size, max_proposals, 2]. 
+                - Not all the actions contain actual proposals. Each element in the batch can have a different number of proposals.
+
         Returns:
             action_log_probs (Tensor): Log probabilities of the actions.
             state_values (Tensor): Values of the states.
             entropy (Tensor): Entropy of the policy.
         """
-        batch_size = actions_batch.size(0)
         
-        # Get distributions
-        gmm_list, num_proposals_probs = self.get_gmm_distribution(states_batch)
+        batch_size = states_batch.num_graphs 
+        device = next(self.parameters()).device
+
+        state_values_batch = self.critic(states_batch.to(device))
+        print(f"\n\nStates batch size: {states_batch.size()}\n\n")
+        # Get distribution (we dont need the samples in critic, which may be changing a lot every time we sample.)
+        gmm_batch, _ = self.get_gmm_distribution(states_batch.to(device))
         
         # Initialize return tensors
-        action_log_probs = torch.zeros(batch_size, device=actions_batch.device)
-        entropy = torch.zeros(batch_size, device=actions_batch.device)
+        action_log_probs = torch.zeros(batch_size, device=device)
+        entropy = torch.zeros(batch_size, device=device)
         
+        print(f"\n\nActions batch: {actions_batch}\n\n")
+        # Compute num_proposals_batch by checking for -1 in actions
+        num_proposals_batch = (actions_batch[:, :, 0] != -1).sum(dim=1)
+        print(f"\n\nNum proposals batch: {num_proposals_batch}\n\n")
+
         # Process each batch element
         for b in range(batch_size):
+
             # Get actual proposals for this batch element
             n_proposals = num_proposals_batch[b].item()
             actual_actions = actions_batch[b, :n_proposals]
             
             # Compute log probabilities and entropy for this batch element
-            action_log_probs[b] = gmm_list[b].log_prob(actual_actions).sum()
-            entropy[b] = self.gmm_entropy(gmm_list[b])
+            action_log_probs[b] = gmm_batch[b].log_prob(actual_actions).sum() # TODO: Is the sum operation correct?
+            entropy[b] = self.gmm_entropy(gmm_batch[b])
         
-        # Get state values
-        state_values = self.critic(states_batch)
-        
-        return action_log_probs, state_values, entropy, num_proposals_probs
+        return action_log_probs, state_values_batch, entropy
     
     def gmm_entropy(self, gmm_single):
         """
@@ -565,29 +571,25 @@ class GATv2ActorCritic(nn.Module):
             "critic_total": shared_params + critic_params,
             "total": total_params}
     
-    def visualize_gmm(self, gmm_single, num_samples=20000, locations=None, iteration=None):
+    def visualize_gmm(self, gmm_single, num_samples=20000, markers=None, batch_index=None, thickness_range=None, location_range=None, iteration=None):
         """
         Visualize the GMM distribution in 3D.
-        If locations are provided, they are marked as red crosses.
+        If locations are provided, they are marked as red crosses in a separate top-down view.
 
         Args:
             gmm_single (MixtureSameFamily): The GMM distribution for a single batch element.
             num_samples (int): Number of samples to generate for visualization.
-            locations (Tensor or ndarray): Locations to mark on the plot, shape (N, 2).
+            markers (tuple of ndarrays): Markers to plot, shape (N, 2).
         """
+        fs = 16
+        base_save_path = f"gmm_iterations/gmm_distribution_iter_{iteration}_batch_{batch_index}"
         
-
-        save_path = f"gmm_iterations/gmm_distribution_iteration_{iteration}.png"
         # Sample from the GMM
         samples = gmm_single.sample((num_samples,))  # Shape: (num_samples, 2)
         samples = samples.detach().cpu().numpy()
 
-        # Create a grid for plotting
-        x = samples[:, 0]  # Location dimension
-        y = samples[:, 1]  # Thickness dimension
-
-        xmin, xmax = x.min(), x.max()
-        ymin, ymax = y.min(), y.max()
+        xmin, xmax = location_range
+        ymin, ymax = thickness_range
         X = np.linspace(xmin, xmax, 100)
         Y = np.linspace(ymin, ymax, 100)
         X, Y = np.meshgrid(X, Y)
@@ -601,124 +603,46 @@ class GATv2ActorCritic(nn.Module):
         Z = gmm_single.log_prob(positions).detach().cpu()
         Z = np.exp(Z.numpy()).reshape(X.shape)
 
-        fig = plt.figure(figsize=(10, 8), dpi=300)   
+        # Main 3D plot without markers
+        fig = plt.figure(figsize=(10, 8), dpi=100)   
         ax = fig.add_subplot(111, projection='3d')
-
-        # Plot the surface
-        ax.plot_surface(X, Y, Z, cmap=cm.viridis, linewidth=0, antialiased=False, alpha=0.7)
-
-        # Plot the provided locations as red crosses
-        if locations is not None:
-            if isinstance(locations, torch.Tensor):
-                locations = locations.detach().cpu().numpy()
-            if locations.ndim == 1:
-                locations = locations.reshape(-1, 2)
-            
-            z_vals = interpolate.griddata((X.ravel(), Y.ravel()), Z.ravel(), 
-                                        (locations[:, 0], locations[:, 1]), method='linear')
-            ax.scatter(locations[:, 0], locations[:, 1], zs=z_vals, 
-                      c='r', marker='x', s=100, label='Given Locations')
-
-        ax.set_xlabel('Location', fontweight='bold')
-        ax.set_ylabel('Thickness', fontweight='bold')
-        ax.set_zlabel('Density', fontweight='bold')
-        ax.set_title('3D GMM', fontweight='bold')
-        if locations is not None:
-            ax.legend()
-
+        surf = ax.plot_surface(X, Y, Z, cmap=cm.viridis, linewidth=0, antialiased=False, alpha=0.7)
+        ax.set_xlabel('Location', fontweight='bold', fontsize=fs, labelpad=15)
+        ax.set_ylabel('Thickness', fontweight='bold', fontsize=fs, labelpad=15)
+        ax.set_zlabel('Density', fontweight='bold', fontsize=fs, labelpad=15)
+        ax.set_title('GMM Distribution', fontweight='bold', fontsize=fs)
+        ax.tick_params(axis='both', which='major', labelsize=fs-2)
+        
+        # Set fixed z-axis limits
+        ax.set_zlim(0, 0.6)
+        ax.set_zticks(np.linspace(0, 0.6, 5))
+        
         plt.tight_layout()
-        if save_path:
-            plt.savefig(save_path)
-            print(f"GMM distribution plot saved to {save_path}")
         # plt.show()
+        plt.savefig(f"{base_save_path}.png")
         plt.close()
 
+        # Create second plot with markers if provided
+        if markers is not None:
+            fig = plt.figure(figsize=(10, 8), dpi=100)
+            ax = plt.gca()
+            
+            ax.grid(True, linestyle=(0, (5, 8)), alpha=0.9, zorder=11)
 
-################ EXAMPLE USAGE #################
-"""
+            contour = ax.contourf(X, Y, Z, levels=20, cmap=cm.viridis, alpha=0.8, zorder=7)
+            cbar = plt.colorbar(contour)
+            cbar.set_label('Density', fontweight='bold', fontsize=fs)
+            cbar.ax.tick_params(labelsize=fs-2)
 
-# Set up parameters
-num_nodes = 50
-num_edges = 200
-edge_dim = 2  # Number of features per edge
-
-in_channels = 2  # Number of input features per node (e.g., x and y coordinates)
-hidden_channels = 8
-out_channels = 16
-
-action_hidden_channels = 32
-gmm_hidden_dim = 32 
-
-initial_heads = 16 # initial number of attention heads in GAT layers
-second_heads = 4 # number of attention heads in the second GAT layer
-action_dim = 10  # Maximum number of crosswalk proposals
-
-batch = torch.zeros(num_nodes, dtype=torch.long)
-
-print("Initializing GATv2ActorCritic model...") 
-model = GATv2ActorCritic(in_channels=in_channels, 
-                         hidden_channels=hidden_channels, 
-                         out_channels=out_channels, 
-                         initial_heads=initial_heads, 
-                         second_heads=second_heads, 
-                         edge_dim=edge_dim, 
-                         action_hidden_channels=action_hidden_channels,
-                         action_dim=action_dim,
-                         gmm_hidden_dim=gmm_hidden_dim)
-
-# Generate dummy data
-print("\nGenerating dummy input data...")
-x = torch.rand((num_nodes, in_channels))  
-edge_index = torch.randint(0, num_nodes, (2, num_edges))  
-edge_attr = torch.rand((num_edges, edge_dim))  
-
-print(f"Node features shape: {x.shape}")
-print(f"Edge index shape: {edge_index.shape}")
-print(f"Edge attributes shape: {edge_attr.shape}")
-
-# Print model information
-print("\nModel architecture:")
-print(model)
-
-print("\nModel parameter count:")
-param_count = model.param_count()
-for key, value in param_count.items():
-    print(f"{key}: {value}")
-
-# Generate crosswalk proposals using the model
-print("\nGenerating crosswalk proposals...")
-proposed_crosswalks, num_actual_proposals, total_log_prob = model.act(x, edge_index, edge_attr, batch)
-
-print(f"\nNumber of actual proposals: {num_actual_proposals}")
-print(f"Total log probability of the action: {total_log_prob.item()}")
-print("\nProposed crosswalks:")
-for i, (location, thickness) in enumerate(proposed_crosswalks):
-    if i < num_actual_proposals:
-        print(f"  Proposal {i+1}: Location: {location:.4f}, Thickness: {thickness:.2f}")
-    else:
-        print(f"  Padding {i+1}: Location: {location:.4f}, Thickness: {thickness:.2f}")
-
-# Evaluate an action
-print("\nEvaluating the proposed action...")
-state = (x, edge_index, edge_attr, batch)
-action = proposed_crosswalks
-
-action_log_probs, state_value, entropy, num_proposals_probs = model.evaluate(state, action)
-
-print(f"Action log probabilities shape: {action_log_probs.shape}")
-print(f"State value: {state_value.item()}")
-print(f"Entropy: {entropy.item()}")
-print(f"Number of proposals probabilities shape: {num_proposals_probs.shape}")
-
-print("\nDetailed evaluation results:")
-print(f"  Action log probabilities: {action_log_probs}")
-print(f"  State value: {state_value.item()}")
-print(f"  Entropy: {entropy.item()}")
-print(f"  Number of proposals probabilities: {num_proposals_probs}")
-
-# Visualize the GMM distribution
-print("\nVisualizing the GMM distribution...")
-gmm = model.get_gmm_distribution(model.forward(x, edge_index, edge_attr, batch))
-model.visualize_gmm(gmm)
-
-"""
+            locations, thicknesses = markers
+            ax.scatter(locations, thicknesses, c='r', marker='x', s=100, label='Samples Drawn', zorder=10)
+            legend = ax.legend(loc='upper right', frameon=True, framealpha=1.0)
+            legend.set_zorder(11)  
+            
+            ax.set_xlabel('Location', fontweight='bold', fontsize=fs)
+            ax.set_ylabel('Thickness', fontweight='bold', fontsize=fs)
+            ax.set_title('GMM with Samples', fontweight='bold', fontsize=fs)
+            ax.tick_params(axis='both', which='major', labelsize=fs-2)
+            plt.tight_layout()
+            plt.savefig(f"{base_save_path}_markers.png")
+            plt.close()

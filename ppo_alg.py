@@ -1,5 +1,6 @@
 import torch
 import torch.optim as optim
+from torch.utils.data import TensorDataset, DataLoader
 from torch_geometric.data import Batch
 from models import CNNActorCritic, GATv2ActorCritic
 
@@ -56,14 +57,22 @@ class GraphDataset(torch.utils.data.Dataset):
             self.returns[idx]
         )
 
-def collate_fn(data_list):
-    states, actions, logprobs, advantages, returns = zip(*data_list)
-    batch_states = Batch.from_data_list(states)
-    actions = torch.stack(actions)
-    logprobs = torch.stack(logprobs)
-    advantages = torch.stack(advantages)
-    returns = torch.stack(returns)
-    return batch_states, actions, logprobs, advantages, returns
+
+def collate_fn(data):
+    states_batch, actions_batch, old_logprobs_batch, advantages_batch, returns_batch = zip(*data)
+    states_batch = Batch.from_data_list(states_batch)  
+
+    # Concatenate actions_batch tensors along the first dimension
+    actions_batch = torch.cat([a for a in actions_batch], dim=0)  # Now shape is (batch_size, max_proposals, 2)
+
+    # Concatenate old_logprobs_batch tensors along the first dimension
+    old_logprobs_batch = torch.cat([l for l in old_logprobs_batch], dim=0)  # Shape is (batch_size,)
+
+    # Stack advantages and returns (already scalar tensors)
+    advantages_batch = torch.stack(advantages_batch)  # Shape is (batch_size,)
+    returns_batch = torch.stack(returns_batch)        # Shape is (batch_size,)
+
+    return states_batch, actions_batch, old_logprobs_batch, advantages_batch, returns_batch
 
 
 class PPO:
@@ -194,18 +203,18 @@ class PPO:
                 combined_memory.rewards.extend(memory.rewards)
                 combined_memory.is_terminals.extend(memory.is_terminals)
 
-            old_states = torch.stack(combined_memory.states).detach().to(self.device)
+            old_states = torch.stack(combined_memory.states).to(self.device)
             with torch.no_grad():
-                values = self.policy.critic(old_states).squeeze().to(self.device) 
+                values = self.policy.critic(old_states).squeeze()
         else: 
-
+            
             # For the higher level agent, Each state is a dict with keys: 'x', 'edge_index', 'edge_attr', 'batch_size'
             print(f"\nUpdating {self.agent_type}-level policy")
             combined_memory = memories
 
             old_states = combined_memory.states 
             # Create batch from states
-            states_batch = Batch.from_data_list(old_states)
+            states_batch = Batch.from_data_list(old_states).to(self.device)
             
             with torch.no_grad():
                 values = self.policy.critic(states_batch).squeeze()
@@ -213,6 +222,7 @@ class PPO:
         print(f"\nStates: {combined_memory.states}")
         print(f"\nActions: {combined_memory.actions}")
         print(f"\nLogprobs: {combined_memory.logprobs}")
+        print(f"\nValues: {values}")
 
         # Compute GAE
         advantages = self.compute_gae(combined_memory.rewards, values, combined_memory.is_terminals, self.gamma, self.gae_lambda)
@@ -231,17 +241,17 @@ class PPO:
 
         # Create a dataloader for mini-batching 
         if agent_type == 'lower':
-            dataset = torch.utils.data.TensorDataset(old_states, old_actions, old_logprobs, advantages, returns)
-            dataloader = torch.utils.data.DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
+            dataset = TensorDataset(old_states, old_actions, old_logprobs, advantages, returns)
+            dataloader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
         else:
             dataset = GraphDataset(old_states, old_actions, old_logprobs, advantages, returns)
-            dataloader = torch.utils.data.DataLoader(dataset, batch_size=self.batch_size, shuffle=True, collate_fn=collate_fn)
+            dataloader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True, collate_fn=collate_fn)
 
         avg_policy_loss = 0
         avg_value_loss = 0
         avg_entropy_loss = 0
 
-        # Optimize policy for K epochs
+        # Optimize policy for K epochs (terminology used in PPO paper)
         for _ in range(self.K_epochs):
             for states_batch, actions_batch, old_logprobs_batch, advantages_batch, returns_batch in dataloader:
 
