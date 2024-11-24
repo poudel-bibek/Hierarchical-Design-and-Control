@@ -571,7 +571,7 @@ class GATv2ActorCritic(nn.Module):
             "critic_total": shared_params + critic_params,
             "total": total_params}
     
-    def visualize_gmm(self, gmm_single, num_samples=20000, markers=None, batch_index=None, thickness_range=None, location_range=None, iteration=None):
+    def visualize_gmm(self, gmm_single, num_samples=50000, markers=None, batch_index=None, thickness_range=None, location_range=None, iteration=None):
         """
         Visualize the GMM distribution in 3D.
         If locations are provided, they are marked as red crosses in a separate top-down view.

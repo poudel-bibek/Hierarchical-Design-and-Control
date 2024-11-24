@@ -116,6 +116,23 @@ class DesignEnv(gym.Env):
     - Modifies the net file based on design action.
     - No need to connect to or close this environment. 
     - Internally calls the parallel workers of the control environment.
+    - Thickness does not need normalization/ denormalization (the sampling process itself proposed between min and max)
+
+    Graph transformations process: 
+        During initialization:
+            - Original SUMO net file -> Original Pedestrian Graph (Networkx): This graph only used for initial visualization and getting normalizers.
+            - Original Pedestrian Graph -> Cleanup (remove isolated, fringe.. etc) -> Iterative Pedestrian Graph (Still Networkx)
+        During reset: 
+            - Iterative Pedestrian Graph -> _convert_to_torch_geometric (includes Normalization) -> Iterative Torch Graph
+        During step:
+            - Apply action:
+                - Denormalize proposed location
+                - Add nodes and edges to iterative pedestrian graph
+                - _convert_to_torch_geometric (includes Normalization) -> Iterative Torch Graph
+            - Step returns Data object from Iterative Torch Graph
+
+        Corrected During step: 
+
 
     """
     
@@ -129,22 +146,19 @@ class DesignEnv(gym.Env):
 
         self.max_proposals = design_args['max_proposals']
         self.min_thickness = design_args['min_thickness']
-        self.max_thickness = design_args['max_thickness']
         self.min_coordinate = design_args['min_coordinate']
         self.max_coordinate = design_args['max_coordinate']
+        self.max_thickness = design_args['max_thickness']
         self.original_net_file = design_args['original_net_file']
 
-        # Clear existing folders and create new ones
-        clear_folders()
-
-        # The crosswalks present initially. 
-        self.crosswalks_to_remove = [crosswalk_id for _, data in CONTROLLED_CROSSWALKS_DICT.items() for crosswalk_id in data['ids']]
+        # The crosswalks present initially. Not used
+        #self.initial_crosswalks = [crosswalk_id for _, data in CONTROLLED_CROSSWALKS_DICT.items() for crosswalk_id in data['ids']]
 
         self.original_pedestrian_graph = self._extract_original_graph()
-        self.iterative_pedestrian_graph = self._cleanup_corridor(self.original_pedestrian_graph)
-
-        # Initialize normalizer values before visualization
-        self._initialize_normalizers()
+        self.iterative_pedestrian_graph = self._cleanup_graph(self.original_pedestrian_graph)
+        
+        clear_folders()
+        self._initialize_normalizers(self.original_pedestrian_graph) # Original passed here.
 
         if design_args['save_graph_images']:
             save_graph_visualization(graph=self.original_pedestrian_graph, iteration='ORIGINAL')
@@ -152,18 +166,13 @@ class DesignEnv(gym.Env):
             save_better_graph_visualization(graph=self.iterative_pedestrian_graph, iteration='BASE_GRAPH')
             save_better_graph_visualization(graph=self.original_pedestrian_graph, iteration='ORIGINAL')
 
-        # Initialize normalizer values
-        self.normalizer_x = None
-        self.normalizer_y = None
-        self.normalizer_width = self.max_thickness
-
-        # The lower level agent
+        # Lower level agent
         self.lower_ppo = PPO(**self.lower_ppo_args)
         self.action_timesteps = 0 # keep track of how many times action has been taken by all lower level workers
         self.writer = self.control_args['writer']
         self.best_reward_lower = float('-inf')
 
-        # Removing unpicklable object (writer) from control_args
+        # Bugfix: Removing unpicklable object (writer) from control_args
         self.control_args_worker = {k: v for k, v in self.control_args.items() if k != 'writer'}
         self.model_init_params_worker = {'model_dim': self.lower_ppo.policy.in_channels,
                                      'action_dim': self.lower_ppo.action_dim,
@@ -199,10 +208,10 @@ class DesignEnv(gym.Env):
 
         - What makes a node?
             - Junctions
-            - Attributes: pos (x, y)
+            - NodeAttributes: pos (x, y)
         - What makes an edge?
             - Walking areas between junctions
-            - Attributes: width
+            - Edge Attributes: x_coordinate of one of the nodes, width
 
         # After getting edges, remove the nodes that dont have edges.
         """
@@ -210,9 +219,6 @@ class DesignEnv(gym.Env):
         G = nx.Graph()
         tree = ET.parse(self.original_net_file)
         root = tree.getroot()
-        # print(f"tree: {tree}, \nroot: \ntag: {root.tag}, \nattrib: {root.attrib}")
-        # for child in root:
-        #     print(f"child: {child.tag}, attrib: {child.attrib}")
 
         # Extract junctions
         for junction in root.findall(".//junction"):
@@ -220,7 +226,7 @@ class DesignEnv(gym.Env):
             x, y = float(junction.get('x')), float(junction.get('y'))
             G.add_node(junction_id, pos=(x, y))
 
-        # only getting edges that have function="walkingarea" does not work. Perhaps the function could be internal. 
+        # only getting edges that have function="walkingarea" does not work. Perhaps the junction could be internal. 
         # For each edge, go to the lane and check if allow="pedestrian" exists
         # Connect junctions based on edges with pedestrian lanes
         for edge in root.findall(".//edge"):
@@ -234,12 +240,9 @@ class DesignEnv(gym.Env):
                     allow = lane.get('allow', '')
                     
                     if 'pedestrian' in allow:
-                        width = float(lane.get('width', 0.0))
+                        width = float(lane.get('width', 3.0)) # default width is 3.0
                         G.add_edge(from_junction, to_junction, width=width)
                         break  # Only need to add edge once if multiple pedestrian lanes
-
-        # Remove nodes that dont have edges
-        G.remove_nodes_from(list(nx.isolates(G)))
 
         # Add debug print at the end
         print("\nGraph Coordinate Ranges:")
@@ -395,9 +398,8 @@ class DesignEnv(gym.Env):
         """
 
         for i, (location, thickness) in enumerate(proposals.squeeze(0)):
-            # Denormalize the location (x-coordinate) and thickness
+            # Denormalize the location (x-coordinate) 
             denorm_location = self.normalizer_x['min'] + location * (self.normalizer_x['max'] - self.normalizer_x['min'])
-            denorm_thickness = thickness * self.normalizer_width
 
             # Find the closest existing nodes (junctions) to place the new crosswalk
             closest_nodes = self._find_closest_nodes(denorm_location)
@@ -410,11 +412,10 @@ class DesignEnv(gym.Env):
 
                 # Connect the new node to the closest existing nodes
                 for node in closest_nodes:
-                    self.iterative_pedestrian_graph.add_edge(new_node_id, node, width=denorm_thickness)
+                    self.iterative_pedestrian_graph.add_edge(new_node_id, node, width=thickness)
 
         # After updating the graph, we need to update the PyTorch Geometric Data object
         torch_graph = self._convert_to_torch_geometric(self.iterative_pedestrian_graph)
-
         self._save_graph_as_xml(self.iterative_pedestrian_graph, iteration)
 
         if self.design_args['save_graph_images']:
@@ -434,20 +435,14 @@ class DesignEnv(gym.Env):
 
     def reset(self):
         """
-        Reset the environment to its initial state.
-        Should return x, edge_index, edge_attr, batch
-
-        Do we want the design agent to ever see the original graph?
+        Reset (only gets called once at the beginning of training) the environment to its initial state.
+        Do we want the design agent to ever see the original graph? Yes.
+        The original and iterative graphs are set during initialization.
         """
-
-        # Reset the graph to its original state
-        self.iterative_pedestrian_graph = self.original_pedestrian_graph.copy()
         
         # Recreate the PyTorch Geometric Data object
         self.iterative_torch_graph = self._convert_to_torch_geometric(self.iterative_pedestrian_graph)
         
-        
-        # Return initial state as a single batch
         state = Data(x=self.iterative_torch_graph.x,
                       edge_index=self.iterative_torch_graph.edge_index,
                       edge_attr=self.iterative_torch_graph.edge_attr)
@@ -460,7 +455,7 @@ class DesignEnv(gym.Env):
         """
         pass
     
-    def _cleanup_corridor(self, graph):
+    def _cleanup_graph(self, graph):
         """
         This step creates a base graph upon which additional edges are added/ removed during training.
         Multiple things happen (Requires some manual input):
@@ -559,16 +554,12 @@ class DesignEnv(gym.Env):
             target = node_id_to_index[target_id]
             edge_index.append([source, target])
             edge_index.append([target, source]) # Add reverse edge (for undirected graph)
-            
-            width = edge_data['width']
-            # Normalize edge width
-            normalized_width = width / self.normalizer_width
 
             # Get source node's x coordinate and add it to edge attribute.
             # TODO: come back to this.
             source_x = (graph.nodes[source_id]['pos'][0] - self.normalizer_x['min']) / (self.normalizer_x['max'] - self.normalizer_x['min'])
-            edge_attr.append([normalized_width, source_x])  # Add source x-coordinate alongside normalized width
-            edge_attr.append([normalized_width, source_x])  # For the reverse edge as well.
+            edge_attr.append([edge_data['width'], source_x])  # Add source x-coordinate alongside width
+            edge_attr.append([edge_data['width'], source_x])  # For the reverse edge as well.
         
         edge_index = torch.tensor(edge_index, dtype=torch.long).t().contiguous()
         edge_attr = torch.tensor(edge_attr, dtype=torch.float)
@@ -586,9 +577,6 @@ class DesignEnv(gym.Env):
         """
         x_coords = features[:, 0]
         y_coords = features[:, 1]
-
-        self.normalizer_x = {'min': x_coords.min(), 'max': x_coords.max()}
-        self.normalizer_y = {'min': y_coords.min(), 'max': y_coords.max()}
 
         normalized_x = (x_coords - self.normalizer_x['min']) / (self.normalizer_x['max'] - self.normalizer_x['min'])
         normalized_y = (y_coords - self.normalizer_y['min']) / (self.normalizer_y['max'] - self.normalizer_y['min'])
@@ -631,28 +619,17 @@ class DesignEnv(gym.Env):
                 crossing.set('node', nearest_junction)
                 crossing.set('shape', f"{data['pos'][0]},{data['pos'][1]} {data['pos'][0]},{data['pos'][1]}")  # Simplified shape
 
-
-        # Create a 'network_iterations' directory if it doesn't exist
-        os.makedirs('./SUMO_files/network_iterations', exist_ok=True)
-
         # Save the updated XML file
         tree.write(os.path.join('./SUMO_files/network_iterations', filename))
         print(f"Updated network saved to {os.path.join('./SUMO_files/network_iterations', filename)}")
 
-    def _initialize_normalizers(self):
+    def _initialize_normalizers(self, graph):
         """
         Initialize normalizers based on the graph coordinates
         """
         # Extract all x and y coordinates from the graph
-        coords = np.array([data['pos'] for _, data in self.original_pedestrian_graph.nodes(data=True)])
-        
-        if len(coords) > 0:
-            x_coords = coords[:, 0]
-            y_coords = coords[:, 1]
-            
-            self.normalizer_x = {'min': float(np.min(x_coords)), 'max': float(np.max(x_coords))}
-            self.normalizer_y = {'min': float(np.min(y_coords)), 'max': float(np.max(y_coords))}
-        else:
-            # Fallback values if the graph is empty
-            self.normalizer_x = {'min': 0.0, 'max': 1.0}
-            self.normalizer_y = {'min': 0.0, 'max': 1.0}
+        coords = np.array([data['pos'] for _, data in graph.nodes(data=True)])
+        x_coords = coords[:, 0]
+        y_coords = coords[:, 1]
+        self.normalizer_x = {'min': float(np.min(x_coords)), 'max': float(np.max(x_coords))}
+        self.normalizer_y = {'min': float(np.min(y_coords)), 'max': float(np.max(y_coords))}
