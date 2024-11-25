@@ -118,21 +118,24 @@ class DesignEnv(gym.Env):
     - Internally calls the parallel workers of the control environment.
     - Thickness does not need normalization/ denormalization (the sampling process itself proposed between min and max)
 
-    Graph transformations process: 
-        During initialization:
-            - Original SUMO net file -> Original Pedestrian Graph (Networkx): This graph only used for initial visualization and getting normalizers.
-            - Original Pedestrian Graph -> Cleanup (remove isolated, fringe.. etc) -> Iterative Pedestrian Graph (Still Networkx)
-        During reset: 
-            - Iterative Pedestrian Graph -> _convert_to_torch_geometric (includes Normalization) -> Iterative Torch Graph
-        During step:
-            - Apply action:
-                - Denormalize proposed location
-                - Add nodes and edges to iterative pedestrian graph
-                - _convert_to_torch_geometric (includes Normalization) -> Iterative Torch Graph
-            - Step returns Data object from Iterative Torch Graph
+    Improved version:
+    - During initialization: 
+        - Extract the pedestrian walkway graph (in networkx) and other than pedestrian graph (in XML) from the original net file.
+        - Start with a base canvas for all 3 types of graphs (networkx, torch, XML).
+        - Extract the normalizers from the original net file. For the XML graph, a base canvas means adding the graph from networkx to other_than_pedestrian_xml_graph.
+        
+    - During reset: 
+        - Get the initial crosswalks (already present in the network) in a data structure (intial proposal).
+        - Create a mechanism where when proposals are provided, they are added to base canvas version of all 3 graphs.
+        - Add the initial crosswalks to all 3 graphs and return the state extracted from iterative torch graph.
+        
+    - During step:
+        - Apply action:
+            - Denormalize proposed locations (thickness does not need denormalization) to get the iterative proposal.
+            - Use the same mechanism as reset to add the proposed crosswalks to all 3 graphs.
 
-        Corrected During step: 
-
+    - Original: unmodified SUMO net file.
+    - Base: add something to this every iteration to the graph/net file for that iteration (e.g., for 0th iteration, stuff is added to base in reset).
 
     """
     
@@ -149,22 +152,30 @@ class DesignEnv(gym.Env):
         self.min_coordinate = design_args['min_coordinate']
         self.max_coordinate = design_args['max_coordinate']
         self.max_thickness = design_args['max_thickness']
-        self.original_net_file = design_args['original_net_file']
 
-        # The crosswalks present initially. Not used
-        #self.initial_crosswalks = [crosswalk_id for _, data in CONTROLLED_CROSSWALKS_DICT.items() for crosswalk_id in data['ids']]
-
-        self.original_pedestrian_graph = self._extract_original_graph()
-        self.iterative_pedestrian_graph = self._cleanup_graph(self.original_pedestrian_graph)
+        clear_folders() # Do not change the position of this.
+        # Extract networkx graph (of pedestrian walkways) and XML graphs (of everything else) from XML and get normalizers
+        self.pedestrian_networkx_graph, self.other_than_pedestrian_xml_graph = self._extract_networkx_graph(design_args['original_net_file']) # other_than_pedestrian_xml_graph is the path.
+        self._initialize_normalizers(self.pedestrian_networkx_graph) # normalizers are extracted from networkx graph
         
-        clear_folders()
-        self._initialize_normalizers(self.original_pedestrian_graph) # Original passed here.
+        # The crosswalks present initially in the XML. (exclude 0, 1, 2, 3)
+        existing_crosswalks = [crosswalk_id for _, data in CONTROLLED_CROSSWALKS_DICT.items() for crosswalk_id in data['ids'] if crosswalk_id not in [0, 1, 2, 3]]
+        
+        # Cleanup the pedestrian walkway graph (i.e, remove isolated, fringe, existing crosswalks) to create a base canvas (for all 3 versions)
+        self.base_networkx_graph = self._cleanup_graph(self.pedestrian_networkx_graph, existing_crosswalks)
+        self.base_torch_graph = self._convert_to_torch_geometric(self.base_networkx_graph)
+        self.base_xml_graph = self._save_graph_as_xml(self.base_networkx_graph, self.other_than_pedestrian_xml_graph,'base') # base_xml_graph is the path. Basically add stuff from networkx/torch to the other than pedestrian XML.
+
+        # Initialize iterative graphs from base canvas (they will be properly set for the first time in reset)
+        self.iterative_networkx_graph = self.base_networkx_graph
+        self.iterative_torch_graph = self.base_torch_graph
+        self.iterative_xml_graph = self.base_xml_graph
 
         if design_args['save_graph_images']:
-            save_graph_visualization(graph=self.original_pedestrian_graph, iteration='ORIGINAL')
-            save_graph_visualization(graph=self.iterative_pedestrian_graph, iteration='BASE_GRAPH')
-            save_better_graph_visualization(graph=self.iterative_pedestrian_graph, iteration='BASE_GRAPH')
-            save_better_graph_visualization(graph=self.original_pedestrian_graph, iteration='ORIGINAL')
+            save_graph_visualization(graph=self.pedestrian_networkx_graph, iteration='original')
+            save_graph_visualization(graph=self.base_networkx_graph, iteration='base')
+            save_better_graph_visualization(graph=self.pedestrian_networkx_graph, iteration='original')
+            save_better_graph_visualization(graph=self.base_networkx_graph, iteration='base')
 
         # Lower level agent
         self.lower_ppo = PPO(**self.lower_ppo_args)
@@ -201,9 +212,9 @@ class DesignEnv(gym.Env):
         """
         return spaces.Box(low=0, high=1, shape=(1000, 3), dtype=np.float32)
 
-    def _extract_original_graph(self):
+    def _extract_networkx_graph(self, sumo_net_file):
         """
-        Extracts the pedestrian graph from the original SUMO network file, including walking areas, connections, and junctions.
+        Extracts the pedestrian walkway graph from the original SUMO network file, including walking areas, connections, and junctions.
         For our purposes:
 
         - What makes a node?
@@ -215,44 +226,60 @@ class DesignEnv(gym.Env):
 
         # After getting edges, remove the nodes that dont have edges.
         """
-
-        G = nx.Graph()
-        tree = ET.parse(self.original_net_file)
+        pedestrian_networkx_graph = nx.Graph()
+        tree = ET.parse(sumo_net_file)
         root = tree.getroot()
 
-        # Extract junctions
+        # Create a copy of the tree for the base network
+        other_than_pedestrian_tree = ET.ElementTree(ET.fromstring(ET.tostring(root)))
+        other_than_pedestrian_root = other_than_pedestrian_tree.getroot()
+
+        # For the pedestrian networkx graph:
+        # Extract junctions 
         for junction in root.findall(".//junction"):
             junction_id = junction.get('id')
             x, y = float(junction.get('x')), float(junction.get('y'))
-            G.add_node(junction_id, pos=(x, y))
-
+            pedestrian_networkx_graph.add_node(junction_id, pos=(x, y))
+            
+        elements_to_remove = [] # The items added to pedestrian networkx graph need to be removed from the base network
         # only getting edges that have function="walkingarea" does not work. Perhaps the junction could be internal. 
-        # For each edge, go to the lane and check if allow="pedestrian" exists
         # Connect junctions based on edges with pedestrian lanes
         for edge in root.findall(".//edge"):
             from_junction = edge.get('from')
             to_junction = edge.get('to')
 
-            if from_junction in G.nodes() and to_junction in G.nodes():
-
+            if from_junction in pedestrian_networkx_graph.nodes() and to_junction in pedestrian_networkx_graph.nodes():
+                has_pedestrian_lane = False
                 # Check if any lane allows pedestrians
                 for lane in edge.findall('lane'):
                     allow = lane.get('allow', '')
-                    
                     if 'pedestrian' in allow:
                         width = float(lane.get('width', 3.0)) # default width is 3.0
-                        G.add_edge(from_junction, to_junction, width=width)
-                        break  # Only need to add edge once if multiple pedestrian lanes
+                        pedestrian_networkx_graph.add_edge(from_junction, to_junction, width=width)
+                        has_pedestrian_lane = True
+                        break # Only need to add edge once if multiple pedestrian lanes
 
-        # Add debug print at the end
-        print("\nGraph Coordinate Ranges:")
-        pos = nx.get_node_attributes(G, 'pos')
-        x_coords = [coord[0] for coord in pos.values()]
-        y_coords = [coord[1] for coord in pos.values()]
-        print(f"X range: {min(x_coords):.2f} to {max(x_coords):.2f}")
-        print(f"Y range: {min(y_coords):.2f} to {max(y_coords):.2f}")
+                # If this edge has a pedestrian lane, mark it for removal from base network
+                if has_pedestrian_lane:
+                    edge_id = edge.get('id')
+                    other_than_pedestrian_edge = other_than_pedestrian_root.find(f".//edge[@id='{edge_id}']")
+                    if other_than_pedestrian_edge is not None:
+                        elements_to_remove.append(other_than_pedestrian_edge)
+
+        # Remove pedestrian elements from base network
+        for element in elements_to_remove:
+            parent = other_than_pedestrian_root.find(f".//*[@id='{element.get('id')}']..")
+            if parent is not None:
+                parent.remove(element)
+                print(f"Removed edge {element.get('id')} from base network")
+
+        # Save the "everything other than pedestrian walkway" network file
+        other_than_pedestrian_file_path ="./SUMO_files/network_iterations/other_than_pedestrian.net.xml"
+        os.makedirs(os.path.dirname(other_than_pedestrian_file_path), exist_ok=True)
+        other_than_pedestrian_tree.write(other_than_pedestrian_file_path)
+        print(f"\nOther than pedestrian network saved to {other_than_pedestrian_file_path}\n")
         
-        return G
+        return pedestrian_networkx_graph, other_than_pedestrian_file_path
 
     def step(self, action, iteration, global_step):
         """
@@ -271,7 +298,7 @@ class DesignEnv(gym.Env):
         print(f"\n\nProposals: {proposals}\n\n")
 
         # Apply the action to output the latest SUMO network file as well as modify the iterative_torch_graph.
-        self.iterative_torch_graph = self._apply_action(proposals, iteration)
+        self._apply_action(proposals, iteration)
 
         # Here you would typically:
         # 1. Calculate the reward
@@ -390,40 +417,37 @@ class DesignEnv(gym.Env):
 
     def _apply_action(self, proposals, iteration):
         """
-        Updates the graph based on the action.
+        Every iteration, new proposals are added to networkx graph. Then that is converted to torch geometric (for state) and XML (for SUMO)
+        Updates all three graph representations (networkx, torch, XML) based on the action.
         The proposals are expected to be a list of tuples (location, thickness) for each proposed crosswalk.
-
-        When a location is proposed, its actually the location of where an edge should be added.
-        i.e., corresponding node positions along the corridor should be found and connected.
+        
+        Process:
+        1. Denormalize proposed locations (thickness doesn't need denormalization)
+        2. Add proposed crosswalks to networkx graph
+        3. Convert to torch geometric
+        4. Update XML
         """
-
         for i, (location, thickness) in enumerate(proposals.squeeze(0)):
-            # Denormalize the location (x-coordinate) 
+            # 1. Denormalize the location (x-coordinate)
             denorm_location = self.normalizer_x['min'] + location * (self.normalizer_x['max'] - self.normalizer_x['min'])
 
-            # Find the closest existing nodes (junctions) to place the new crosswalk
+            # 2. Add to networkx graph
             closest_nodes = self._find_closest_nodes(denorm_location)
-
             if closest_nodes:
                 # Create a new node for the crosswalk
                 new_node_id = f"crosswalk_{iteration}_{i}"
-                y_coord = sum(self.iterative_pedestrian_graph.nodes[node]['pos'][1] for node in closest_nodes) / len(closest_nodes)
-                self.iterative_pedestrian_graph.add_node(new_node_id, pos=(denorm_location, y_coord))
+                y_coord = sum(self.iterative_networkx_graph.nodes[node]['pos'][1] for node in closest_nodes) / len(closest_nodes)
+                self.iterative_networkx_graph.add_node(new_node_id, pos=(denorm_location, y_coord))
 
                 # Connect the new node to the closest existing nodes
                 for node in closest_nodes:
-                    self.iterative_pedestrian_graph.add_edge(new_node_id, node, width=thickness)
+                    self.iterative_networkx_graph.add_edge(new_node_id, node, width=thickness)
 
-        # After updating the graph, we need to update the PyTorch Geometric Data object
-        torch_graph = self._convert_to_torch_geometric(self.iterative_pedestrian_graph)
-        self._save_graph_as_xml(self.iterative_pedestrian_graph, iteration)
+        # 3. Update torch geometric graph
+        self.iterative_torch_graph = self._convert_to_torch_geometric(self.iterative_networkx_graph)
+        # 4. Update XML
+        self._save_graph_as_xml(self.iterative_networkx_graph, self.other_than_pedestrian_xml_graph, iteration)
 
-        if self.design_args['save_graph_images']:
-            save_graph_visualization(self.iterative_pedestrian_graph, iteration)
-            save_better_graph_visualization(self.iterative_pedestrian_graph, iteration)
-
-        return torch_graph
-    
     def _get_reward(self, iteration):
         """
         Design reward based on:
@@ -435,17 +459,37 @@ class DesignEnv(gym.Env):
 
     def reset(self):
         """
-        Reset (only gets called once at the beginning of training) the environment to its initial state.
-        Do we want the design agent to ever see the original graph? Yes.
-        The original and iterative graphs are set during initialization.
+        Reset the environment to its initial state.
+        - Add initial original set of crosswalks to the base canvas of all graphs
+        - Return state extracted from iterative torch graph
         """
+
+        # Add the 7 crosswalks from the original net file
+        original_crosswalk_connections = [('9727816846','9727816851'), ('9727816625','9666274798'), ('9740157158','9666274886'), ('9740483934','9655154530'),('9740157204','9740157195'), ('9740484420','9740157210'), ('9740484528','9740484524')]
         
-        # Recreate the PyTorch Geometric Data object
-        self.iterative_torch_graph = self._convert_to_torch_geometric(self.iterative_pedestrian_graph)
+        for edge in original_crosswalk_connections:
+            from_node = edge[0]
+            to_node = edge[1]
+
+            # coordinates of the nodes
+            from_node_coords = self.pedestrian_networkx_graph.nodes[from_node]['pos']
+            to_node_coords = self.pedestrian_networkx_graph.nodes[to_node]['pos']
+
+            # Add nodes to networkx graph
+            self.iterative_networkx_graph.add_node(from_node, pos=from_node_coords)
+            self.iterative_networkx_graph.add_node(to_node, pos=to_node_coords)
+
+            # Add edge to networkx graph
+            self.iterative_networkx_graph.add_edge(from_node, to_node, width=3.0)
         
+        # Update torch graph and XML
+        self.iterative_torch_graph = self._convert_to_torch_geometric(self.iterative_networkx_graph)
+        self._save_graph_as_xml(self.iterative_networkx_graph, self.other_than_pedestrian_xml_graph, 0)
+        
+        # Return state
         state = Data(x=self.iterative_torch_graph.x,
-                      edge_index=self.iterative_torch_graph.edge_index,
-                      edge_attr=self.iterative_torch_graph.edge_attr)
+                    edge_index=self.iterative_torch_graph.edge_index,
+                    edge_attr=self.iterative_torch_graph.edge_attr)
         
         return state
 
@@ -455,7 +499,7 @@ class DesignEnv(gym.Env):
         """
         pass
     
-    def _cleanup_graph(self, graph):
+    def _cleanup_graph(self, graph, existing_crosswalks):
         """
         This step creates a base graph upon which additional edges are added/ removed during training.
         Multiple things happen (Requires some manual input):
@@ -464,7 +508,7 @@ class DesignEnv(gym.Env):
             - In the original graph, more than 2 nodes may exist to create a crosswalk.
             - We need to remove these nodes in the middle.
 
-        1. Clear existing crosswalks in the corridor (NOT DONE RIGHT NOW)
+        1. Clear existing crosswalks in the corridor 
             - In the case where we want to start the design agent from scratch, we need to clear the corridor of all existing crosswalks.
             - Since we are benchmarking against the original graph, we do not want the design agent to ever see the original graph in its learning process.
 
@@ -482,14 +526,8 @@ class DesignEnv(gym.Env):
         middle_nodes = ['9727816850','9727816844', '9727816623', '9740157155', 'cluster_9740157181_9740483933','9740157194','9740157192', '9740157209','9740157207','9740484527']
         cleanup_graph.remove_nodes_from(middle_nodes) # remove the middle nodes
 
-        clean_connections = [('9727816846','9727816851'), ('9727816625','9666274798'), ('9740157158','9666274886'), ('9740483934','9655154530'),('9740157204','9740157195'), ('9740484420','9740157210'), ('9740484528','9740484524')]
-        for edge in clean_connections:
-            cleanup_graph.add_edge(edge[0], edge[1], width=3.0)
-
-        # 1. Get all nodes from clean_connections and remove
-        nodes_to_remove_1 = [node for connection in clean_connections for node in connection]
-        cleanup_graph.remove_nodes_from(nodes_to_remove_1)
-
+        # 1. 
+        cleanup_graph.remove_nodes_from(existing_crosswalks)
 
         # 2.
         # remove everything with y-coordinates outside 10% and 90% range
@@ -509,11 +547,10 @@ class DesignEnv(gym.Env):
         fringe_nodes = ['9727779406','9740484031','cluster_9740411700_9740411702','9740155241','9740484518', '9740484521']
         isolated_nodes = list(nx.isolates(cleanup_graph))
         isolated_and_fringe_nodes = fringe_nodes + isolated_nodes
-
         cleanup_graph.remove_nodes_from(isolated_and_fringe_nodes)
-        cleanup_graph.remove_edges_from(cleanup_graph.edges(isolated_and_fringe_nodes)) 
-
+        #cleanup_graph.remove_edges_from(cleanup_graph.edges(isolated_and_fringe_nodes))  # TODO: When the isolated nodes are removed, are the edges automatically removed?
         print(f"\nAfter cleanup: {len(cleanup_graph.nodes())} nodes, {len(cleanup_graph.edges())} edges\n")
+
         return cleanup_graph
     
     def _find_closest_nodes(self, x_location):
@@ -521,7 +558,7 @@ class DesignEnv(gym.Env):
         Finds the closest existing nodes (junctions) to the given x_location.
         Returns a list of node IDs.
         """
-        nodes = list(self.iterative_pedestrian_graph.nodes(data=True))
+        nodes = list(self.iterative_networkx_graph.nodes(data=True))
         sorted_nodes = sorted(nodes, key=lambda n: abs(n[1]['pos'][0] - x_location))
         
         # Get the two closest nodes
@@ -583,46 +620,101 @@ class DesignEnv(gym.Env):
 
         return torch.stack([normalized_x, normalized_y], dim=1)
     
-    def _save_graph_as_xml(self, graph, iteration):
+    def _save_graph_as_xml(self, networkx_graph, other_than_pedestrian_xml_graph, iteration):
         """
-        Saves the current state of the graph in netrowkx as a SUMO network XML file.
-        when saving, changes made from previous iterations are discarded. i.e., only the changes of this iteration on the base graph are saved.
+        To save the current state of the graph in networkx as a SUMO network XML file:
+        - The networkx graph passed here only contains the current state of the pedestrian walk graph (with possible crosswalks in successive iterations).
+        - All the other stuff (vehicle roads, junctions) is preserved from the original net file (present in other_than_pedestrian_xml_graph).
         """
+        
+        # Start with a fresh copy of base XML
+        self.iterative_xml_tree = ET.parse(other_than_pedestrian_xml_graph)
+        self.iterative_xml_root = self.iterative_xml_tree.getroot()
 
-        filename = f'network_iteration_{iteration}.net.xml' 
+        # Add crosswalks based on the current graph state
+        for node, data in networkx_graph.nodes(data=True):
+            if node.startswith('crosswalk'):  # Only process crosswalk nodes
+                # Find non-crosswalk neighbors (junctions)
+                non_crosswalk_neighbors = [j for j in networkx_graph.neighbors(node) if not j.startswith('crosswalk')]
+                
+                if len(non_crosswalk_neighbors) >= 2:  # Need at least two junctions for a valid crossing
+                    # Get the width from one of the edges
+                    width = next(iter(networkx_graph[node].values()))['width']
+                    
+                    # Create a new junction element for the crosswalk
+                    junction = ET.SubElement(self.iterative_xml_root, 'junction')
+                    junction.set('id', node)
+                    junction.set('type', 'priority')
+                    junction.set('x', str(data['pos'][0]))
+                    junction.set('y', str(data['pos'][1]))
+                    junction.set('z', '0.00')
+                    junction.set('incLanes', '')
+                    junction.set('intLanes', '')
+                    junction.set('shape', f"{data['pos'][0]},{data['pos'][1]}")
 
-        # Load the original XML file
-        tree = ET.parse(self.original_net_file)
-        root = tree.getroot()
+                    # Create edges for each connection
+                    for idx, neighbor in enumerate(non_crosswalk_neighbors):
+                        # Create unique IDs for the edges
+                        edge_id = f"{node}_to_{neighbor}"
+                        
+                        # Add edge element
+                        edge = ET.SubElement(self.iterative_xml_root, 'edge')
+                        edge.set('id', edge_id)
+                        edge.set('from', node)
+                        edge.set('to', neighbor)
+                        edge.set('priority', '1')
+                        edge.set('type', 'crossing')
+                        
+                        # Add lane element
+                        lane = ET.SubElement(edge, 'lane')
+                        lane.set('id', f"{edge_id}_0")
+                        lane.set('index', '0')
+                        lane.set('speed', '13.89')
+                        lane.set('length', '10.00')
+                        lane.set('width', str(width))
+                        lane.set('shape', f"{data['pos'][0]},{data['pos'][1]} {networkx_graph.nodes[neighbor]['pos'][0]},{networkx_graph.nodes[neighbor]['pos'][1]}")
+                        lane.set('allow', 'pedestrian')
 
-        # Remove existing crosswalks
-        for crosswalk in root.findall(".//crossing"):
-            root.remove(crosswalk)
+                        # Add reverse edge
+                        rev_edge_id = f"{neighbor}_to_{node}"
+                        rev_edge = ET.SubElement(self.iterative_xml_root, 'edge')
+                        rev_edge.set('id', rev_edge_id)
+                        rev_edge.set('from', neighbor)
+                        rev_edge.set('to', node)
+                        rev_edge.set('priority', '1')
+                        rev_edge.set('type', 'crossing')
+                        
+                        # Add reverse lane
+                        rev_lane = ET.SubElement(rev_edge, 'lane')
+                        rev_lane.set('id', f"{rev_edge_id}_0")
+                        rev_lane.set('index', '0')
+                        rev_lane.set('speed', '13.89')
+                        rev_lane.set('length', '10.00')
+                        rev_lane.set('width', str(width))
+                        rev_lane.set('shape', f"{networkx_graph.nodes[neighbor]['pos'][0]},{networkx_graph.nodes[neighbor]['pos'][1]} {data['pos'][0]},{data['pos'][1]}")
+                        rev_lane.set('allow', 'pedestrian')
 
-        # Add new crosswalks based on the updated graph
-        for node, data in graph.nodes(data=True):
-
-            # Find non-crosswalk neighbors
-            non_crosswalk_neighbors = [j for j in graph.neighbors(node)]
-            
-            if non_crosswalk_neighbors:
-                # Find the nearest junction
-                nearest_junction = min(
-                    non_crosswalk_neighbors,
-                    key=lambda j: ((data['pos'][0] - graph.nodes[j]['pos'][0])**2 +
-                                    (data['pos'][1] - graph.nodes[j]['pos'][1])**2)**0.5
-                )
-
-                # Create a new crossing element
-                crossing = ET.SubElement(root, 'crossing')
-                crossing.set('id', node)
-                crossing.set('node', nearest_junction)
-                crossing.set('shape', f"{data['pos'][0]},{data['pos'][1]} {data['pos'][0]},{data['pos'][1]}")  # Simplified shape
+                        # Add connection elements
+                        connection = ET.SubElement(self.iterative_xml_root, 'connection')
+                        connection.set('from', edge_id)
+                        connection.set('to', rev_edge_id)
+                        connection.set('fromLane', '0')
+                        connection.set('toLane', '0')
+                        
+                        rev_connection = ET.SubElement(self.iterative_xml_root, 'connection')
+                        rev_connection.set('from', rev_edge_id)
+                        rev_connection.set('to', edge_id)
+                        rev_connection.set('fromLane', '0')
+                        rev_connection.set('toLane', '0')
 
         # Save the updated XML file
-        tree.write(os.path.join('./SUMO_files/network_iterations', filename))
-        print(f"Updated network saved to {os.path.join('./SUMO_files/network_iterations', filename)}")
+        filename = f'network_iteration_{iteration}.net.xml'
+        filepath = os.path.join('./SUMO_files/network_iterations', filename)
+        self.iterative_xml_tree.write(filepath)
+        print(f"XML network saved to {os.path.join('./SUMO_files/network_iterations', filename)}")
 
+        return filepath
+    
     def _initialize_normalizers(self, graph):
         """
         Initialize normalizers based on the graph coordinates
@@ -633,3 +725,43 @@ class DesignEnv(gym.Env):
         y_coords = coords[:, 1]
         self.normalizer_x = {'min': float(np.min(x_coords)), 'max': float(np.max(x_coords))}
         self.normalizer_y = {'min': float(np.min(y_coords)), 'max': float(np.max(y_coords))}
+
+
+
+        # G = nx.Graph()
+        # tree = ET.parse(sumo_net_file)
+        # root = tree.getroot()
+
+        # # Extract junctions
+        # for junction in root.findall(".//junction"):
+        #     junction_id = junction.get('id')
+        #     x, y = float(junction.get('x')), float(junction.get('y'))
+        #     G.add_node(junction_id, pos=(x, y))
+
+        # # only getting edges that have function="walkingarea" does not work. Perhaps the junction could be internal. 
+        # # For each edge, go to the lane and check if allow="pedestrian" exists
+        # # Connect junctions based on edges with pedestrian lanes
+        # for edge in root.findall(".//edge"):
+        #     from_junction = edge.get('from')
+        #     to_junction = edge.get('to')
+
+        #     if from_junction in G.nodes() and to_junction in G.nodes():
+
+        #         # Check if any lane allows pedestrians
+        #         for lane in edge.findall('lane'):
+        #             allow = lane.get('allow', '')
+                    
+        #             if 'pedestrian' in allow:
+        #                 width = float(lane.get('width', 3.0)) # default width is 3.0
+        #                 G.add_edge(from_junction, to_junction, width=width)
+        #                 break  # Only need to add edge once if multiple pedestrian lanes
+
+        # # Add debug print at the end
+        # print("\nGraph Coordinate Ranges:")
+        # pos = nx.get_node_attributes(G, 'pos')
+        # x_coords = [coord[0] for coord in pos.values()]
+        # y_coords = [coord[1] for coord in pos.values()]
+        # print(f"X range: {min(x_coords):.2f} to {max(x_coords):.2f}")
+        # print(f"Y range: {min(y_coords):.2f} to {max(y_coords):.2f}")
+        
+        # return G
