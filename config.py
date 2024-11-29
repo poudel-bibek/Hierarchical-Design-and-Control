@@ -14,6 +14,8 @@ def get_config():
         "pedestrian_input_trips": "./SUMO_files/original_pedtrips.xml",  # Original Input pedestrian trips file
         "pedestrian_output_trips": "./SUMO_files/scaled_trips/scaled_pedtrips.xml",  # Output pedestrian trips file
         "original_net_file": "./SUMO_files/Craver_traffic_lights.net.xml",  # Original net file
+        "component_dir": "./SUMO_files/component_SUMO_files",
+        "network_dir": "./SUMO_files/network_iterations",
 
         # Demand scaling
         "manual_demand_veh": None,  # Manually scale vehicle demand before starting the simulation (veh/hr)
@@ -101,6 +103,8 @@ def classify_and_return_args(train_config, worker_device):
         'max_coordinate': train_config['max_coordinate'],
         'save_freq': train_config['save_freq'],
         'original_net_file': train_config['original_net_file'],
+        'component_dir': train_config['component_dir'],
+        'network_dir': train_config['network_dir'],
     }
 
     control_args = {

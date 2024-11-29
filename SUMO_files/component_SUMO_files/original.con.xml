@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<!-- generated on 2024-11-25 17:09:55 by Eclipse SUMO netconvert Version 1.20.0
+<!-- generated on 2024-11-29 10:29:07 by Eclipse SUMO netconvert Version 1.20.0
 <configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/netconvertConfiguration.xsd">
 
     <input>
-        <sumo-net-file value="Craver_traffic_lights.net.xml"/>
+        <sumo-net-file value="./SUMO_files/Craver_traffic_lights.net.xml"/>
     </input>
 
     <output>
-        <plain-output-prefix value="output"/>
+        <plain-output-prefix value="./SUMO_files/component_SUMO_files/original"/>
         <plain-output.lanes value="true"/>
         <output.street-names value="true"/>
     </output>

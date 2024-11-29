@@ -39,3 +39,9 @@ For a complete list of parameters, refer to the argument parser in `ppo_run.py`.
 
 ### Single Run
 To start training with default settings:
+
+
+This command may be different: 
+```bash
+command = f"netconvert --sumo-net-file {sumo_net_file} --plain-output-prefix {output_dir}/base_xml --plain-output.lanes true"
+```

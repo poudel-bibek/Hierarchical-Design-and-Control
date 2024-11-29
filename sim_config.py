@@ -69,6 +69,7 @@ CONTROLLED_CROSSWALKS_DICT = {
         'related_junction_edges': [':9727816658_w0', ':9687187526_w0'], # For forward lookup
         'connected_edges': ['1054121752#1', '1054121752#0', '1058666191#4', '1058666191#5'],
         'reroute_edges': {'upside': '1054121747#2' , 'downside': '1058666192' }, # Used as a fulcrum
+        'crossing_nodes': [], # First the bottom one, last one on the top. # Not used 
     },
     # Crosswalk no. 1 and 2 are not controlled. They are simply present here to serve as a next best route if crosswalk 0 or 3 are disabled.
     1: {
@@ -77,6 +78,7 @@ CONTROLLED_CROSSWALKS_DICT = {
         'related_junction_edges': [':9687148199_w0','1054116933_0',':9687148198_w0',':9727816638_w0'],  
         'connected_edges': ['1078803478#0','1058666191#4','1058666191#3','1054116932#1','1054116932#0'],
         'reroute_edges': {'upside': '1054116929#4' , 'downside': '1054116929#2' }, 
+        'crossing_nodes': [], # Not used
     },
     2: {
         'ids': [':cluster_172228464_482708521_9687148201_9687148202_#5more_c1',],
@@ -84,13 +86,15 @@ CONTROLLED_CROSSWALKS_DICT = {
         'related_junction_edges': [':9687148197_w0',':9666242268_w0',':9727816638_w0',':9687148198_w0'],
         'connected_edges': ['1058666191#4','1058666191#3','1050677005#3','452522817#1','1050677005#2'],  
         'reroute_edges': {'upside': '1054116929#0' , 'downside': '1054116929#1' }, 
-    },
+        'crossing_nodes': [], # Not used
+    }, 
     3: {
         'ids': [':9727816850_c0'],
         'vicinity_walking_edges': [':9727816850_w1', '1058666207#1', ':9727816844_w0',':9727816850_w0', '1058666206#0', '1058666207#0' ], # Have to be re-routed # JUnctions should not be here
         'related_junction_edges': [':9727816846_w0', ':9727816851_w0'], 
         'connected_edges': ['1050677005#7','1050677005#6','1058666191#1','1058666191#2'],
         'reroute_edges': {'upside': '1058666207#1' , 'downside': '1058666207#0' }, 
+        'crossing_nodes': ['9727816846', '9727816844', '9727816850', '9727816851'],
     },
     4: {
         'ids': [':9727816623_c0'],
@@ -98,6 +102,7 @@ CONTROLLED_CROSSWALKS_DICT = {
         'related_junction_edges': [':9727816625_w0', ':9666274798_w0'], # All edges with _w0 in the end begin with : in front
         'connected_edges': ['1058666187#2','1058666187#3', '1050677005#10','1050677005#9' ], 
         'reroute_edges': {'upside': '1051865729#3' , 'downside': '1058666188#1' },
+        'crossing_nodes': ['9727816625', '9727816623', '9666274798'], # First the bottom one, last one on the top.
     },
     5: {
         'ids': [':9740157155_c0'],
@@ -105,6 +110,7 @@ CONTROLLED_CROSSWALKS_DICT = {
         'related_junction_edges': [':9666274886_w0', ':9740157154_w0'],
         'connected_edges': ['1060131388#2','1060131388#3', '1050677005#13', '1050677005#12'],
         'reroute_edges': {'upside': '1060131391#1' , 'downside': '1060131391#0'}, 
+        'crossing_nodes': ['9740157154', '9740157153', '9740157155', '9666274886'], # First the bottom one, last one on the top.
     },
     6: {
         'ids': [':cluster_9740157181_9740483933_c0'],
@@ -112,6 +118,7 @@ CONTROLLED_CROSSWALKS_DICT = {
         'related_junction_edges': [':9740157180_w0', ':9655154530_w0'],
         'connected_edges': ['1060131402', ':9740483934_w0', ':9740157180_w0', '1060131401#1', '1050677005#14', '1050677005#13', '1050677007#1'],
         'reroute_edges': {'upside': '1060131401#3' , 'downside': '1060131401#2'},
+        'crossing_nodes': ['9740157180', 'cluster_9740157181_9740483933', '9655154530'],
     },
     7: {
         'ids': [':9740157194_c0'],
@@ -119,6 +126,7 @@ CONTROLLED_CROSSWALKS_DICT = {
         'related_junction_edges': [':9740157204_w0', ':9740157195_w0', ':10054309033_w0', ], # One step lookup
         'connected_edges': ['1050677005#16', '1098062395', '1050677005#18', '1060131403#1', '1060112727#1', '1060131404#1'],
         'reroute_edges': {'upside': '1060131406'  , 'downside': '1060131405#1'},
+        'crossing_nodes': ['9740157204', '9740157194', '9740157192', '9740157195'], 
     },
     8: {
         'ids': [':9740157209_c0'],
@@ -126,6 +134,7 @@ CONTROLLED_CROSSWALKS_DICT = {
         'related_junction_edges': [':9740157207_w0', ':9740157211_w0', ':9740157210_w0', '1060131404#2' ], # For lookup
         'connected_edges': [':9740484420_w0', '1060131404#3', '1050677005#19', '1050677005#18', '1060131409#1' ],
         'reroute_edges': {'upside': '1060131408#1'  , 'downside': '1060131408#0' }, 
+        'crossing_nodes': ['9740484420', '9740157207', '9740157209', '9740157210'],
     },
     9: {
         'ids': [':9740484527_c0'],
@@ -133,6 +142,7 @@ CONTROLLED_CROSSWALKS_DICT = {
         'related_junction_edges': [':9740484528_w0', ':9740484524_w0'],
         'connected_edges': ['1060166262#2', '1050677005#20', '1060112787#2', '1060112787#1'],
         'reroute_edges': {'upside': '1050677005#21' , 'downside': '1060166260#1' },
+        'crossing_nodes': ['9740484528', '9740484527', '9740484524'],
     },
     10: {
         'ids': [':cluster_172228408_9739966907_9739966910_c2'],
@@ -140,6 +150,7 @@ CONTROLLED_CROSSWALKS_DICT = {
         'related_junction_edges': [':9739966908_w0', ':9739966904_w0', '1060112789#0', '1060112789#2'], # Lookup. 89#0 is the right one (downside)
         'connected_edges': [':9739966895_w0', ':9740484531_w0', '1060112790', ':cluster_172228408_9739966907_9739966910_w1'], # _w1 is the one on the right (downside)
         'reroute_edges': {'upside': '1060112789#2' , 'downside': '1060112789#1'},
+        'crossing_nodes': [], # Not used
     },
 }
 
