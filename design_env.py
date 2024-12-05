@@ -1,4 +1,5 @@
 import os
+import math 
 import random
 import shutil
 from itertools import tee
@@ -168,7 +169,10 @@ class DesignEnv(gym.Env):
         
         # Cleanup the pedestrian walkway graph (i.e, remove isolated, fringe, existing crosswalks) to create a base canvas
         self.base_networkx_graph = self._cleanup_graph(pedestrian_networkx_graph, self.existing_crosswalks)
-        self._update_xml_files(self.base_networkx_graph, 'base') # Create base XML files from latest networkx graph
+        self.horizontal_nodes_top = ['9666242268', '9666274719', '9666274722', '9666274721', '9727816851', '9666274744', '9666274574', '9666274798', '9666274635', '9666274616', '9666274886', '9655154530', '9655154527', '9655154520', '10054309033', '9740157195', '9740157210', '10054309051', '9740484524', '9740484531']
+        self.horizontal_nodes_bottom = ['9727816638', '9727816862', '9727816846', '9727816629', '9727779405', '9740157080', '9727816625', '9740157142', '9740157169', '9740157145', '9740484033', '9740157174', '9740157171', '9740157154', '9740157158', '9740411703', '9740411701', '9740483978', '9740483934', '9740157180', '9740483946', '9740157204', '9740484420', '9740157211', '9740484523', '9740484522', '9740484512', '9740484528', '9739966899', '9739966895']
+
+        #self._update_xml_files(self.base_networkx_graph, 'base') # Create base XML files from latest networkx graph
 
         if self.design_args['save_graph_images']:
             save_graph_visualization(graph=pedestrian_networkx_graph, iteration='original')
@@ -216,7 +220,7 @@ class DesignEnv(gym.Env):
         Extract the crosswalks present initially in the XML. (exclude 0, 1, 2, 3, 10)
         Add the node locations to the existing crosswalk from the networkx graph.
         """
-        excluded_ids = [0, 1, 2, 3, 10]
+        excluded_ids = [0, 1, 2, 10]
         existing_crosswalks = {}
         
         for key, data in CONTROLLED_CROSSWALKS_DICT.items():
@@ -252,7 +256,7 @@ class DesignEnv(gym.Env):
             node_id = node.get('id')
             x = float(node.get('x'))
             y = float(node.get('y'))
-            G.add_node(node_id, pos=(x, y))
+            G.add_node(node_id, pos=(x, y), type='regular')
 
         # Parse edge file
         edge_tree = ET.parse(f'{self.component_dir}/original.edg.xml')
@@ -305,7 +309,7 @@ class DesignEnv(gym.Env):
             print(f"Error running netconvert: {e}")
             print("Error output:", e.stderr)
 
-    def step(self, action, iteration, global_step):
+    def step(self, action, num_actual_proposals, iteration, global_step):
         """
         Every step in the design environment involves:
         - Updating the network xml file based on the design action.
@@ -314,10 +318,10 @@ class DesignEnv(gym.Env):
 
         # First complete the higher level agent's step.
         print(f"Action received: {action}")
+
         # Convert tensor action to proposals
         action = action.cpu().numpy()  # Convert to numpy array if it's not already
-        num_proposals = np.count_nonzero(action.any(axis=1))  # Count non-zero rows
-        proposals = action[:num_proposals]  # Only consider the actual proposals
+        proposals = action.squeeze(0)[:num_actual_proposals]  # Only consider the actual proposals
 
         print(f"\n\nProposals: {proposals}\n\n")
 
@@ -451,28 +455,161 @@ class DesignEnv(gym.Env):
         2. Add proposed crosswalks to networkx graph
         3. Update XML
         """
-        for i, (location, thickness) in enumerate(proposals.squeeze(0)):
+
+        # First make a copy
+        self.iterative_networkx_graph = self.base_networkx_graph.copy()
+        latest_horizontal_nodes_top = self.horizontal_nodes_top
+        latest_horizontal_nodes_bottom = self.horizontal_nodes_bottom
+
+        for i, (location, thickness) in enumerate(proposals):
+            
             # 1. Denormalize the location (x-coordinate)
             denorm_location = self.normalizer_x['min'] + location * (self.normalizer_x['max'] - self.normalizer_x['min'])
+            print(f"\nLocation: {location} Denormalized location: {denorm_location}\n")
 
-            # 2. Add to networkx graph
-            closest_nodes = self._find_closest_nodes(denorm_location)
-            if closest_nodes:
-                # Create a new node for the crosswalk
-                new_node_id = f"crosswalk_{iteration}_{i}"
-                y_coord = sum(self.iterative_networkx_graph.nodes[node]['pos'][1] for node in closest_nodes) / len(closest_nodes)
-                self.iterative_networkx_graph.add_node(new_node_id, pos=(denorm_location, y_coord))
+            # 2. Add to base networkx graph
+            # Add new nodes in both sides in this intersection of type 'regular'.
+            # Connect the new nodes to the existing nodes via edges with the given thickness.
 
-                # Connect the new node to the closest existing nodes
-                for node in closest_nodes:
-                    self.iterative_networkx_graph.add_edge(new_node_id, node, width=thickness)
+            latest_horizontal_segment = self._get_horizontal_segment(latest_horizontal_nodes_top, latest_horizontal_nodes_bottom, self.iterative_networkx_graph) # Start with set of nodes in base graph
+            new_intersects = self._find_intersects(denorm_location, latest_horizontal_segment, self.iterative_networkx_graph)
+            print(f"\nNew intersects: {new_intersects}\n")
+
+            mid_node_details = {'top': {'y_cord': None, 'node_id': None}, 'bottom': {'y_cord': None, 'node_id': None}}
+            # Now add an edge from from_node to the pos of the new node. As well as from the new node to to_node.
+           
+            for side in ['top', 'bottom']:
+                 # Remove the old edge first.
+                from_node, to_node = new_intersects[side]['edge'][0], new_intersects[side]['edge'][1]
+                self.iterative_networkx_graph.remove_edge(from_node, to_node)
+
+                # Add the new edge  
+                end_node_pos = new_intersects[side]['intersection_pos']
+                end_node_id = f"iter{iteration}_{i}_{side}"
+                self.iterative_networkx_graph.add_node(end_node_id, pos=end_node_pos, type='regular')# type for this is regular
+
+                self.iterative_networkx_graph.add_edge(from_node, end_node_id, width=2.0) # The width of these edges is default (Not from the proposal)
+                self.iterative_networkx_graph.add_edge(end_node_id, to_node, width=2.0)
+
+                # Modify the horizontal segment (add the new node)
+                if side == 'top':
+                    latest_horizontal_nodes_top.append(end_node_id)
+                else:
+                    latest_horizontal_nodes_bottom.append(end_node_id)
+
+                mid_node_details[side]['y_cord'] = end_node_pos[1]
+                mid_node_details[side]['node_id'] = end_node_id
+
+            # Add the mid node and edges 
+            mid_node_id = f"iter{iteration}_{i}_mid"
+            mid_node_pos = (denorm_location, (mid_node_details['top']['y_cord'] + mid_node_details['bottom']['y_cord']) / 2)
+            self.iterative_networkx_graph.add_node(mid_node_id, pos=mid_node_pos, type='middle')
+            self.iterative_networkx_graph.add_edge(mid_node_details['top']['node_id'], mid_node_id, width=thickness) # Thickness is from sampled proposal
+            self.iterative_networkx_graph.add_edge(mid_node_id, mid_node_details['bottom']['node_id'], width=thickness) # Thickness is from sampled proposal
 
         if self.design_args['save_graph_images']:
             save_graph_visualization(graph=self.iterative_networkx_graph, iteration=iteration)
             save_better_graph_visualization(graph=self.iterative_networkx_graph, iteration=iteration)
 
         # 3. Update XML
-        self._update_xml_files(self.iterative_networkx_graph, iteration)
+        #self._update_xml_files(self.iterative_networkx_graph, iteration)
+    
+    def _find_segment_intersects(self, segments, x_location):
+        """
+        Helper function to check intersection
+        """
+        
+        for start_x, (length, edge) in segments.items():
+            end_x = start_x + length
+            if start_x <= x_location <= end_x:
+                return {
+                    'edge': edge,
+                    'start_x': start_x,
+                    'length_x': length
+                }
+                    
+    def _find_intersects(self, x_location, latest_horizontal_segment, latest_graph):
+        """
+        Find where a given x-coordinate intersects with the horizontal segments.
+        Returns the edge IDs and positions where the intersection occurs.
+        The graph is always changing as edges are added/removed.
+        """
+        intersections = {}
+
+        for side in ['top', 'bottom']:
+            intersections[side] = {}
+            intersection = self._find_segment_intersects(latest_horizontal_segment[side], x_location)
+
+            # Interpolate along the edge to find the y_coordinates
+            x_diff = (x_location - intersection['start_x']) / intersection['length_x'] # The proportion of the edge along x
+
+            from_node, to_node = intersection['edge'][0], intersection['edge'][1]
+            from_node_y, to_node_y = latest_graph.nodes[from_node]['pos'][1], latest_graph.nodes[to_node]['pos'][1]
+            sign = 1 if from_node_y < to_node_y else -1
+
+            length_y = abs(to_node_y - from_node_y)
+            y_location = from_node_y + sign*abs(x_diff)*length_y
+
+            intersections[side]['edge'] = intersection['edge']
+            intersections[side]['intersection_pos'] = (x_location, y_location)
+
+        return intersections
+
+    def _get_horizontal_segment(self, horizontal_nodes_top, horizontal_nodes_bottom, latest_graph, validation=False):
+        """
+        Get the entire horizontal segment of the corridor.
+        """
+
+        base_nodes_dict = {node[0]: node[1] for node in latest_graph.nodes(data=True)}
+        edges = list(latest_graph.edges(data=True))
+
+        horizontal_segment = {'top': {}, 'bottom': {}}
+
+        # find edge ids horizontal_edges_top, horizontal_edges_bottom in edges
+        for edge in edges:
+            from_node, to_node = edge[0], edge[1]
+            from_node_x, to_node_x = base_nodes_dict[from_node]['pos'][0], base_nodes_dict[to_node]['pos'][0]
+            if from_node in horizontal_nodes_top and to_node in horizontal_nodes_top:
+                smaller_x, larger_x = min(from_node_x, to_node_x), max(from_node_x, to_node_x)
+                horizontal_segment['top'][smaller_x] = [larger_x - smaller_x, edge] #[2]['id']] # starting position, length, edge id
+            elif from_node in horizontal_nodes_bottom and to_node in horizontal_nodes_bottom:
+                smaller_x, larger_x = min(from_node_x, to_node_x), max(from_node_x, to_node_x)
+                horizontal_segment['bottom'][smaller_x] = [larger_x - smaller_x, edge] #[2]['id']] # starting position, length, edge id
+
+        # print(f"\nHorizontal top: {horizontal_segment['top']}\n")
+        # print(f"\nHorizontal bottom: {horizontal_segment['bottom']}\n")
+
+        # validation plot (to see if they make continuous horizontal segments)
+        if validation:
+            _, ax = plt.subplots()
+            horizontal_segment_top = sorted(list(horizontal_segment['top'].keys()))
+            horizontal_segment_bottom = sorted(list(horizontal_segment['bottom'].keys()))
+            for start_pos in horizontal_segment_top:
+                x_min, x_max = horizontal_segment_top[0], horizontal_segment_top[-1]
+                length = horizontal_segment['top'][start_pos][0]
+                ax.plot([start_pos, start_pos + length], [2, 2], 'r-')
+                ax.plot(start_pos, 2, 'x')
+
+                # plot the min and max x-coordinate values
+                ax.text(x_min, 2, f'{x_min:.2f}', fontsize=12, verticalalignment='bottom')
+                ax.text(x_max, 2, f'{x_max:.2f}', fontsize=12, verticalalignment='bottom')
+
+            for start_pos in horizontal_segment_bottom:
+                x_min, x_max = horizontal_segment_bottom[0], horizontal_segment_bottom[-1]
+                length = horizontal_segment['bottom'][start_pos][0]
+                ax.plot([start_pos, start_pos + length], [8, 8], 'b-')
+                ax.plot(start_pos, 8, 'x')
+
+                # plot the min and max x-coordinate values
+                ax.text(x_min, 8, f'{x_min:.2f}', fontsize=12, verticalalignment='bottom')
+                ax.text(x_max, 8, f'{x_max:.2f}', fontsize=12, verticalalignment='bottom')
+
+            ax.set_ylim(-1, 11)
+            ax.set_xlabel('X-coordinate')
+            plt.savefig('./horizontal_segments.png')
+            #plt.show()
+        
+        return horizontal_segment
 
     def _get_reward(self, iteration):
         """
@@ -492,7 +629,7 @@ class DesignEnv(gym.Env):
 
         self.iterative_networkx_graph = self.base_networkx_graph.copy()
 
-        if not start_from_base:
+        if start_from_base:
             pass # Do nothing
         else: 
             pass
@@ -505,9 +642,12 @@ class DesignEnv(gym.Env):
                 middle_x = (bottom_pos[0] + top_pos[0]) / 2
                 middle_y = (bottom_pos[1] + top_pos[1]) / 2
                 middle_pos = (middle_x, middle_y)
-                middle_node_id = f"{cid}_middle"
+
+                # sanitize the id 
+                cid = cid.replace(":", "") # Do not use a space
+                middle_node_id = f"{cid}_mid"
                 # Add the new middle node to the networkx graph
-                self.iterative_networkx_graph.add_node(middle_node_id, pos=middle_pos)
+                self.iterative_networkx_graph.add_node(middle_node_id, pos=middle_pos, type='middle')
 
                 # Add the connecting edge between the end nodes
                 crossing_nodes = crosswalk_data['crossing_nodes']
@@ -521,7 +661,7 @@ class DesignEnv(gym.Env):
 
         # Everytime the networkx graph is updated, the XML graph needs to be updated.
         # Make the added nodes/edges a crossing with traffic light in XML.
-        self._update_xml_files(self.iterative_networkx_graph, 0)
+        #self._update_xml_files(self.iterative_networkx_graph, 0)
         
         # Return state
         iterative_torch_graph = self._convert_to_torch_geometric(self.iterative_networkx_graph)
@@ -558,7 +698,7 @@ class DesignEnv(gym.Env):
         print(f"\nBefore cleanup: {len(cleanup_graph.nodes())} nodes, {len(cleanup_graph.edges())} edges\n")
 
         # 0. primary cleanup 
-        print(f"Existing crosswalks: {existing_crosswalks}")
+        #print(f"Existing crosswalks: {existing_crosswalks}")
         middle_nodes = []
         for crosswalk_data in existing_crosswalks.values():
             nodes = crosswalk_data['crossing_nodes'] # There will always be more than 2 nodes.
@@ -591,18 +731,7 @@ class DesignEnv(gym.Env):
 
         return cleanup_graph
     
-    def _find_closest_nodes(self, x_location):
-        """
-        Finds the closest existing nodes (junctions) to the given x_location.
-        Returns a list of node IDs.
-        """
-        nodes = list(self.iterative_networkx_graph.nodes(data=True))
-        sorted_nodes = sorted(nodes, key=lambda n: abs(n[1]['pos'][0] - x_location))
-        
-        # Get the two closest nodes
-        closest_nodes = [sorted_nodes[0][0], sorted_nodes[1][0]]
-        
-        return closest_nodes
+    
     
     def _convert_to_torch_geometric(self, graph):
         """
@@ -668,7 +797,9 @@ class DesignEnv(gym.Env):
 
         Networkx graph will already have:
           - End nodes with position values that come from the proposal.
-          - Middle nodes to create traffic lights.
+          - Middle nodes to create traffic lights. Every proposal will have nodes with id _mid. 
+                - These nodes need to be connected to vehicle nodes on either side as well. 
+                - For every _mid node, a TL logic needs to be added to the traffic_light XML file.
         """
 
         prefix = "original" if iteration == 'base' else f"iteration_base"
@@ -695,7 +826,10 @@ class DesignEnv(gym.Env):
         # print(f"Nodes: {list(networkx_graph.nodes())}\n")
         # print(f"Edges: {list(networkx_graph.edges())}\n")
         
-        # Perform the removeals first.
+        # Perform the removeals first. 
+         # - Pedestrian Nodes and edges (identified by edges of type highway.footway) that are not present in the networkx graph.
+         # - unused TL Logic
+
         # For iteration = base, only need to add the middle nodes and edges (i.e., a special case where end nodes are already present).
         # The XML files, which may have network other than pedestrian network. Keep them intact. 
         # For the nodes and edges related to pedestrian network:
@@ -708,7 +842,6 @@ class DesignEnv(gym.Env):
             # <node id=" " x=" " y=" " type=" " />
             # For the middle nodes, type will "traffic_light" and an attribute tl =" " with the value same as id.
             # For the end nodes, type will be "dead_end"
-            
         # Edge: 
             # From the middle node to end nodes of type "highway.footway"
             # From middle node to vehicle nodes of type "highway.tertiary"
@@ -719,6 +852,143 @@ class DesignEnv(gym.Env):
             # create a nested param element: <param key="origId" value=" "/>
             # end with </lane></edge>
 
+        ### Removals
+        # Find all the nodes in the XML component .nod file (From node id alone we cant differentiate between vehicle and pedestrian nodes.)
+        nodes_in_xml = {} 
+        for node in node_root.findall('node'):
+            node_id = node.get('id')
+            nodes_in_xml[node_id] = node # save the node element itself.
+
+        pedestrian_nodes_in_xml = set()
+        pedestrian_edges_in_xml = {}
+
+        # Find pedestrian nodes and edges in the XML component .edg file. (Using edge attributes to find pedestrian nodes and edges.)
+        for edge in edge_root.findall('edge'):
+            if edge.get('type') in ['highway.footway', 'highway.steps']:
+                if 'pedestrian' in edge.get('allow'):
+                    from_node = edge.get('from')
+                    to_node = edge.get('to')
+                    pedestrian_edges_in_xml[(from_node, to_node)] = edge
+                    pedestrian_nodes_in_xml.update([from_node, to_node])
+
+        # Find nodes to remove, i.e., pedestrian nodes that are in XML component file but not in networkx graph.
+        nodes_to_remove = pedestrian_nodes_in_xml - set(networkx_graph.nodes())
+        print(f"Nodes to remove: {nodes_to_remove}")
+        for node_id in nodes_to_remove:
+            node_element = nodes_in_xml.get(node_id)
+            if node_element is not None:
+                node_root.remove(node_element) # remove from nod component file
+                del nodes_in_xml[node_id] # remove from dictionary
+
+        # At this point, nodes_in_xml contains all vehicles nodes intact. The pedestrian nodes not present in networkx graph removed.
+        # From both component file and dict.
+
+        # Note: Nodes are removed but the edges are not 
+        # Finding edges to remove are more complicated.
+        # If the edge is from pedestrian to vehicle (in the middle node), then stitch the edges. i.e, keep this edge just remove the TL part.
+        # Other edges can be removed
+
+        # Remove all TLs and connections except the default one.
+        default_tl = ['cluster_172228464_482708521_9687148201_9687148202_#5more'] # By default in base, there will the one TL at the left intersection. present.
+        tls_to_remove = []
+        for tl in traffic_light_root.findall('tlLogic'):
+            if tl.get('id') not in default_tl:
+                tls_to_remove.append(tl)
+        for tl in tls_to_remove:
+            traffic_light_root.remove(tl)
+
+        connections_to_remove = []
+        for conn in traffic_light_root.findall('connection'):
+            if conn.get('tl') not in default_tl:
+                connections_to_remove.append(conn)
+        for conn in connections_to_remove:
+            traffic_light_root.remove(conn)
+
+
+        ### Additions
+        # Find the nodes to add (present in networkx graph but not in XML component file). 
+        # For regular nodes: <node id=" " x=" " y=" " />
+        # For all the nodes in networkx graph with type "middle", in the XML component file:
+        # - add a node attribute type with value "traffic_light" and tl with value "node_id".
+        # - add a TL logic and a connection.
+
+        nodes_to_add = set(networkx_graph.nodes()) - set(nodes_in_xml.keys()) # In the iteration base, there will be no nodes to add.
+        print(f"\nNodes to add: {nodes_to_add}")
+        for node_id in nodes_to_add:
+            node_data = networkx_graph.nodes[node_id]
+            x, y = node_data['pos']
+            if node_data.get('type') == 'regular':
+                node_attribs = {'id': node_id, 'x': str(x), 'y': str(y)}
+                node_element = ET.Element('node', node_attribs)
+                node_root.append(node_element)
+            elif node_data.get('type') == 'middle':
+                node_attribs = {'id': node_id, 'x': str(x), 'y': str(y), 'type': 'traffic_light', 'tl': node_id}
+                node_element = ET.Element('node', node_attribs)
+                node_root.append(node_element)
+        
+        # TL logic
+        for node_id in nodes_to_add:
+            node_data = networkx_graph.nodes[node_id]
+            if node_data.get('type') == 'middle':
+                tlLogic_element = ET.Element('tlLogic', id=node_id, type='static', programID='0', offset='0')
+                
+                # Create phases with proper indentation
+                phase1 = ET.SubElement(tlLogic_element, 'phase', duration='77', state='GGr')
+                phase2 = ET.SubElement(tlLogic_element, 'phase', duration='3', state='yyr') 
+                phase3 = ET.SubElement(tlLogic_element, 'phase', duration='5', state='rrG')
+                phase4 = ET.SubElement(tlLogic_element, 'phase', duration='5', state='rrr')
+                
+                # Set tail to newline and text to tab for proper formatting
+                phase1.tail = "\n\t\t"
+                phase2.tail = "\n\t\t" 
+                phase3.tail = "\n\t\t"
+                phase4.tail = "\n"
+                
+                traffic_light_root.append(tlLogic_element)
+                tlLogic_element.text = "\n\t\t"
+                tlLogic_element.tail = "\n"
+
+        # connection
+        # for node_id in nodes_to_add:
+        #     node_data = networkx_graph.nodes[node_id]
+        #     if node_data.get('type') == 'middle':
+        #         from_node =  # TODO: Figure these out.. are these vehicle nodes?
+        #         to_node =  # TODO: Figure these out.. are these vehicle nodes?
+        #         conn_attribs = {'from': from_node, 'to': to_node, 'tl': node_id, 'fromLane': '0', 'toLane': '0'} # Since inside the corridor, there is only one lane.
+        #         connection_element = ET.Element('connection', conn_attribs)
+        #         traffic_light_root.append(connection_element)
+        
+
+        # To add the pedestrian edges. Connect Regular to middle.
+
+        
+
+
+        # Add new pedestrian edges to XML
+        # edges_to_add = pedestrian_edge_tuples_in_graph - pedestrian_edge_tuples_in_xml
+        # for from_node, to_node in edges_to_add:
+        #     edge_data = networkx_graph.get_edge_data(from_node, to_node)
+        #     edge_id = edge_data.get('id', f'edge_{from_node}_{to_node}')
+        #     width = edge_data.get('width', 2.0)
+        #     edge_attribs = {
+        #         'id': edge_id,
+        #         'from': from_node,
+        #         'to': to_node,
+        #         'priority': '1',
+        #         'type': 'highway.footway',
+        #         'numLanes': '1',
+        #         'speed': '2.78',
+        #         'allow': 'pedestrian',
+        #         'width': str(width)
+        #     }
+        #     edge_element = ET.Element('edge', edge_attribs)
+        #     # Create nested lane element
+        #     lane_element = ET.SubElement(edge_element, 'lane', index='0', allow='pedestrian', speed='2.78', width=str(width))
+        #     ET.SubElement(lane_element, 'param', key='origId', value=edge_id)
+        #     edge_root.append(edge_element)
+
+
+
 
         iteration_prefix = f'{self.component_dir}/iteration_{iteration}'
         node_tree.write(f'{iteration_prefix}.nod.xml', encoding='utf-8', xml_declaration=True)
@@ -728,7 +998,7 @@ class DesignEnv(gym.Env):
         traffic_light_tree.write(f'{iteration_prefix}.tll.xml', encoding='utf-8', xml_declaration=True)
 
         # Generate the final net file using netconvert
-        output_file = f'{self.network_dir}/network_iteration_{iteration}.net.xml' # Although this is generated for base, its not used in base version.
+        output_file = f'{self.network_dir}/network_iteration_{iteration}.net.xml'
         command = f"netconvert --node-files={iteration_prefix}.nod.xml --edge-files={iteration_prefix}.edg.xml --connection-files={iteration_prefix}.con.xml --type-files={iteration_prefix}.typ.xml --tllogic-files={iteration_prefix}.tll.xml --output-file={output_file}"
 
         try:
@@ -738,6 +1008,9 @@ class DesignEnv(gym.Env):
         except subprocess.CalledProcessError as e:
             print(f"Error running netconvert: {e}")
             print("Error output:", e.stderr)
+
+        # terminate the program here
+        #os._exit(0)
 
     def _initialize_normalizers(self, graph):
         """

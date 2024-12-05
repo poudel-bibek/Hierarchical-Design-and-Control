@@ -461,7 +461,7 @@ class GATv2ActorCritic(nn.Module):
         print(f"\n\nnum_actual_proposals: {num_actual_proposals.shape, num_actual_proposals}\n\n")
 
         # Initialize output tensors (2 because location and thickness)
-        proposals = torch.full((batch_size, self.max_proposals, 2), -1, device=device) # Initialize with -1 so that its easier to infer the actual proposals in critic without passing them around.
+        proposals = torch.full((batch_size, self.max_proposals, 2), -1.0, dtype=torch.float32, device=device) # Initialize with -1 so that its easier to infer the actual proposals in critic without passing them around.
         log_probs = torch.zeros(batch_size, device=device)
         
         for b in range(batch_size):
@@ -469,6 +469,13 @@ class GATv2ActorCritic(nn.Module):
             # Sample proposals for this batch element
             samples = gmm_batch[b].sample((num_actual_proposals[b].item(),))
             locations, thicknesses = samples.split(1, dim=-1)
+            
+            # Clamp the locations to [0,1]
+            locations = torch.clamp(locations, 0.0, 1.0)
+            thicknesses = torch.clamp(thicknesses, self.min_thickness, self.max_thickness)
+            
+            # Recombine the samples
+            samples = torch.cat([locations, thicknesses], dim=-1)
             
             # Visualization is only meaningful during act (i.e., not during evaluation)
             if visualize and iteration is not None:

@@ -113,10 +113,10 @@ def train(train_config, is_sweep=False, sweep_config=None):
         # Higher level agent takes node features, edge index, edge attributes and batch (to make single large graph) as input 
         # To produce padded fixed-sized actions num_actual_proposals is also returned.
         higher_action, num_actual_proposals, higher_logprob = higher_ppo.policy_old.act(higher_state, iteration, visualize=True) 
-        
+
         # Since the higher agent internally takes a step where a number of parallel lower agents take their own steps, 
         # We return things relevant to both the higher and lower agents. First, for higher.
-        higher_next_state, higher_reward, higher_done, higher_info = higher_env.step(higher_action, iteration, global_step)
+        higher_next_state, higher_reward, higher_done, higher_info = higher_env.step(higher_action, num_actual_proposals, iteration, global_step)
         higher_memory.append(higher_state, higher_action, higher_logprob, higher_reward, higher_done)
 
         if iteration % train_config['higher_update_freq'] == 0:

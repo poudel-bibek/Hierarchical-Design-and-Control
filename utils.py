@@ -237,7 +237,7 @@ def save_graph_visualization(graph, iteration):
     label_pos = {node: (coords[0], coords[1] + random.uniform(-2.5, 2.5)) for node, coords in pos.items()}
     nx.draw_networkx_labels(graph, label_pos, font_size=6)
     
-    plt.title(f"Pedestrian Graph - Iteration {iteration}", fontsize=16)
+    plt.title(f"Pedestrian Graph - Iteration {iteration}", fontsize=12)
     plt.axis('off')
     plt.tight_layout()
     
@@ -278,7 +278,9 @@ def save_better_graph_visualization(graph, iteration,
     sns.set_style("white")
     colors = {
         'junction': '#FF6B6B',
+        'special': '#4CAF50',  # Green color for special nodes
         'edge': '#45B7D1',
+        'special_edge': '#90EE90',  # Light green for edges between special nodes
         'text': '#2C3E50',
         'grid': '#E4E7EB'
     }
@@ -297,50 +299,80 @@ def save_better_graph_visualization(graph, iteration,
     x_range = x_max - x_min
     y_range = y_max - y_min
     
-    # Set axis limits with proper padding
     ax.set_xlim(x_min - x_range*padding, x_max + x_range*padding)
     ax.set_ylim(y_min - y_range*padding, y_max + y_range*padding)
 
-    # Setup grid
     ax.grid(True, linestyle='--', color=colors['grid'], alpha=0.5)
     ax.set_axisbelow(True)
 
-    # Draw edges with gradient effect
+    # Separate special and regular nodes
+    special_nodes = [node for node in graph.nodes() if any(suffix in str(node) for suffix in ['_top', '_bottom', '_mid'])]
+    regular_nodes = [node for node in graph.nodes() if node not in special_nodes]
+
+    # Draw edges with different colors based on endpoint types
     edge_widths = [data['width'] for (_, _, data) in graph.edges(data=True)]
     max_width = max(edge_widths) if edge_widths else 1
     
-    # Draw edges with gradient colors and glow effect
     for (u, v, data) in graph.edges(data=True):
         width = edge_width * (data['width']/max_width) if proportional_width else edge_width
+        # Check if both endpoints are special nodes
+        is_special_edge = u in special_nodes and v in special_nodes
+        edge_color = colors['special_edge'] if is_special_edge else colors['edge']
+        
         # Draw multiple lines with decreasing alpha for glow effect
         for w, a in zip([width*1.5, width*1.2, width], [0.1, 0.2, 0.7]):
             nx.draw_networkx_edges(
                 graph, pos,
                 edgelist=[(u, v)],
                 width=w,
-                edge_color=colors['edge'],
+                edge_color=edge_color,
                 alpha=a,
                 style='solid'
             )
 
-    # Draw nodes with glow effect
-    nx.draw_networkx_nodes(
-        graph, pos,
-        node_color=colors['junction'],
-        node_size=node_size*1.3,
-        alpha=0.3,
-        node_shape='o'
-    )
-    
-    nx.draw_networkx_nodes(
-        graph, pos,
-        node_color=colors['junction'],
-        node_size=node_size,
-        alpha=0.9,
-        node_shape='o',
-        edgecolors='white',
-        linewidths=2
-    )
+    # Draw regular nodes
+    if regular_nodes:
+        nx.draw_networkx_nodes(
+            graph, pos,
+            nodelist=regular_nodes,
+            node_color=colors['junction'],
+            node_size=node_size*1.3,
+            alpha=0.3,
+            node_shape='o'
+        )
+        
+        nx.draw_networkx_nodes(
+            graph, pos,
+            nodelist=regular_nodes,
+            node_color=colors['junction'],
+            node_size=node_size,
+            alpha=0.9,
+            node_shape='o',
+            edgecolors='white',
+            linewidths=2
+        )
+
+    # Draw special nodes
+    if special_nodes:
+        nx.draw_networkx_nodes(
+            graph, pos,
+            nodelist=special_nodes,
+            node_color=colors['special'],
+            node_size=node_size*1.3,
+            alpha=0.3,
+            node_shape='o'
+        )
+        
+        nx.draw_networkx_nodes(
+            graph, pos,
+            nodelist=special_nodes,
+            node_color=colors['special'],
+            node_size=node_size,
+            alpha=0.9,
+            node_shape='o',
+            edgecolors='white',
+            linewidths=2
+        )
 
     # Add labels if requested
     if show_node_ids or show_coordinates:
@@ -363,10 +395,12 @@ def save_better_graph_visualization(graph, iteration,
             plt.annotate(f"{data['width']:.1f}m", xy=edge_center, xytext=(5, 5),
                         textcoords='offset points', fontsize=font_size-4)
 
-    # Add legend elements
+    # Update legend elements to include special nodes
     legend_elements = [
-        plt.Line2D([0], [0], color=colors['edge'], lw=edge_width, label='Path'),
-        plt.scatter([0], [0], c=colors['junction'], marker='o', s=node_size, label='Junction')
+        plt.Line2D([0], [0], color=colors['edge'], lw=edge_width, label = "Existing Edge"),
+        plt.Line2D([0], [0], color=colors['special_edge'], lw=edge_width, label='New Edge'),
+        plt.scatter([0], [0], c=colors['junction'], marker='o', s=node_size, label='Existing Node'),
+        plt.scatter([0], [0], c=colors['special'], marker='o', s=node_size, label='New Node')
     ]
     
     # Add legend at the bottom
