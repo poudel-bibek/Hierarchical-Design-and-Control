@@ -172,7 +172,7 @@ class DesignEnv(gym.Env):
         self.horizontal_nodes_top = ['9666242268', '9666274719', '9666274722', '9666274721', '9727816851', '9666274744', '9666274574', '9666274798', '9666274635', '9666274616', '9666274886', '9655154530', '9655154527', '9655154520', '10054309033', '9740157195', '9740157210', '10054309051', '9740484524', '9740484531']
         self.horizontal_nodes_bottom = ['9727816638', '9727816862', '9727816846', '9727816629', '9727779405', '9740157080', '9727816625', '9740157142', '9740157169', '9740157145', '9740484033', '9740157174', '9740157171', '9740157154', '9740157158', '9740411703', '9740411701', '9740483978', '9740483934', '9740157180', '9740483946', '9740157204', '9740484420', '9740157211', '9740484523', '9740484522', '9740484512', '9740484528', '9739966899', '9739966895']
 
-        #self._update_xml_files(self.base_networkx_graph, 'base') # Create base XML files from latest networkx graph
+        self._update_xml_files(self.base_networkx_graph, 'base') # Create base XML files from latest networkx graph
 
         if self.design_args['save_graph_images']:
             save_graph_visualization(graph=pedestrian_networkx_graph, iteration='original')
@@ -512,16 +512,17 @@ class DesignEnv(gym.Env):
             save_better_graph_visualization(graph=self.iterative_networkx_graph, iteration=iteration)
 
         # 3. Update XML
-        #self._update_xml_files(self.iterative_networkx_graph, iteration)
+        self._update_xml_files(self.iterative_networkx_graph, iteration)
     
     def _find_segment_intersects(self, segments, x_location):
         """
-        Helper function to check intersection
+        Helper function to check intersection. 
+        x_location is denormalized.
         """
         
         for start_x, (length, edge) in segments.items():
             end_x = start_x + length
-            if start_x <= x_location <= end_x:
+            if start_x <= x_location < end_x:
                 return {
                     'edge': edge,
                     'start_x': start_x,
@@ -538,19 +539,25 @@ class DesignEnv(gym.Env):
 
         for side in ['top', 'bottom']:
             intersections[side] = {}
-            intersection = self._find_segment_intersects(latest_horizontal_segment[side], x_location)
+            intersect = self._find_segment_intersects(latest_horizontal_segment[side], x_location)
 
-            # Interpolate along the edge to find the y_coordinates
-            x_diff = (x_location - intersection['start_x']) / intersection['length_x'] # The proportion of the edge along x
+            from_node, to_node = intersect['edge'][0], intersect['edge'][1]
+            
+            # Extract node positions
+            from_x, from_y = latest_graph.nodes[from_node]['pos']
+            to_x, to_y = latest_graph.nodes[to_node]['pos']
 
-            from_node, to_node = intersection['edge'][0], intersection['edge'][1]
-            from_node_y, to_node_y = latest_graph.nodes[from_node]['pos'][1], latest_graph.nodes[to_node]['pos'][1]
-            sign = 1 if from_node_y < to_node_y else -1
+            # Ensure from_x < to_x for consistency
+            if from_x > to_x:
+                from_x, to_x = to_x, from_x
+                from_y, to_y = to_y, from_y
 
-            length_y = abs(to_node_y - from_node_y)
-            y_location = from_node_y + sign*abs(x_diff)*length_y
+            # Compute how far along the segment x_location lies as a fraction
+            x_diff = (x_location - from_x) / (to_x - from_x)
+            # Now simply interpolate y
+            y_location = from_y + x_diff * (to_y - from_y)
 
-            intersections[side]['edge'] = intersection['edge']
+            intersections[side]['edge'] = intersect['edge']
             intersections[side]['intersection_pos'] = (x_location, y_location)
 
         return intersections
@@ -661,7 +668,7 @@ class DesignEnv(gym.Env):
 
         # Everytime the networkx graph is updated, the XML graph needs to be updated.
         # Make the added nodes/edges a crossing with traffic light in XML.
-        #self._update_xml_files(self.iterative_networkx_graph, 0)
+        self._update_xml_files(self.iterative_networkx_graph, 0)
         
         # Return state
         iterative_torch_graph = self._convert_to_torch_geometric(self.iterative_networkx_graph)
