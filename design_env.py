@@ -169,8 +169,10 @@ class DesignEnv(gym.Env):
         
         # Cleanup the pedestrian walkway graph (i.e, remove isolated, fringe, existing crosswalks) to create a base canvas
         self.base_networkx_graph = self._cleanup_graph(pedestrian_networkx_graph, self.existing_crosswalks)
-        self.horizontal_nodes_top = ['9666242268', '9666274719', '9666274722', '9666274721', '9727816851', '9666274744', '9666274574', '9666274798', '9666274635', '9666274616', '9666274886', '9655154530', '9655154527', '9655154520', '10054309033', '9740157195', '9740157210', '10054309051', '9740484524', '9740484531']
-        self.horizontal_nodes_bottom = ['9727816638', '9727816862', '9727816846', '9727816629', '9727779405', '9740157080', '9727816625', '9740157142', '9740157169', '9740157145', '9740484033', '9740157174', '9740157171', '9740157154', '9740157158', '9740411703', '9740411701', '9740483978', '9740483934', '9740157180', '9740483946', '9740157204', '9740484420', '9740157211', '9740484523', '9740484522', '9740484512', '9740484528', '9739966899', '9739966895']
+        self.horizontal_nodes_top_ped = ['9666242268', '9666274719', '9666274722', '9666274721', '9727816851', '9666274744', '9666274574', '9666274798', '9666274635', '9666274616', '9666274886', '9655154530', '9655154527', '9655154520', '10054309033', '9740157195', '9740157210', '10054309051', '9740484524', '9740484531']
+        self.horizontal_nodes_bottom_ped = ['9727816638', '9727816862', '9727816846', '9727816629', '9727779405', '9740157080', '9727816625', '9740157142', '9740157169', '9740157145', '9740484033', '9740157174', '9740157171', '9740157154', '9740157158', '9740411703', '9740411701', '9740483978', '9740483934', '9740157180', '9740483946', '9740157204', '9740484420', '9740157211', '9740484523', '9740484522', '9740484512', '9740484528', '9739966899', '9739966895']
+        self.horizontal_edges_top_veh = ['-16666012#2', '-16666012#3', '-16666012#4', '-16666012#5', '-16666012#6', '-16666012#7', '-16666012#9', '-16666012#11', '-16666012#12', '-16666012#13', '-16666012#14', '-16666012#15', '-16666012#16', '-16666012#17']
+        self.horizontal_edges_bottom_veh = ['16666012#2', '16666012#3', '16666012#4', '16666012#5', '16666012#6', '16666012#7', '16666012#9', '16666012#11', '16666012#12', '16666012#13', '16666012#14', '16666012#15', '16666012#16', '16666012#17']
 
         self._update_xml_files(self.base_networkx_graph, 'base') # Create base XML files from latest networkx graph
 
@@ -317,13 +319,13 @@ class DesignEnv(gym.Env):
         """
 
         # First complete the higher level agent's step.
-        print(f"Action received: {action}")
+        #print(f"Action received: {action}")
 
         # Convert tensor action to proposals
         action = action.cpu().numpy()  # Convert to numpy array if it's not already
         proposals = action.squeeze(0)[:num_actual_proposals]  # Only consider the actual proposals
 
-        print(f"\n\nProposals: {proposals}\n\n")
+        #print(f"\n\nProposals: {proposals}\n\n")
 
         # Apply the action to output the latest SUMO network file as well as modify the iterative_torch_graph.
         self._apply_action(proposals, iteration)
@@ -458,22 +460,22 @@ class DesignEnv(gym.Env):
 
         # First make a copy
         self.iterative_networkx_graph = self.base_networkx_graph.copy()
-        latest_horizontal_nodes_top = self.horizontal_nodes_top
-        latest_horizontal_nodes_bottom = self.horizontal_nodes_bottom
+        latest_horizontal_nodes_top_ped = self.horizontal_nodes_top_ped
+        latest_horizontal_nodes_bottom_ped = self.horizontal_nodes_bottom_ped
 
         for i, (location, thickness) in enumerate(proposals):
             
             # 1. Denormalize the location (x-coordinate)
             denorm_location = self.normalizer_x['min'] + location * (self.normalizer_x['max'] - self.normalizer_x['min'])
-            print(f"\nLocation: {location} Denormalized location: {denorm_location}\n")
+            #print(f"\nLocation: {location} Denormalized location: {denorm_location}\n")
 
             # 2. Add to base networkx graph
             # Add new nodes in both sides in this intersection of type 'regular'.
             # Connect the new nodes to the existing nodes via edges with the given thickness.
 
-            latest_horizontal_segment = self._get_horizontal_segment(latest_horizontal_nodes_top, latest_horizontal_nodes_bottom, self.iterative_networkx_graph) # Start with set of nodes in base graph
-            new_intersects = self._find_intersects(denorm_location, latest_horizontal_segment, self.iterative_networkx_graph)
-            print(f"\nNew intersects: {new_intersects}\n")
+            latest_horizontal_segment = self._get_horizontal_segment_ped(latest_horizontal_nodes_top_ped, latest_horizontal_nodes_bottom_ped, self.iterative_networkx_graph) # Start with set of nodes in base graph
+            new_intersects = self._find_intersects_ped(denorm_location, latest_horizontal_segment, self.iterative_networkx_graph)
+            #print(f"\nNew intersects: {new_intersects}\n")
 
             mid_node_details = {'top': {'y_cord': None, 'node_id': None}, 'bottom': {'y_cord': None, 'node_id': None}}
             # Now add an edge from from_node to the pos of the new node. As well as from the new node to to_node.
@@ -493,9 +495,9 @@ class DesignEnv(gym.Env):
 
                 # Modify the horizontal segment (add the new node)
                 if side == 'top':
-                    latest_horizontal_nodes_top.append(end_node_id)
+                    latest_horizontal_nodes_top_ped.append(end_node_id)
                 else:
-                    latest_horizontal_nodes_bottom.append(end_node_id)
+                    latest_horizontal_nodes_bottom_ped.append(end_node_id)
 
                 mid_node_details[side]['y_cord'] = end_node_pos[1]
                 mid_node_details[side]['node_id'] = end_node_id
@@ -514,7 +516,7 @@ class DesignEnv(gym.Env):
         # 3. Update XML
         self._update_xml_files(self.iterative_networkx_graph, iteration)
     
-    def _find_segment_intersects(self, segments, x_location):
+    def _find_segment_intersects_ped(self, segments, x_location):
         """
         Helper function to check intersection. 
         x_location is denormalized.
@@ -529,7 +531,7 @@ class DesignEnv(gym.Env):
                     'length_x': length
                 }
                     
-    def _find_intersects(self, x_location, latest_horizontal_segment, latest_graph):
+    def _find_intersects_ped(self, x_location, latest_horizontal_segment, latest_graph):
         """
         Find where a given x-coordinate intersects with the horizontal segments.
         Returns the edge IDs and positions where the intersection occurs.
@@ -539,7 +541,7 @@ class DesignEnv(gym.Env):
 
         for side in ['top', 'bottom']:
             intersections[side] = {}
-            intersect = self._find_segment_intersects(latest_horizontal_segment[side], x_location)
+            intersect = self._find_segment_intersects_ped(latest_horizontal_segment[side], x_location)
 
             from_node, to_node = intersect['edge'][0], intersect['edge'][1]
             
@@ -562,7 +564,7 @@ class DesignEnv(gym.Env):
 
         return intersections
 
-    def _get_horizontal_segment(self, horizontal_nodes_top, horizontal_nodes_bottom, latest_graph, validation=False):
+    def _get_horizontal_segment_ped(self, horizontal_nodes_top, horizontal_nodes_bottom, latest_graph, validation=False):
         """
         Get the entire horizontal segment of the corridor.
         """
@@ -617,6 +619,12 @@ class DesignEnv(gym.Env):
             #plt.show()
         
         return horizontal_segment
+
+    def _get_horizontal_segment_veh(self, horizontal_edges_top, horizontal_edges_bottom, latest_graph, validation=False):
+        """
+        Get the entire horizontal segment of the corridor.
+        """
+        pass 
 
     def _get_reward(self, iteration):
         """
@@ -702,7 +710,7 @@ class DesignEnv(gym.Env):
         """
 
         cleanup_graph = graph.copy()
-        print(f"\nBefore cleanup: {len(cleanup_graph.nodes())} nodes, {len(cleanup_graph.edges())} edges\n")
+        #print(f"\nBefore cleanup: {len(cleanup_graph.nodes())} nodes, {len(cleanup_graph.edges())} edges\n")
 
         # 0. primary cleanup 
         #print(f"Existing crosswalks: {existing_crosswalks}")
@@ -711,7 +719,7 @@ class DesignEnv(gym.Env):
             nodes = crosswalk_data['crossing_nodes'] # There will always be more than 2 nodes.
             middle_nodes.extend(nodes[1:-1]) # Add all nodes except first and last
                 
-        print(f"Removing middle nodes: {middle_nodes}")
+        #print(f"Removing middle nodes: {middle_nodes}")
         cleanup_graph.remove_nodes_from(middle_nodes)
 
         # 1.
@@ -734,7 +742,7 @@ class DesignEnv(gym.Env):
         # isolated_and_fringe_nodes = fringe_nodes + isolated_nodes
         # cleanup_graph.remove_nodes_from(isolated_and_fringe_nodes)
         #cleanup_graph.remove_edges_from(cleanup_graph.edges(isolated_and_fringe_nodes))  # TODO: When the isolated nodes are removed, are the edges automatically removed?
-        print(f"\nAfter cleanup: {len(cleanup_graph.nodes())} nodes, {len(cleanup_graph.edges())} edges\n")
+        #print(f"\nAfter cleanup: {len(cleanup_graph.nodes())} nodes, {len(cleanup_graph.edges())} edges\n")
 
         return cleanup_graph
     
@@ -796,20 +804,40 @@ class DesignEnv(gym.Env):
     
     def _update_xml_files(self, networkx_graph, iteration):
         """
-        Update the XML component files to reflect the current state of the networkx graph. Only modifies the pedestrian network.
-        For base, use the "original" XML component files. Automatically wont consist of the addition of nodes/ edges (because there is nothing in networkx graph thats not already in the component files).
-        For other iterations, use the "base" XML component files as a foundation and add new elements.
+        Update the XML component files to reflect the current state of the networkx graph. 
+        For base, use the "original" XML component files. For other iterations, use the "base" XML component files as a foundation and add/ remove elements.
         Iterative component files are saved in component_SUMO_files directory.
         Iterative net files are saved in network_iterations directory.
 
         Networkx graph will already have:
           - End nodes with position values that come from the proposal.
           - Middle nodes to create traffic lights. Every proposal will have nodes with id _mid. 
-                - These nodes need to be connected to vehicle nodes on either side as well. 
+                - The _mid nodes need to be connected to vehicle edges on either side as well. 
                 - For every _mid node, a TL logic needs to be added to the traffic_light XML file.
+
+        For iteration = base, the end nodes are already present in the XML component files.
+        For other iterations, the end nodes will require reconstruction.
+
+        For the nodes and edges related to pedestrian network:
+            Remove them from the XML component files: If they don't exist in networkx graph.
+            Add them to the XML component files: If they exist in networkx graph but don't exist in component XML.
+
+        Node attributes: 
+            - <node id=" " x=" " y=" " type=" " />
+            - For the middle nodes, type will "traffic_light" and an attribute tl =" " with the value same as id.
+            - For the end nodes, type will be "dead_end"
+        Edge attributes: 
+            - From the middle node to end nodes of type "highway.footway"
+            - From middle node to vehicle nodes of type "highway.tertiary"
+            - Both of these are needed because the traffic light is coordinating vehicles and pedestrians in the crosswalk.
+            - <edge id=" " from=" " to=" " priority="1" type="highway.footway" numLanes="1" speed="2.78" shape=" " spreadType="center" width="2.0" allow="pedestrian"> 
+            - shape seems difficult to get right.
+            - create a nested lane element: <lane index="0" allow="pedestrian" width=" " speed=" ">
+            - create a nested param element: <param key="origId" value=" "/>
+            - end with </lane></edge>
         """
 
-        prefix = "original" if iteration == 'base' else f"iteration_base"
+        prefix = "original" if iteration == 'base' else f"iteration_base" # Every iteration will have the same base XML files.
         node_file = f'{self.component_dir}/{prefix}.nod.xml'
         edge_file = f'{self.component_dir}/{prefix}.edg.xml'
         connection_file = f'{self.component_dir}/{prefix}.con.xml'
@@ -829,72 +857,91 @@ class DesignEnv(gym.Env):
         type_root = type_tree.getroot() 
         traffic_light_root = traffic_light_tree.getroot()
 
-        # print(f"\nNetworkx graph has {len(networkx_graph.nodes())} nodes and {len(networkx_graph.edges())} edges")
-        # print(f"Nodes: {list(networkx_graph.nodes())}\n")
-        # print(f"Edges: {list(networkx_graph.edges())}\n")
-        
-        # Perform the removeals first. 
-         # - Pedestrian Nodes and edges (identified by edges of type highway.footway) that are not present in the networkx graph.
-         # - unused TL Logic
+        # Find all the nodes and edges in the XML component files ()
+        nodes_in_xml = { node.get('id'): node for node in node_root.findall('node') } # save the node element itself.
+        edges_in_xml = { (e.get('from'), e.get('to')): e for e in edge_root.findall('edge') } # save the edge element itself.
 
-        # For iteration = base, only need to add the middle nodes and edges (i.e., a special case where end nodes are already present).
-        # The XML files, which may have network other than pedestrian network. Keep them intact. 
-        # For the nodes and edges related to pedestrian network:
-            # Keep them in the XML component files as they are: If they exist in networkx graph and XML. (this means the middle tl node needs to be added)
-            # Remove them from the XML component files: If they don't exist in networkx graph.
-            # Add them to the XML component files: If they don't exist in component XML but exist in networkx graph.
-
-        # If nodes and edges ever needs be added (they will always be associated with crosswalks), other attributes: 
-        # Node: 
-            # <node id=" " x=" " y=" " type=" " />
-            # For the middle nodes, type will "traffic_light" and an attribute tl =" " with the value same as id.
-            # For the end nodes, type will be "dead_end"
-        # Edge: 
-            # From the middle node to end nodes of type "highway.footway"
-            # From middle node to vehicle nodes of type "highway.tertiary"
-            # Both of these are needed because the traffic light is coordinating vehicles and pedestrians in the crosswalk.
-            # <edge id=" " from=" " to=" " priority="1" type="highway.footway" numLanes="1" speed="2.78" shape=" " spreadType="center" width="2.0" allow="pedestrian"> 
-            # shape seems difficult to get right.
-            # create a nested lane element: <lane index="0" allow="pedestrian" width=" " speed=" ">
-            # create a nested param element: <param key="origId" value=" "/>
-            # end with </lane></edge>
-
-        ### Removals
-        # Find all the nodes in the XML component .nod file (From node id alone we cant differentiate between vehicle and pedestrian nodes.)
-        nodes_in_xml = {} 
-        for node in node_root.findall('node'):
-            node_id = node.get('id')
-            nodes_in_xml[node_id] = node # save the node element itself.
-
-        pedestrian_nodes_in_xml = set()
+        # Find pedestrian nodes and edges in the XML component .edg file. 
         pedestrian_edges_in_xml = {}
+        pedestrian_nodes_in_xml = set()
+        for (f, t), e in edges_in_xml.items():
+            e_type = e.get('type')
+            allow = e.get('allow', '')
+            if e_type in ['highway.footway', 'highway.steps'] and 'pedestrian' in allow:
+                pedestrian_edges_in_xml[(f, t)] = e
+                pedestrian_nodes_in_xml.update([f, t]) # From node id alone we cant differentiate between vehicle and pedestrian nodes.
 
-        # Find pedestrian nodes and edges in the XML component .edg file. (Using edge attributes to find pedestrian nodes and edges.)
-        for edge in edge_root.findall('edge'):
-            if edge.get('type') in ['highway.footway', 'highway.steps']:
-                if 'pedestrian' in edge.get('allow'):
-                    from_node = edge.get('from')
-                    to_node = edge.get('to')
-                    pedestrian_edges_in_xml[(from_node, to_node)] = edge
-                    pedestrian_nodes_in_xml.update([from_node, to_node])
+        # Extract pedestrian nodes and edges from networkx_graph
+        pedestrian_nodes_in_graph = set(networkx_graph.nodes())
+        pedestrian_edges_in_graph = set(networkx_graph.edges())
+        
+        print(f"Pedestrian nodes in XML: {pedestrian_nodes_in_xml}\n")
+        print(f"Pedestrian nodes in graph: {pedestrian_nodes_in_graph}\n")
+        print(f"Pedestrian edges in XML: {list(pedestrian_edges_in_xml.keys())}\n")
+        print(f"Pedestrian edges in graph: {pedestrian_edges_in_graph}\n")
+        
+        # Remove pedestrian nodes that are in XML component file but not in networkx graph.
+        potential_nodes_to_remove = pedestrian_nodes_in_xml - pedestrian_nodes_in_graph
+        print(f"Potential Nodes to remove: Total: {len(potential_nodes_to_remove)},\n {potential_nodes_to_remove}\n")
+        
+        # Some edges may still access the nodes that are removed above.
+        # Find the edges that still access the nodes that are removed above.
+        edges_in_xml_that_access_removed_nodes = {}
+        for (f, t) in edges_in_xml:
+            if f in potential_nodes_to_remove or t in potential_nodes_to_remove:
+                edges_in_xml_that_access_removed_nodes[(f, t)] = edges_in_xml[(f, t)] # These can be vehicle edges as well.
 
-        # Find nodes to remove, i.e., pedestrian nodes that are in XML component file but not in networkx graph.
-        nodes_to_remove = pedestrian_nodes_in_xml - set(networkx_graph.nodes())
-        print(f"Nodes to remove: {nodes_to_remove}")
-        for node_id in nodes_to_remove:
-            node_element = nodes_in_xml.get(node_id)
-            if node_element is not None:
-                node_root.remove(node_element) # remove from nod component file
+        print(f"Edges in XML that still access the potential removed nodes: Total: {len(edges_in_xml_that_access_removed_nodes)}")
+        for (f, t), e in edges_in_xml_that_access_removed_nodes.items():
+            print(f"Edge: {f} -> {t}")
+            print(f"Edge attributes: {e.attrib}\n")
+
+        # In the potential nodes selected for removal, some of them are vehicle edges (The old TL was removed) (highway.tertiary and disallowed pedestrian).
+        vehicle_edges_linked_to_potential_removal_nodes = {}
+        for (f, t), e in edges_in_xml_that_access_removed_nodes.items():
+            e_type = e.get('type')
+            disallow = e.get('disallow', '')
+            if e_type == 'highway.tertiary' and 'pedestrian' in disallow:
+                vehicle_edges_linked_to_potential_removal_nodes[(f, t)] = e
+        print(f"Vehicle edges linked to potential removal nodes: Total: {len(vehicle_edges_linked_to_potential_removal_nodes)},\n {vehicle_edges_linked_to_potential_removal_nodes}\n")
+
+        # Each removed node that is a part of the vehicle edges will have four vehicle edges (two for each direction).
+        # Option 1: Merge into a larger edge by combining the shapes. This may be harmful because the edge itself could be referenced by other other parts of the network.
+        # Option 2: keep these vehicle nodes and edges as they are. Only remove the pedestrian edges and the TL associated with these nodes.
+        # Others are pedestrian nodes and edges, they can be removed.
+        
+        # Get all nodes that appear in vehicle edges
+        nodes_in_vehicle_edges = set()
+        for f, t in vehicle_edges_linked_to_potential_removal_nodes.keys():
+            nodes_in_vehicle_edges.add(f)
+            nodes_in_vehicle_edges.add(t)
+
+        print(f"Potential nodes to be removed: {potential_nodes_to_remove}\n")
+        print(f"Nodes in vehicle edges: {nodes_in_vehicle_edges}\n")
+        
+        # Remove nodes that appear in vehicle edges from potential nodes to remove
+        pedestrian_nodes_to_remove = potential_nodes_to_remove - nodes_in_vehicle_edges
+        print(f"Actual pedestrian nodes to remove: Total: {len(pedestrian_nodes_to_remove)},\n {pedestrian_nodes_to_remove}\n")
+
+        # Remove the pedestrian edges that are not present in the vehicle edges.
+        pedestrian_edges_to_remove = {}
+        for (f, t), e in edges_in_xml_that_access_removed_nodes.items():
+            if (f, t) not in vehicle_edges_linked_to_potential_removal_nodes:
+                pedestrian_edges_to_remove[(f, t)] = e
+        print(f"Actual pedestrian edges to remove: Total: {len(pedestrian_edges_to_remove)}, \n {pedestrian_edges_to_remove}\n")
+
+        # Removing selected nodes and edges
+        for node_id in pedestrian_nodes_to_remove:
+            if node_id in nodes_in_xml:
+                node_root.remove(nodes_in_xml[node_id]) # remove from nod component file
                 del nodes_in_xml[node_id] # remove from dictionary
 
-        # At this point, nodes_in_xml contains all vehicles nodes intact. The pedestrian nodes not present in networkx graph removed.
-        # From both component file and dict.
+        for (f, t) in pedestrian_edges_to_remove:
+            if (f, t) in edges_in_xml:
+                edge_root.remove(edges_in_xml[(f, t)]) # remove from edg component file
+                del edges_in_xml[(f, t)] # remove from dictionary
 
-        # Note: Nodes are removed but the edges are not 
-        # Finding edges to remove are more complicated.
-        # If the edge is from pedestrian to vehicle (in the middle node), then stitch the edges. i.e, keep this edge just remove the TL part.
-        # Other edges can be removed
-
+        # Remove the associated TLs (This is safe I think.)
         # Remove all TLs and connections except the default one.
         default_tl = ['cluster_172228464_482708521_9687148201_9687148202_#5more'] # By default in base, there will the one TL at the left intersection. present.
         tls_to_remove = []
@@ -904,6 +951,8 @@ class DesignEnv(gym.Env):
         for tl in tls_to_remove:
             traffic_light_root.remove(tl)
 
+        # Since the vehicle nodes are not removed, perhaps the connections dont need to be removed (because they connect the vehicle edges). However, removing them for now.
+        # Perhaps each connection here needs to be converted to an edge? No.
         connections_to_remove = []
         for conn in traffic_light_root.findall('connection'):
             if conn.get('tl') not in default_tl:
@@ -911,51 +960,109 @@ class DesignEnv(gym.Env):
         for conn in connections_to_remove:
             traffic_light_root.remove(conn)
 
-
-        ### Additions
-        # Find the nodes to add (present in networkx graph but not in XML component file). 
+        # Node additions at the end nodes (in iterations other than base) and middle nodes.
+        # Find the pedestrian nodes to add (present in networkx graph but not in XML component file). 
         # For regular nodes: <node id=" " x=" " y=" " />
-        # For all the nodes in networkx graph with type "middle", in the XML component file:
-        # - add a node attribute type with value "traffic_light" and tl with value "node_id".
-        # - add a TL logic and a connection.
+        # For all the nodes in networkx graph with type "middle" in the XML component file: add a node attribute type with value "traffic_light" and tl with value "node_id" and add a TL logic and a connection.
+        node_ids_to_add = pedestrian_nodes_in_graph - set(nodes_in_xml.keys()) # In the iteration base, there will be no nodes to add.
+        print(f"\nNodes to add: {node_ids_to_add}")
 
-        nodes_to_add = set(networkx_graph.nodes()) - set(nodes_in_xml.keys()) # In the iteration base, there will be no nodes to add.
-        print(f"\nNodes to add: {nodes_to_add}")
-        for node_id in nodes_to_add:
-            node_data = networkx_graph.nodes[node_id]
+        for nid in node_ids_to_add:
+            node_data = networkx_graph.nodes[nid]
             x, y = node_data['pos']
-            if node_data.get('type') == 'regular':
-                node_attribs = {'id': node_id, 'x': str(x), 'y': str(y)}
-                node_element = ET.Element('node', node_attribs)
-                node_root.append(node_element)
-            elif node_data.get('type') == 'middle':
-                node_attribs = {'id': node_id, 'x': str(x), 'y': str(y), 'type': 'traffic_light', 'tl': node_id}
-                node_element = ET.Element('node', node_attribs)
-                node_root.append(node_element)
-        
-        # TL logic
-        for node_id in nodes_to_add:
-            node_data = networkx_graph.nodes[node_id]
-            if node_data.get('type') == 'middle':
-                tlLogic_element = ET.Element('tlLogic', id=node_id, type='static', programID='0', offset='0')
-                
-                # Create phases with proper indentation
-                phase1 = ET.SubElement(tlLogic_element, 'phase', duration='77', state='GGr')
-                phase2 = ET.SubElement(tlLogic_element, 'phase', duration='3', state='yyr') 
-                phase3 = ET.SubElement(tlLogic_element, 'phase', duration='5', state='rrG')
-                phase4 = ET.SubElement(tlLogic_element, 'phase', duration='5', state='rrr')
-                
-                # Set tail to newline and text to tab for proper formatting
-                phase1.tail = "\n\t\t"
-                phase2.tail = "\n\t\t" 
-                phase3.tail = "\n\t\t"
-                phase4.tail = "\n"
-                
-                traffic_light_root.append(tlLogic_element)
-                tlLogic_element.text = "\n\t\t"
-                tlLogic_element.tail = "\n"
+            n_type = node_data.get('type', 'regular')
+            attribs = {'id': nid, 'x': str(x), 'y': str(y)}
 
-        # connection
+            if n_type == 'regular':
+                attribs['type'] = 'dead_end'
+            elif n_type == 'middle':
+                attribs['type'] = 'traffic_light'
+                attribs['tl'] = nid
+
+            new_node = ET.Element('node', attribs)
+            node_root.append(new_node)
+            nodes_in_xml[nid] = new_node
+
+            
+        
+        # Edge additions
+        # Find the edges to add (present in networkx graph but not in XML component file).
+        # For each edge, add a new edge element with the same attributes.
+        edges_to_add = set(networkx_graph.edges()) - set(edges_in_xml.keys()) # These are all pedestrian edges.
+        edges_to_add = list(edges_to_add)
+        print(f"\nEdges to add: Total: {len(edges_to_add)},\n {edges_to_add}\n")
+
+        # The edge could be a Regular node to Regular node or Regular node to middle node (crosswalk).
+        for (f, t) in edges_to_add:
+
+            # Do Regular to Regular and Regular to Middle need some different treatment?
+            edge_data = networkx_graph.get_edge_data(f, t)
+            edge_id = edge_data.get('id', f'edge_{f}_{t}') # Get it from the networkx graph.
+            width = edge_data.get('width', 2.0)
+            edge_attribs = {
+                'id': edge_id,
+                'from': f,
+                'to': t,
+                'name': 'Iterative addition',
+                'priority': '1',
+                'type': 'highway.footway',
+                'numLanes': '1',
+                'speed': '2.78', # default
+                'spreadType': 'center',
+                'width': str(width),
+                'allow': 'pedestrian'
+            }
+
+            # positions of f and t nodes
+            f_data = networkx_graph.nodes[f]
+            t_data = networkx_graph.nodes[t]
+            f_x, f_y = round(f_data['pos'][0], 2), round(f_data['pos'][1], 2)
+            t_x, t_y = round(t_data['pos'][0], 2), round(t_data['pos'][1], 2)
+            shape = f'{f_x},{f_y} {t_x},{t_y}'
+            #print(f"Shape: {shape}")
+
+            edge_element = ET.Element('edge', edge_attribs)
+            edge_element.text = "\n\t\t" 
+
+            lane_element = ET.SubElement(
+                edge_element,
+                'lane', 
+                index='0', 
+                allow='pedestrian',
+                width=str(width),
+                speed='2.78', 
+                shape=shape
+            )
+
+            lane_element.text = "\n\t\t\t" 
+            param_element = ET.SubElement(lane_element, 'param', key='origId', value=edge_id)
+            param_element.tail = "\n\t\t" 
+            lane_element.tail = "\n\t"
+            edge_element.tail = "\n\t"
+
+            edge_root.append(edge_element)
+
+        # TODO: Vehicle connections.
+        # For all the mid nodes, find and add all vehicle connections: that connect the TL to the existing vehicle edges. 
+        # The vehicle edges that are already present in either sides of the newly added TL (middle node). 
+        middle_nodes_to_add = [nid for nid in node_ids_to_add if networkx_graph.nodes[nid].get('type') == 'middle']
+        removed_vehicle_edges = [] # ids of the vehicle edges that are removed.
+        # Whenever a middle node falls on a vehicle edge:
+        # Split the edge into two edges and add a new connection (both to TLL and Con files). Use linkIndex 0 for connecting -ve direction and linkIndex 1 for connecting +ve direction.
+        # The new edges should inherit certain properties of the original edge to preserve the shape etc.
+        # Delete the original edge (add the id to the edge removed_vehicle_edges list).
+        xml_horizontal_segments_base = {}
+
+
+        # TODO: For all the node ids with _middle (add a crossing tag in the connection file) with vehicle edges on either side as edges attributes.
+        # First remove all the crossing tags except default one.
+        for crossing in connection_root.findall('crossing'):
+            if crossing.get('node') not in default_tl:
+                connection_root.remove(crossing)
+        # The width here needs to come from the model. 
+        
+        # TODO: Might need to update the y_coordinate of the mid nodes to align with the vehicle edges/ nodes? That would result in a change to networkx graph.
+
         # for node_id in nodes_to_add:
         #     node_data = networkx_graph.nodes[node_id]
         #     if node_data.get('type') == 'middle':
@@ -964,39 +1071,67 @@ class DesignEnv(gym.Env):
         #         conn_attribs = {'from': from_node, 'to': to_node, 'tl': node_id, 'fromLane': '0', 'toLane': '0'} # Since inside the corridor, there is only one lane.
         #         connection_element = ET.Element('connection', conn_attribs)
         #         traffic_light_root.append(connection_element)
+
+        # TL logic additions
+        for nid in middle_nodes_to_add:
+            node_data = networkx_graph.nodes[nid]
+            tlLogic_element = ET.Element('tlLogic', id=nid, type='static', programID='0', offset='0')
+            tlLogic_element.text = "\n\t\t" # Inside <tlLogic>: phases start at two tabs
+
+            # Create phases with proper indentation
+            phase1 = ET.SubElement(tlLogic_element, 'phase', duration='77', state='GGr')
+            phase1.tail = "\n\t\t"
+            phase2 = ET.SubElement(tlLogic_element, 'phase', duration='3', state='yyr') 
+            phase2.tail = "\n\t\t"
+            phase3 = ET.SubElement(tlLogic_element, 'phase', duration='5', state='rrG')
+            phase3.tail = "\n\t\t"
+            phase4 = ET.SubElement(tlLogic_element, 'phase', duration='5', state='rrr')
+            phase4.tail = "\n\t"
+
+            tlLogic_element.tail = "\n\t"
+            traffic_light_root.append(tlLogic_element)
+                
+        # Respective changes to the connections file.
+        # All the connections present in the TLL file should also be present in the connections file. But the connection file will have more of them.
+        # In iteration base, there will be a bunch of connections to remove from original file (remove connections with the same from and to edges).
+
+        all_conn_file_connections = [(conn.get('from'), conn.get('to')) for conn in connection_root.findall('connection')]
+        print(f"connection Before removal: Total: {len(all_conn_file_connections)},\n {all_conn_file_connections}\n")
         
+        # Look at the same from and to edges in the connections file and remove them.
+        connections_to_remove_list = [(conn.get('from'), conn.get('to')) for conn in connections_to_remove]
+        #print(f"connections_to_remove_list: Total: {len(connections_to_remove_list)},\n {connections_to_remove_list}\n")
 
-        # To add the pedestrian edges. Connect Regular to middle.
+        to_remove = []
+        for conn in connection_root.findall('connection'):
+            from_edge = conn.get('from')
+            to_edge = conn.get('to')
+            if (from_edge, to_edge) in connections_to_remove_list:
+                to_remove.append(conn)
+
+        # Remove all identified connections from connection file
+        for conn in to_remove:
+            connection_root.remove(conn)
+
+
+        # Additional stuff related to edge removals.
+        # If the edge (pedestrian and vehicle) is removed, then the connections to and from that edge should also be removed.
+        pedestrian_edges_to_remove_connections = []
+        for (f,t), edge in pedestrian_edges_to_remove.items():
+            pedestrian_edges_to_remove_connections.append(edge.get('id'))
+
+        print(f"pedestrian_edges_to_remove_connections: Total: {len(pedestrian_edges_to_remove_connections)},\n {pedestrian_edges_to_remove_connections}\n")
+
+        for conn in connection_root.findall('connection'):
+            if conn.get('from') in pedestrian_edges_to_remove_connections or conn.get('to') in pedestrian_edges_to_remove_connections:
+                connection_root.remove(conn)
+
+        all_conn_file_connections = [(conn.get('from'), conn.get('to')) for conn in connection_root.findall('connection')]
+        print(f"connection After removal: Total: {len(all_conn_file_connections)},\n {all_conn_file_connections}\n")
+
 
         
-
-
-        # Add new pedestrian edges to XML
-        # edges_to_add = pedestrian_edge_tuples_in_graph - pedestrian_edge_tuples_in_xml
-        # for from_node, to_node in edges_to_add:
-        #     edge_data = networkx_graph.get_edge_data(from_node, to_node)
-        #     edge_id = edge_data.get('id', f'edge_{from_node}_{to_node}')
-        #     width = edge_data.get('width', 2.0)
-        #     edge_attribs = {
-        #         'id': edge_id,
-        #         'from': from_node,
-        #         'to': to_node,
-        #         'priority': '1',
-        #         'type': 'highway.footway',
-        #         'numLanes': '1',
-        #         'speed': '2.78',
-        #         'allow': 'pedestrian',
-        #         'width': str(width)
-        #     }
-        #     edge_element = ET.Element('edge', edge_attribs)
-        #     # Create nested lane element
-        #     lane_element = ET.SubElement(edge_element, 'lane', index='0', allow='pedestrian', speed='2.78', width=str(width))
-        #     ET.SubElement(lane_element, 'param', key='origId', value=edge_id)
-        #     edge_root.append(edge_element)
-
-
-
-
+        
         iteration_prefix = f'{self.component_dir}/iteration_{iteration}'
         node_tree.write(f'{iteration_prefix}.nod.xml', encoding='utf-8', xml_declaration=True)
         edge_tree.write(f'{iteration_prefix}.edg.xml', encoding='utf-8', xml_declaration=True)
@@ -1029,6 +1164,3 @@ class DesignEnv(gym.Env):
         y_coords = coords[:, 1]
         self.normalizer_x = {'min': float(np.min(x_coords)), 'max': float(np.max(x_coords))}
         self.normalizer_y = {'min': float(np.min(y_coords)), 'max': float(np.max(y_coords))}
-
-
-

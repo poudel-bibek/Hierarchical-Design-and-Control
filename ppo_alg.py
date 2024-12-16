@@ -268,6 +268,7 @@ class PPO:
                 # Calculate policy and value losses
                 # TODO: Is the mean necessary here? In policy loss and entropy loss. Probably yes, for averaging across the batch.
                 policy_loss = -torch.min(surr1, surr2).mean() # Equation 7 in the paper
+                # The negative sign ensures that the optimizer maximizes the PPO objective by minimizing the loss function. It is correct and necessary.
                 value_loss = ((state_values - returns_batch) ** 2).mean() # MSE 
                 entropy_loss = dist_entropy.mean()
                 

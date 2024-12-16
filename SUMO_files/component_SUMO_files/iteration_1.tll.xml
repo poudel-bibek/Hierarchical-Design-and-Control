@@ -28,52 +28,40 @@
     <connection from="773672648#0" to="773672649#1" fromLane="1" toLane="0" tl="cluster_172228464_482708521_9687148201_9687148202_#5more" linkIndex="13" />
     <connection from="773672648#0" to="16666012#2" fromLane="2" toLane="0" tl="cluster_172228464_482708521_9687148201_9687148202_#5more" linkIndex="14" />
     <connection from="773672648#0" to="452522817#1" fromLane="2" toLane="1" tl="cluster_172228464_482708521_9687148201_9687148202_#5more" linkIndex="15" />
-<tlLogic id="iter1_7_mid" type="static" programID="0" offset="0">
-		<phase duration="77" state="GGr" />
-		<phase duration="3" state="yyr" />
-		<phase duration="5" state="rrG" />
-		<phase duration="5" state="rrr" />
-</tlLogic>
-<tlLogic id="iter1_6_mid" type="static" programID="0" offset="0">
-		<phase duration="77" state="GGr" />
-		<phase duration="3" state="yyr" />
-		<phase duration="5" state="rrG" />
-		<phase duration="5" state="rrr" />
-</tlLogic>
-<tlLogic id="iter1_3_mid" type="static" programID="0" offset="0">
-		<phase duration="77" state="GGr" />
-		<phase duration="3" state="yyr" />
-		<phase duration="5" state="rrG" />
-		<phase duration="5" state="rrr" />
-</tlLogic>
-<tlLogic id="iter1_0_mid" type="static" programID="0" offset="0">
-		<phase duration="77" state="GGr" />
-		<phase duration="3" state="yyr" />
-		<phase duration="5" state="rrG" />
-		<phase duration="5" state="rrr" />
-</tlLogic>
-<tlLogic id="iter1_2_mid" type="static" programID="0" offset="0">
-		<phase duration="77" state="GGr" />
-		<phase duration="3" state="yyr" />
-		<phase duration="5" state="rrG" />
-		<phase duration="5" state="rrr" />
-</tlLogic>
 <tlLogic id="iter1_5_mid" type="static" programID="0" offset="0">
 		<phase duration="77" state="GGr" />
 		<phase duration="3" state="yyr" />
 		<phase duration="5" state="rrG" />
 		<phase duration="5" state="rrr" />
-</tlLogic>
-<tlLogic id="iter1_1_mid" type="static" programID="0" offset="0">
+	</tlLogic>
+	<tlLogic id="iter1_2_mid" type="static" programID="0" offset="0">
 		<phase duration="77" state="GGr" />
 		<phase duration="3" state="yyr" />
 		<phase duration="5" state="rrG" />
 		<phase duration="5" state="rrr" />
-</tlLogic>
-<tlLogic id="iter1_4_mid" type="static" programID="0" offset="0">
+	</tlLogic>
+	<tlLogic id="iter1_3_mid" type="static" programID="0" offset="0">
 		<phase duration="77" state="GGr" />
 		<phase duration="3" state="yyr" />
 		<phase duration="5" state="rrG" />
 		<phase duration="5" state="rrr" />
-</tlLogic>
-</tlLogics>
+	</tlLogic>
+	<tlLogic id="iter1_1_mid" type="static" programID="0" offset="0">
+		<phase duration="77" state="GGr" />
+		<phase duration="3" state="yyr" />
+		<phase duration="5" state="rrG" />
+		<phase duration="5" state="rrr" />
+	</tlLogic>
+	<tlLogic id="iter1_0_mid" type="static" programID="0" offset="0">
+		<phase duration="77" state="GGr" />
+		<phase duration="3" state="yyr" />
+		<phase duration="5" state="rrG" />
+		<phase duration="5" state="rrr" />
+	</tlLogic>
+	<tlLogic id="iter1_4_mid" type="static" programID="0" offset="0">
+		<phase duration="77" state="GGr" />
+		<phase duration="3" state="yyr" />
+		<phase duration="5" state="rrG" />
+		<phase duration="5" state="rrr" />
+	</tlLogic>
+	</tlLogics>

@@ -1,3 +1,23 @@
-***Starting server on port 46329 ***
-Error: File './SUMO_files/network_iterations/network_iteration_1.net.xml' is not accessible (No such file or directory).
+***Starting server on port 53251 ***
+Loading net-file from './SUMO_files/network_iterations/network_iteration_1.net.xml' ... done (24ms).
+Loading done.
+Simulation started with time: 0.00.
+Error: Answered with error to command 0xaa: Edge ':9727816850_w1' is not known
+Error: tcpip::Socket::recvAndCheck @ recv: peer shutdown
 Quitting (on error).
+Simulation ended at time: 1.00
+Performance: 
+ Duration: 0.91s
+ TraCI-Duration: 0.00s
+ Real time factor: 1.10011
+ UPS: 0.000000
+Vehicles: 
+ Inserted: 0 (Loaded: 1)
+ Running: 0
+ Waiting: 0
+Persons: 
+ Inserted: 1
+ Running: 0
+
+DijkstraRouter answered 1 queries and explored 48.00 edges on average.
+DijkstraRouter spent 0.00s answering queries (0.00ms on average).

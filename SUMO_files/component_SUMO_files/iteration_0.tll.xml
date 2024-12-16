@@ -28,46 +28,46 @@
     <connection from="773672648#0" to="773672649#1" fromLane="1" toLane="0" tl="cluster_172228464_482708521_9687148201_9687148202_#5more" linkIndex="13" />
     <connection from="773672648#0" to="16666012#2" fromLane="2" toLane="0" tl="cluster_172228464_482708521_9687148201_9687148202_#5more" linkIndex="14" />
     <connection from="773672648#0" to="452522817#1" fromLane="2" toLane="1" tl="cluster_172228464_482708521_9687148201_9687148202_#5more" linkIndex="15" />
-<tlLogic id="9740157155_c0_mid" type="static" programID="0" offset="0">
-		<phase duration="77" state="GGr" />
-		<phase duration="3" state="yyr" />
-		<phase duration="5" state="rrG" />
-		<phase duration="5" state="rrr" />
-</tlLogic>
-<tlLogic id="9740157209_c0_mid" type="static" programID="0" offset="0">
-		<phase duration="77" state="GGr" />
-		<phase duration="3" state="yyr" />
-		<phase duration="5" state="rrG" />
-		<phase duration="5" state="rrr" />
-</tlLogic>
-<tlLogic id="9727816850_c0_mid" type="static" programID="0" offset="0">
-		<phase duration="77" state="GGr" />
-		<phase duration="3" state="yyr" />
-		<phase duration="5" state="rrG" />
-		<phase duration="5" state="rrr" />
-</tlLogic>
-<tlLogic id="9727816623_c0_mid" type="static" programID="0" offset="0">
-		<phase duration="77" state="GGr" />
-		<phase duration="3" state="yyr" />
-		<phase duration="5" state="rrG" />
-		<phase duration="5" state="rrr" />
-</tlLogic>
 <tlLogic id="cluster_9740157181_9740483933_c0_mid" type="static" programID="0" offset="0">
 		<phase duration="77" state="GGr" />
 		<phase duration="3" state="yyr" />
 		<phase duration="5" state="rrG" />
 		<phase duration="5" state="rrr" />
-</tlLogic>
-<tlLogic id="9740157194_c0_mid" type="static" programID="0" offset="0">
+	</tlLogic>
+	<tlLogic id="9740157155_c0_mid" type="static" programID="0" offset="0">
 		<phase duration="77" state="GGr" />
 		<phase duration="3" state="yyr" />
 		<phase duration="5" state="rrG" />
 		<phase duration="5" state="rrr" />
-</tlLogic>
-<tlLogic id="9740484527_c0_mid" type="static" programID="0" offset="0">
+	</tlLogic>
+	<tlLogic id="9740157209_c0_mid" type="static" programID="0" offset="0">
 		<phase duration="77" state="GGr" />
 		<phase duration="3" state="yyr" />
 		<phase duration="5" state="rrG" />
 		<phase duration="5" state="rrr" />
-</tlLogic>
-</tlLogics>
+	</tlLogic>
+	<tlLogic id="9727816850_c0_mid" type="static" programID="0" offset="0">
+		<phase duration="77" state="GGr" />
+		<phase duration="3" state="yyr" />
+		<phase duration="5" state="rrG" />
+		<phase duration="5" state="rrr" />
+	</tlLogic>
+	<tlLogic id="9740484527_c0_mid" type="static" programID="0" offset="0">
+		<phase duration="77" state="GGr" />
+		<phase duration="3" state="yyr" />
+		<phase duration="5" state="rrG" />
+		<phase duration="5" state="rrr" />
+	</tlLogic>
+	<tlLogic id="9727816623_c0_mid" type="static" programID="0" offset="0">
+		<phase duration="77" state="GGr" />
+		<phase duration="3" state="yyr" />
+		<phase duration="5" state="rrG" />
+		<phase duration="5" state="rrr" />
+	</tlLogic>
+	<tlLogic id="9740157194_c0_mid" type="static" programID="0" offset="0">
+		<phase duration="77" state="GGr" />
+		<phase duration="3" state="yyr" />
+		<phase duration="5" state="rrG" />
+		<phase duration="5" state="rrr" />
+	</tlLogic>
+	</tlLogics>
