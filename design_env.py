@@ -171,9 +171,7 @@ class DesignEnv(gym.Env):
         self.base_networkx_graph = self._cleanup_graph(pedestrian_networkx_graph, self.existing_crosswalks)
         self.horizontal_nodes_top_ped = ['9666242268', '9666274719', '9666274722', '9666274721', '9727816851', '9666274744', '9666274574', '9666274798', '9666274635', '9666274616', '9666274886', '9655154530', '9655154527', '9655154520', '10054309033', '9740157195', '9740157210', '10054309051', '9740484524', '9740484531']
         self.horizontal_nodes_bottom_ped = ['9727816638', '9727816862', '9727816846', '9727816629', '9727779405', '9740157080', '9727816625', '9740157142', '9740157169', '9740157145', '9740484033', '9740157174', '9740157171', '9740157154', '9740157158', '9740411703', '9740411701', '9740483978', '9740483934', '9740157180', '9740483946', '9740157204', '9740484420', '9740157211', '9740484523', '9740484522', '9740484512', '9740484528', '9739966899', '9739966895']
-        self.horizontal_edges_top_veh = ['-16666012#2', '-16666012#3', '-16666012#4', '-16666012#5', '-16666012#6', '-16666012#7', '-16666012#9', '-16666012#11', '-16666012#12', '-16666012#13', '-16666012#14', '-16666012#15', '-16666012#16', '-16666012#17']
-        self.horizontal_edges_bottom_veh = ['16666012#2', '16666012#3', '16666012#4', '16666012#5', '16666012#6', '16666012#7', '16666012#9', '16666012#11', '16666012#12', '16666012#13', '16666012#14', '16666012#15', '16666012#16', '16666012#17']
-
+    
         self._update_xml_files(self.base_networkx_graph, 'base') # Create base XML files from latest networkx graph
 
         if self.design_args['save_graph_images']:
@@ -474,6 +472,7 @@ class DesignEnv(gym.Env):
             # Connect the new nodes to the existing nodes via edges with the given thickness.
 
             latest_horizontal_segment = self._get_horizontal_segment_ped(latest_horizontal_nodes_top_ped, latest_horizontal_nodes_bottom_ped, self.iterative_networkx_graph) # Start with set of nodes in base graph
+            #print(f"\nLatest horizontal segment: {latest_horizontal_segment}\n")
             new_intersects = self._find_intersects_ped(denorm_location, latest_horizontal_segment, self.iterative_networkx_graph)
             #print(f"\nNew intersects: {new_intersects}\n")
 
@@ -533,7 +532,7 @@ class DesignEnv(gym.Env):
                     
     def _find_intersects_ped(self, x_location, latest_horizontal_segment, latest_graph):
         """
-        Find where a given x-coordinate intersects with the horizontal segments.
+        Find where a given x-coordinate intersects with the horizontal pedestriansegments.
         Returns the edge IDs and positions where the intersection occurs.
         The graph is always changing as edges are added/removed.
         """
@@ -566,7 +565,7 @@ class DesignEnv(gym.Env):
 
     def _get_horizontal_segment_ped(self, horizontal_nodes_top, horizontal_nodes_bottom, latest_graph, validation=False):
         """
-        Get the entire horizontal segment of the corridor.
+        Get the entire horizontal pedestrian segment of the corridor.
         """
 
         base_nodes_dict = {node[0]: node[1] for node in latest_graph.nodes(data=True)}
@@ -619,12 +618,6 @@ class DesignEnv(gym.Env):
             #plt.show()
         
         return horizontal_segment
-
-    def _get_horizontal_segment_veh(self, horizontal_edges_top, horizontal_edges_bottom, latest_graph, validation=False):
-        """
-        Get the entire horizontal segment of the corridor.
-        """
-        pass 
 
     def _get_reward(self, iteration):
         """
@@ -837,7 +830,7 @@ class DesignEnv(gym.Env):
             - end with </lane></edge>
         """
 
-        prefix = "original" if iteration == 'base' else f"iteration_base" # Every iteration will have the same base XML files.
+        prefix = "original" #if iteration == 'base' else "iteration_base" # Every iteration will have the same base XML files.
         node_file = f'{self.component_dir}/{prefix}.nod.xml'
         edge_file = f'{self.component_dir}/{prefix}.edg.xml'
         connection_file = f'{self.component_dir}/{prefix}.con.xml'
@@ -904,11 +897,6 @@ class DesignEnv(gym.Env):
             if e_type == 'highway.tertiary' and 'pedestrian' in disallow:
                 vehicle_edges_linked_to_potential_removal_nodes[(f, t)] = e
         print(f"Vehicle edges linked to potential removal nodes: Total: {len(vehicle_edges_linked_to_potential_removal_nodes)},\n {vehicle_edges_linked_to_potential_removal_nodes}\n")
-
-        # Each removed node that is a part of the vehicle edges will have four vehicle edges (two for each direction).
-        # Option 1: Merge into a larger edge by combining the shapes. This may be harmful because the edge itself could be referenced by other other parts of the network.
-        # Option 2: keep these vehicle nodes and edges as they are. Only remove the pedestrian edges and the TL associated with these nodes.
-        # Others are pedestrian nodes and edges, they can be removed.
         
         # Get all nodes that appear in vehicle edges
         nodes_in_vehicle_edges = set()
@@ -983,8 +971,6 @@ class DesignEnv(gym.Env):
             node_root.append(new_node)
             nodes_in_xml[nid] = new_node
 
-            
-        
         # Edge additions
         # Find the edges to add (present in networkx graph but not in XML component file).
         # For each edge, add a new edge element with the same attributes.
@@ -1042,27 +1028,24 @@ class DesignEnv(gym.Env):
 
             edge_root.append(edge_element)
 
-        # TODO: Vehicle connections.
-        # For all the mid nodes, find and add all vehicle connections: that connect the TL to the existing vehicle edges. 
-        # The vehicle edges that are already present in either sides of the newly added TL (middle node). 
+
+        # Whenever a middle node falls on a vehicle edge: For all the mid nodes, find two new edges.
+        # Split the old edge into two edges with left and right attached to the names (the new edges inherit shape property of the original edge)
+        # This happens iteratively and is much more complex than what is written above.
         middle_nodes_to_add = [nid for nid in node_ids_to_add if networkx_graph.nodes[nid].get('type') == 'middle']
-        removed_vehicle_edges = [] # ids of the vehicle edges that are removed.
-        # Whenever a middle node falls on a vehicle edge:
-        # Split the edge into two edges and add a new connection (both to TLL and Con files). Use linkIndex 0 for connecting -ve direction and linkIndex 1 for connecting +ve direction.
-        # The new edges should inherit certain properties of the original edge to preserve the shape etc.
-        # Delete the original edge (add the id to the edge removed_vehicle_edges list).
-        xml_horizontal_segments_base = {}
+        old_veh_edges_to_remove, new_veh_edges_to_add, updated_conn_root = get_new_veh_edges(middle_nodes_to_add, networkx_graph, f'{self.component_dir}/original.edg.xml', f'{self.component_dir}/original.nod.xml', connection_root)
+        print(f"old_veh_edges_to_remove: {old_veh_edges_to_remove}\n")
+        print(f"new_veh_edges_to_add: {new_veh_edges_to_add}\n")
 
+        # Add the new edges to the edge file. 
+        # Write here.
 
-        # TODO: For all the node ids with _middle (add a crossing tag in the connection file) with vehicle edges on either side as edges attributes.
-        # First remove all the crossing tags except default one.
-        for crossing in connection_root.findall('crossing'):
-            if crossing.get('node') not in default_tl:
-                connection_root.remove(crossing)
-        # The width here needs to come from the model. 
+        # The TLL file connections dont need to iteratively change. Although connection tags may refer to the old edges, dont need to take care of these as much.
+        # Use linkIndex 0 for connecting -ve direction and linkIndex 1 for connecting +ve direction.
+        # Write here.
         
-        # TODO: Might need to update the y_coordinate of the mid nodes to align with the vehicle edges/ nodes? That would result in a change to networkx graph.
-
+        # Now add the new connections between middle nodes and new vehicle edges
+        # The width here needs to come from the model.
         # for node_id in nodes_to_add:
         #     node_data = networkx_graph.nodes[node_id]
         #     if node_data.get('type') == 'middle':
@@ -1071,6 +1054,31 @@ class DesignEnv(gym.Env):
         #         conn_attribs = {'from': from_node, 'to': to_node, 'tl': node_id, 'fromLane': '0', 'toLane': '0'} # Since inside the corridor, there is only one lane.
         #         connection_element = ET.Element('connection', conn_attribs)
         #         traffic_light_root.append(connection_element)
+
+        
+        # For the crossing tags in the Conn file ( which also dont need to be changed iteratively). 
+        # They are already updated while obtaining the new edges. Nothing to do here.
+        # Whereas for the crossing tags,
+        # First remove all except the default ones. Then add the new ones here by making use of new_veh_edges_to_add.
+        default_crossings = default_tl + ['cluster_172228408_9739966907_9739966910', '9687187500', '9687187501'] # associated with ids 0 and 10.
+        for crossing in updated_conn_root.findall('crossing'):
+            if crossing.get('node') not in default_crossings:
+                updated_conn_root.remove(crossing)
+        
+        # Then add new crossings here by making use of new_veh_edges_to_add.
+        # All tags that refer to the old edges should now refer to the new edges (if the refering edges fall to the left, they will refer to the new left edge and vice versa) 
+        # They have the edges attribute and outlineShape attribute.
+        # Write here.
+
+
+        # Delete the old edges from the edg file i.e., just remove the tags with old edge ids.
+        # for edge in edge_root.findall('edge'):
+        #     if edge.get('id') in old_veh_edges_to_remove:
+        #         edge_root.remove(edge)
+
+
+        # TODO: Might need to update the y_coordinate of the mid nodes to align with the vehicle edges/ nodes? 
+        # The difference is minute.
 
         # TL logic additions
         for nid in middle_nodes_to_add:
@@ -1113,7 +1121,6 @@ class DesignEnv(gym.Env):
         for conn in to_remove:
             connection_root.remove(conn)
 
-
         # Additional stuff related to edge removals.
         # If the edge (pedestrian and vehicle) is removed, then the connections to and from that edge should also be removed.
         pedestrian_edges_to_remove_connections = []
@@ -1128,9 +1135,6 @@ class DesignEnv(gym.Env):
 
         all_conn_file_connections = [(conn.get('from'), conn.get('to')) for conn in connection_root.findall('connection')]
         print(f"connection After removal: Total: {len(all_conn_file_connections)},\n {all_conn_file_connections}\n")
-
-
-        
         
         iteration_prefix = f'{self.component_dir}/iteration_{iteration}'
         node_tree.write(f'{iteration_prefix}.nod.xml', encoding='utf-8', xml_declaration=True)

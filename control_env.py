@@ -536,16 +536,20 @@ class ControlEnv(gym.Env):
             # Increment the current action step
             self.current_action_step = (self.current_action_step + 1) % self.steps_per_action # Wrapped around some modulo arithmetic
 
+            # TODO: For the time being. Modify it later.
             # Collect observation at each substep
-            obs = self._get_observation(print_map=False)
+            obs = np.random.rand(40)
+            #obs = self._get_observation(print_map=False)
             #print(f"\nObservation: {obs}")
             observation_buffer.append(obs)
 
-            self._update_pressure_dict(self.corrected_occupancy_map)
+            # TODO: For the time being. Modify it later.
+            #self._update_pressure_dict(self.corrected_occupancy_map)
 
             # Accumulate reward
-            reward += self._get_reward(current_tl_action)
-            
+            #reward += self._get_reward(current_tl_action)
+            reward += 0 # TODO: For the time being. Modify it later.
+
             # Check if episode is done
             if self._check_done():
                 done = True
@@ -994,7 +998,10 @@ class ControlEnv(gym.Env):
             # Apply the current phase group using _apply_action
             self._apply_action(initial_action, step, None)
             traci.simulationStep()
-            obs = self._get_observation()
+
+            # TODO: For the time being. Modify it later.
+            #obs = self._get_observation()
+            obs = np.random.rand(40)
             observation_buffer.append(obs)
 
         observation = np.asarray(observation_buffer, dtype=np.float32)

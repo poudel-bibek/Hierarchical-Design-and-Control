@@ -18,14 +18,15 @@ class Memory:
         self.is_terminals = []
 
     def append(self, state, action, logprob, reward, done):
-        self.states.append(state)
-
         # clone creates a copy to ensure that subsequent operations on the copy do not affect the original tensor. 
         # Detach removes a tensor from the computational graph, preventing gradients from flowing through it during backpropagation.
-        self.actions.append(action.clone().detach()) 
-        self.logprobs.append(logprob)
-        self.rewards.append(reward)
-        self.is_terminals.append(done)
+        # store cpu tensors
+
+        self.states.append(state.cpu())
+        self.actions.append(action.clone().detach().cpu()) 
+        self.logprobs.append(logprob.cpu())
+        self.rewards.append(reward) # these are scalars
+        self.is_terminals.append(done) # these are scalars
 
     def clear_memory(self):
         del self.actions[:]

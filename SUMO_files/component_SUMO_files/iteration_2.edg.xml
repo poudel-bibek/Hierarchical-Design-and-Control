@@ -1731,4 +1731,34 @@
 			<param key="origId" value="1054116931" />
 		</lane>
 	</edge>
+	<edge id="edge_9740157142_iter2_0_bottom" from="9740157142" to="iter2_0_bottom" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2485.99,2637.54 2470.25,2636.83">
+			<param key="origId" value="edge_9740157142_iter2_0_bottom" />
+		</lane>
+	</edge>
+	<edge id="edge_iter2_0_top_iter2_0_mid" from="iter2_0_top" to="iter2_0_mid" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="4.2744937" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="4.2744937" speed="2.78" shape="2470.25,2655.73 2470.25,2646.28">
+			<param key="origId" value="edge_iter2_0_top_iter2_0_mid" />
+		</lane>
+	</edge>
+	<edge id="edge_9666274798_iter2_0_top" from="9666274798" to="iter2_0_top" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2452.5,2655.23 2470.25,2655.73">
+			<param key="origId" value="edge_9666274798_iter2_0_top" />
+		</lane>
+	</edge>
+	<edge id="edge_9727816625_iter2_0_bottom" from="9727816625" to="iter2_0_bottom" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2452.03,2636.0 2470.25,2636.83">
+			<param key="origId" value="edge_9727816625_iter2_0_bottom" />
+		</lane>
+	</edge>
+	<edge id="edge_iter2_0_bottom_iter2_0_mid" from="iter2_0_bottom" to="iter2_0_mid" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="4.2744937" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="4.2744937" speed="2.78" shape="2470.25,2636.83 2470.25,2646.28">
+			<param key="origId" value="edge_iter2_0_bottom_iter2_0_mid" />
+		</lane>
+	</edge>
+	<edge id="edge_9666274635_iter2_0_top" from="9666274635" to="iter2_0_top" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2494.74,2656.42 2470.25,2655.73">
+			<param key="origId" value="edge_9666274635_iter2_0_top" />
+		</lane>
+	</edge>
 	</edges>
