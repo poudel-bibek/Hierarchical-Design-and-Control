@@ -1,21 +1,2 @@
-Warning: Teleporting vehicle '63'; waited too long (yield), lane='1060131306#0_0', time=314.00.
-Warning: Vehicle '63' ends teleporting on edge '16666012#2', time=314.00.
-Warning: Teleporting vehicle '62'; waited too long (yield), lane='1078803478#0_1', time=426.00.
-Warning: Vehicle '62' ends teleporting on edge '16666012#2', time=426.00.
-Warning: Teleporting vehicle '198'; waited too long (yield), lane='-16666012#2_0', time=453.00.
-Warning: Vehicle '198' ends teleporting on edge '452522817#1', time=453.00.
-Warning: Person '1945' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=463.00.
-Warning: Person '57' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w4', time=508.00.
-Warning: Person '1948' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=522.00.
-Warning: Person '1' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=534.00.
-Warning: Person '1941' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=538.00.
-Warning: Person '2219' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w4', time=600.00.
-Warning: Teleporting vehicle '5'; waited too long (yield), lane='1060131306#0_0', time=620.00.
-Warning: Vehicle '5' ends teleporting on edge '16666012#2', time=620.00.
-Warning: Person '2210' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w4', time=631.00.
-Warning: Person '2101' is jammed on edge ':9727816625_w0', time=649.00.
-Warning: Person '1919' is jammed on edge ':9727816625_w0', time=650.00.
-Warning: Person '1688' is jammed on edge ':9727816625_w0', time=651.00.
-Warning: Person '2191' is jammed on edge ':9727816625_w0', time=668.00.
-Warning: Person '1739' is jammed on edge ':9727816625_w0', time=689.00.
-Warning: Person '2220' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w4', time=714.00.
+Error: File './SUMO_files/network_iterations/network_iteration_1.net.xml' is not accessible (No such file or directory).
+Quitting (on error).

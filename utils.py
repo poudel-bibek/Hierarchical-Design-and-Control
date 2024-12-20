@@ -447,7 +447,7 @@ def save_better_graph_visualization(graph, iteration,
 
 
 #### XML related Utils #####    
-def get_initial_veh_edge_config(original_edg_file, original_nod_file):
+def get_initial_veh_edge_config(edge_root, node_root, node_coords):
     """
     """
 
@@ -459,19 +459,7 @@ def get_initial_veh_edge_config(original_edg_file, original_nod_file):
                                     '16666012#6', '16666012#7', '16666012#9', '16666012#11',
                                     '16666012#12', '16666012#13', '16666012#14', '16666012#15',
                                     '16666012#16', '16666012#17']
-    # Parse XML files
-    edge_tree = ET.parse(original_edg_file)
-    edge_root = edge_tree.getroot()
-    node_tree = ET.parse(original_nod_file)
-    node_root = node_tree.getroot()
-
-    # Create a dictionary of node coordinates
-    node_coords = {}
-    for node in node_root.findall('node'):
-        node_id = node.get('id')
-        x = float(node.get('x'))
-        node_coords[node_id] = x
-
+    
     veh_edges = {
         'top': {},
         'bottom': {}
@@ -522,13 +510,36 @@ def get_initial_veh_edge_config(original_edg_file, original_nod_file):
     
     return veh_edges
 
-def get_new_veh_edges(middle_nodes_to_add, networkx_graph, original_edg_file, original_nod_file, conn_root):
+def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_edg_file, original_nod_file, conn_root):
     """
     Find which vehicle edges (both top and bottom) each middle node intersects with.
     Uses x-coordinate of middle node to find intersecting edges.
     """
+    # Parse XML files
+    edge_tree = ET.parse(original_edg_file)
+    edge_root = edge_tree.getroot()
+    node_tree = ET.parse(original_nod_file)
+    node_root = node_tree.getroot()
 
-    original_edges = get_initial_veh_edge_config(original_edg_file, original_nod_file)
+    # Create a dictionary of node coordinates
+    node_coords = {}
+    for node in node_root.findall('node'):
+        node_id = node.get('id')
+        node_coords[node_id] = round(float(node.get('x')), 2)
+
+    original_edges = get_initial_veh_edge_config(edge_root, node_root, node_coords)
+
+    # This needs to aldo contain all the edges that could be connected to the initial edges.
+    iterative_edges = {}
+    for edge in edge_root.findall('edge'):
+        edge_id = edge.get('id')
+        attributes_dict = edge.attrib # only from and to will be used
+        # Add from_x and to_x to the attributes_dict
+        attributes_dict['from_x'] = node_coords[attributes_dict['from']]
+        attributes_dict['to_x'] = node_coords[attributes_dict['to']]
+        iterative_edges[edge_id] = attributes_dict
+    #print(f"iterative_edges: {iterative_edges}\n")
+
     edges_to_remove = []
     edges_to_add = {'top': {}, 'bottom': {}}
     
@@ -536,12 +547,14 @@ def get_new_veh_edges(middle_nodes_to_add, networkx_graph, original_edg_file, or
     # In the same process, the connections (in the conn file) need to change as we go. 
     # The old edge in a connection could either be a to or a from edge. For the counterpart edge, find if its to the right or left of the old edge.
     # Find intersects for each middle node and then update the conn file.
-    for m_node in middle_nodes_to_add:
-        x_coord = networkx_graph.nodes[m_node]['pos'][0]
+    for i in range(len(middle_nodes_to_add)):
+        m_node = middle_nodes_to_add[i]
+        x_coord = round(networkx_graph.nodes[m_node]['pos'][0], 2)
         
-        # Handle top edges (reversed direction) and top connection
+        # Handle top edges and top connection
         for edge_id, edge_data in original_edges['top'].items():
-            if edge_data['from_x'] >= x_coord >= edge_data['to_x']:  # Reversed direction check
+            if edge_data['from_x'] >= x_coord >= edge_data['to_x']:  # greater than from and less than to
+
                 connections_referenced_top = []
                 for connection in conn_root.findall('connection'):
                     if connection.get('from') == edge_id or connection.get('to') == edge_id:
@@ -594,51 +607,57 @@ def get_new_veh_edges(middle_nodes_to_add, networkx_graph, original_edg_file, or
                 
                 # Add new edges to edges_to_add
                 # Right part of split (from original from to middle)
-                right_edge_id = f"{edge_id}right"
-                edges_to_add['top'][right_edge_id] = {
+                right_edge_id_top = f"{edge_id}right{i}" # The same edge can be split multiple times. Value of i not neceaasrily corresponding to number of times split.
+                edges_to_add['top'][right_edge_id_top] = {
                     'new_node': m_node,
                     'from': edge_data['from'],
                     'to': m_node,
-                    'from_x': edge_data['from_x'],
+                    'from_x': round(edge_data['from_x'], 2),
                     'to_x': x_coord,
                     'edge_shape': right_edge_shape,
                     'lane_shape': right_lane_shape
                 }
                 
                 # Left part of split (from middle to original to)
-                left_edge_id = f"{edge_id}left"
-                edges_to_add['top'][left_edge_id] = {
+                left_edge_id_top = f"{edge_id}left{i}" # The same edge can be split multiple times.
+                edges_to_add['top'][left_edge_id_top] = {
                     'new_node': m_node,
                     'from': m_node,
                     'to': edge_data['to'],
                     'from_x': x_coord,
-                    'to_x': edge_data['to_x'],
+                    'to_x': round(edge_data['to_x'], 2),
                     'edge_shape': left_edge_shape,
                     'lane_shape': left_lane_shape
                 }
+
+                # Add the new edges to iterative_edges (because we need the latest edge data below)
+                iterative_edges[right_edge_id_top] = edges_to_add['top'][right_edge_id_top]
+                iterative_edges[left_edge_id_top] = edges_to_add['top'][left_edge_id_top]
 
                 # Now add new connections to conn_root and remove old connections.
                 for connection in connections_referenced_top:
                     from_edge, to_edge = connection.get('from'), connection.get('to') # Existing connection edge ids 
                     # A new connection is formed between the edge 1 = 'other than the current edge id' and egde 2 =one of either f"{edge_id}right" or f"{edge_id}left"
                     edge_1 = to_edge if edge_id == from_edge else from_edge
-                    edge_1_n1, edge_1_n2 = 
-                    edge_1_n1_x, edge_1_n2_x =  
+                    edge_1_n1_x, edge_1_n2_x = iterative_edges[edge_1]['from_x'], iterative_edges[edge_1]['to_x'] # x_coord of the nodes of edge_1
+                    lowest_e1_x = min(edge_1_n1_x, edge_1_n2_x)
 
-                    # To find edge_2, we need to find where edge_1 is located (with respect to the current edge id)
-                    current_edge_n1_x, current_edge_n2_x = edge_data['from_x'], edge_data['to_x']
-                    
-                    if 
+                    # To find edge_2 (whether left or right), we need to find where edge_1 is located (with respect to the current edge id)
+                    # The logic is: if the smallest x_coordinate of nodes of edge_1 is greater than the smallest x_coordinate of the nodes ofcurrent edge id (the one that was split), then edge_2 is connected by the right side of the split.
+                    # Draw this on a paper to understand.
+                    current_edge_n1_x, current_edge_n2_x = iterative_edges[edge_id]['from_x'], iterative_edges[edge_id]['to_x']
+                    if lowest_e1_x >= min(current_edge_n1_x, current_edge_n2_x): # greater than from and less than to (correct direction)
+                        edge_2 = right_edge_id_top
+                    else:
+                        edge_2 = left_edge_id_top
 
+                    # Add a new connection with attributes
+                    attributes = {'from': edge_1, 'to': edge_2, 'fromLane': str(0), 'toLane': str(0)}
+                    new_connection = ET.Element('connection', attributes)
+                    new_connection.text = None  # Ensure there's no text content
+                    new_connection.text = "\n\t\t"
+                    conn_root.append(new_connection)
 
-                    # new connection attributes
-                    attributes = {'from': , 
-                                  'to': , 
-                                  'tl': , 
-                                  'fromLane': , 
-                                  'toLane': 
-                                  }
-                
 
                 # remove old connections
                 for connection in connections_referenced_top:
@@ -648,7 +667,7 @@ def get_new_veh_edges(middle_nodes_to_add, networkx_graph, original_edg_file, or
         
         # Check bottom edges and bottom connection
         for edge_id, edge_data in original_edges['bottom'].items():
-            if edge_data['from_x'] <= x_coord <= edge_data['to_x']:
+            if edge_data['from_x'] <= x_coord <= edge_data['to_x']: # less than from and greater than to (reversed direction)
                 connections_referenced_bottom = []
                 for connection in conn_root.findall('connection'):
                     if connection.get('from') == edge_id or connection.get('to') == edge_id:
@@ -701,30 +720,56 @@ def get_new_veh_edges(middle_nodes_to_add, networkx_graph, original_edg_file, or
                 
                 # Add new edges to edges_to_add
                 # Left part of split
-                left_edge_id = f"{edge_id}left"
-                edges_to_add['bottom'][left_edge_id] = {
+                left_edge_id_bottom = f"{edge_id}left{i}" # The same edge can be split multiple times.
+                edges_to_add['bottom'][left_edge_id_bottom] = {
                     'new_node': m_node,
                     'from': edge_data['from'],
                     'to': m_node,
-                    'from_x': edge_data['from_x'],
+                    'from_x': round(edge_data['from_x'], 2),
                     'to_x': x_coord,
                     'edge_shape': left_edge_shape,
                     'lane_shape': left_lane_shape
                 }
                 
                 # Right part of split
-                right_edge_id = f"{edge_id}right"
-                edges_to_add['bottom'][right_edge_id] = {
+                right_edge_id_bottom = f"{edge_id}right{i}" # The same edge can be split multiple times.
+                edges_to_add['bottom'][right_edge_id_bottom] = {
                     'new_node': m_node,
                     'from': m_node,
                     'to': edge_data['to'],
                     'from_x': x_coord,
-                    'to_x': edge_data['to_x'],
+                    'to_x': round(edge_data['to_x'], 2),
                     'edge_shape': right_edge_shape,
                     'lane_shape': right_lane_shape
                 }
 
+                # Add the new edges to iterative_edges (because we need the latest edge data below)
+                iterative_edges[right_edge_id_bottom] = edges_to_add['bottom'][right_edge_id_bottom]
+                iterative_edges[left_edge_id_bottom] = edges_to_add['bottom'][left_edge_id_bottom]
+
                 # Now add new connections to conn_root and remove old connections.
+                for connection in connections_referenced_bottom:
+                    from_edge, to_edge = connection.get('from'), connection.get('to') # Existing connection edge ids 
+                    # A new connection is formed between the edge 1 = 'other than the current edge id' and egde 2 =one of either f"{edge_id}right" or f"{edge_id}left"
+                    edge_1 = to_edge if edge_id == from_edge else from_edge
+                    edge_1_n1_x, edge_1_n2_x = iterative_edges[edge_1]['from_x'], iterative_edges[edge_1]['to_x'] # x_coord of the nodes of edge_1
+                    lowest_e1_x = min(edge_1_n1_x, edge_1_n2_x)
+
+                    # To find edge_2 (whether left or right), we need to find where edge_1 is located (with respect to the current edge id)
+                    # The logic is: if the smallest x_coordinate of nodes of edge_1 is greater than the smallest x_coordinate of the nodes ofcurrent edge id (the one that was split), then edge_2 is connected by the right side of the split.
+                    # Draw this on a paper to understand.
+                    current_edge_n1_x, current_edge_n2_x = iterative_edges[edge_id]['from_x'], iterative_edges[edge_id]['to_x']
+                    if lowest_e1_x <= min(current_edge_n1_x, current_edge_n2_x):  # reversed direction
+                        edge_2 = right_edge_id_bottom
+                    else:
+                        edge_2 = left_edge_id_bottom
+
+                    # Add a new connection with attributes
+                    attributes = {'from': edge_1, 'to': edge_2, 'fromLane': str(0), 'toLane': str(0)}
+                    new_connection = ET.Element('connection', attributes)
+                    new_connection.text = None  # Ensure there's no text content
+                    new_connection.tail  = "\n\t\t"
+                    conn_root.append(new_connection)
 
                 # remove old connections
                 for connection in connections_referenced_bottom:
@@ -732,7 +777,7 @@ def get_new_veh_edges(middle_nodes_to_add, networkx_graph, original_edg_file, or
                 
                 break
 
-    return edges_to_remove, edges_to_add
+    return edges_to_remove, edges_to_add, conn_root
 
 def interpolate_y_coordinate(points, x):
     """

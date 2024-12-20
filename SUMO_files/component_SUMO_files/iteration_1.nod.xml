@@ -195,4 +195,4 @@
         <param key="origEdgeIds" value="-16666012#8 16666012#8" />
         <param key="origId" value="9740411700 9740411702" />
     </node>
-<node id="iter1_1_mid" x="2467.987608370483" y="2646.1949797144534" type="traffic_light" tl="iter1_1_mid" /><node id="iter1_1_bottom" x="2467.987608370483" y="2636.7236371286967" type="dead_end" /><node id="iter1_0_bottom" x="2568.473415362835" y="2639.875164131902" type="dead_end" /><node id="iter1_0_mid" x="2568.473415362835" y="2648.0059689088407" type="traffic_light" tl="iter1_0_mid" /><node id="iter1_0_top" x="2568.473415362835" y="2656.1367736857796" type="dead_end" /><node id="iter1_1_top" x="2467.987608370483" y="2655.66632230021" type="dead_end" /></nodes>
+<node id="iter1_0_mid" x="2287.077169651985" y="2628.4876651155796" type="traffic_light" tl="iter1_0_mid" /><node id="iter1_0_bottom" x="2287.077169651985" y="2618.618598479127" type="dead_end" /><node id="iter1_0_top" x="2287.077169651985" y="2638.3567317520324" type="dead_end" /></nodes>

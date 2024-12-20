@@ -487,7 +487,7 @@ class DesignEnv(gym.Env):
                 # Add the new edge  
                 end_node_pos = new_intersects[side]['intersection_pos']
                 end_node_id = f"iter{iteration}_{i}_{side}"
-                self.iterative_networkx_graph.add_node(end_node_id, pos=end_node_pos, type='regular')# type for this is regular
+                self.iterative_networkx_graph.add_node(end_node_id, pos=end_node_pos, type='regular', width=-1) # type for this is regular (width specified for completeness as -1: Not used)
 
                 self.iterative_networkx_graph.add_edge(from_node, end_node_id, width=2.0) # The width of these edges is default (Not from the proposal)
                 self.iterative_networkx_graph.add_edge(end_node_id, to_node, width=2.0)
@@ -504,7 +504,7 @@ class DesignEnv(gym.Env):
             # Add the mid node and edges 
             mid_node_id = f"iter{iteration}_{i}_mid"
             mid_node_pos = (denorm_location, (mid_node_details['top']['y_cord'] + mid_node_details['bottom']['y_cord']) / 2)
-            self.iterative_networkx_graph.add_node(mid_node_id, pos=mid_node_pos, type='middle')
+            self.iterative_networkx_graph.add_node(mid_node_id, pos=mid_node_pos, type='middle', width=thickness) # The width is used later
             self.iterative_networkx_graph.add_edge(mid_node_details['top']['node_id'], mid_node_id, width=thickness) # Thickness is from sampled proposal
             self.iterative_networkx_graph.add_edge(mid_node_id, mid_node_details['bottom']['node_id'], width=thickness) # Thickness is from sampled proposal
 
@@ -655,7 +655,7 @@ class DesignEnv(gym.Env):
                 cid = cid.replace(":", "") # Do not use a space
                 middle_node_id = f"{cid}_mid"
                 # Add the new middle node to the networkx graph
-                self.iterative_networkx_graph.add_node(middle_node_id, pos=middle_pos, type='middle')
+                self.iterative_networkx_graph.add_node(middle_node_id, pos=middle_pos, type='middle', width=3.0) # At reset, the default width of 3.0 is used
 
                 # Add the connecting edge between the end nodes
                 crossing_nodes = crosswalk_data['crossing_nodes']
@@ -830,7 +830,7 @@ class DesignEnv(gym.Env):
             - end with </lane></edge>
         """
 
-        prefix = "original" #if iteration == 'base' else "iteration_base" # Every iteration will have the same base XML files.
+        prefix = "original" if iteration == 'base' else "iteration_base" # Every iteration will have the same base XML files.
         node_file = f'{self.component_dir}/{prefix}.nod.xml'
         edge_file = f'{self.component_dir}/{prefix}.edg.xml'
         connection_file = f'{self.component_dir}/{prefix}.con.xml'
@@ -976,7 +976,7 @@ class DesignEnv(gym.Env):
         # For each edge, add a new edge element with the same attributes.
         edges_to_add = set(networkx_graph.edges()) - set(edges_in_xml.keys()) # These are all pedestrian edges.
         edges_to_add = list(edges_to_add)
-        print(f"\nEdges to add: Total: {len(edges_to_add)},\n {edges_to_add}\n")
+        print(f"\nPedestrian edges to add: Total: {len(edges_to_add)},\n {edges_to_add}\n")
 
         # The edge could be a Regular node to Regular node or Regular node to middle node (crosswalk).
         for (f, t) in edges_to_add:
@@ -1033,30 +1033,64 @@ class DesignEnv(gym.Env):
         # Split the old edge into two edges with left and right attached to the names (the new edges inherit shape property of the original edge)
         # This happens iteratively and is much more complex than what is written above.
         middle_nodes_to_add = [nid for nid in node_ids_to_add if networkx_graph.nodes[nid].get('type') == 'middle']
-        old_veh_edges_to_remove, new_veh_edges_to_add, updated_conn_root = get_new_veh_edges(middle_nodes_to_add, networkx_graph, f'{self.component_dir}/original.edg.xml', f'{self.component_dir}/original.nod.xml', connection_root)
+        old_veh_edges_to_remove, new_veh_edges_to_add, updated_conn_root = get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, 
+                                                                                                         f'{self.component_dir}/original.edg.xml', 
+                                                                                                         f'{self.component_dir}/original.nod.xml', connection_root)
         print(f"old_veh_edges_to_remove: {old_veh_edges_to_remove}\n")
         print(f"new_veh_edges_to_add: {new_veh_edges_to_add}\n")
 
-        # Add the new edges to the edge file. 
-        # Write here.
+        # Add the new edges (each edge has a single nested lane) to the edge file. The width is the default road width.
+        for direction in ['top', 'bottom']:
+            for edge_id, edge_data in new_veh_edges_to_add[direction].items():
+                edge_attribs = {
+                    'id': edge_id,
+                    'from': edge_data.get('from'),
+                    'to': edge_data.get('to'),
+                    'name': "Craver Road Iterative Addition",
+                    'priority': "10",
+                    'type': "highway.tertiary",
+                    'numLanes': "1",
+                    'speed': "8.94",
+                    'shape': edge_data.get('edge_shape'),
+                    'disallow': "pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway"
+                }
 
-        # The TLL file connections dont need to iteratively change. Although connection tags may refer to the old edges, dont need to take care of these as much.
+                edge_element = ET.Element('edge', edge_attribs)
+                edge_element.text = "\n\t\t"
+
+                lane_element = ET.SubElement(edge_element, 
+                                             'lane', 
+                                             index='0', 
+                                             disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway", 
+                                             speed="8.94", 
+                                             shape=edge_data.get('lane_shape')
+                                             )
+                
+                lane_element.text = "\n\t\t\t"
+                param_element = ET.SubElement(lane_element, 'param', key='origId', value=edge_id.split('#')[0].replace('-', '')) # remove the negative sign and #
+                param_element.tail = "\n\t\t"
+                lane_element.tail = "\n\t"
+                edge_element.tail = "\n\t"
+
+                edge_root.append(edge_element)
+
+        # The TLL file connections (vehicle edges with right and left attached in the names, with middle node in between) dont need to iteratively change. Although connection tags may refer to the old edges, dont need to take care of these as much.
         # Use linkIndex 0 for connecting -ve direction and linkIndex 1 for connecting +ve direction.
-        # Write here.
+        for direction in ['top', 'bottom']:
+            all_edge_ids = [edge_id for edge_id in new_veh_edges_to_add[direction].keys()]
+            # get the edge ids with right in the name
+            right_edge_ids = [edge_id for edge_id in all_edge_ids if 'right' in edge_id]
+            for from_edge_id in right_edge_ids: # using left as from and right as to
+                to_edge_id = from_edge_id.replace('right', 'left')
+                linkindex = 0 if direction == 'top' else 1 # Top is -ve direction and bottom is +ve direction.
+                tl_id = new_veh_edges_to_add[direction][from_edge_id].get('new_node')
+                conn_attribs = {'from': from_edge_id, 'to': to_edge_id, 'fromLane': "0", 'toLane': "0", 'tl': tl_id, 'linkIndex': str(linkindex)} # Since inside the corridor, there is only one lane.
+                connection_element = ET.Element('connection', conn_attribs)
+                connection_element.text = None  # Ensure there's no text content
+                connection_element.tail = "\n\t\t"
+                traffic_light_root.append(connection_element)
         
-        # Now add the new connections between middle nodes and new vehicle edges
-        # The width here needs to come from the model.
-        # for node_id in nodes_to_add:
-        #     node_data = networkx_graph.nodes[node_id]
-        #     if node_data.get('type') == 'middle':
-        #         from_node =  # TODO: Figure these out.. are these vehicle nodes?
-        #         to_node =  # TODO: Figure these out.. are these vehicle nodes?
-        #         conn_attribs = {'from': from_node, 'to': to_node, 'tl': node_id, 'fromLane': '0', 'toLane': '0'} # Since inside the corridor, there is only one lane.
-        #         connection_element = ET.Element('connection', conn_attribs)
-        #         traffic_light_root.append(connection_element)
-
-        
-        # For the crossing tags in the Conn file ( which also dont need to be changed iteratively). 
+        # For the crossing tags in the Conn file ( which also dont need to be changed iteratively). # The width here needs to come from the model. 
         # They are already updated while obtaining the new edges. Nothing to do here.
         # Whereas for the crossing tags,
         # First remove all except the default ones. Then add the new ones here by making use of new_veh_edges_to_add.
@@ -1065,16 +1099,54 @@ class DesignEnv(gym.Env):
             if crossing.get('node') not in default_crossings:
                 updated_conn_root.remove(crossing)
         
+        # Then deal with the existing old crossings that refer to the old edges which have been split. 
+        # Can be done manually.. as in -> if the leftmost edge has been split then the intersection should now refer to the new edge.
+        min_x, max_x = float('inf'), float('-inf')
+        leftmost_new, rightmost_new = '', ''
+        for edge_id, edge_data in new_veh_edges_to_add['top'].items(): # One of the counterparts (among -ve, +ve) is enough.
+            # Also bottom has reverse direction so top is enough.
+            min_x_among_nodes = min(edge_data.get('from_x'), edge_data.get('to_x'))
+            if min_x_among_nodes < min_x:
+                min_x = min_x_among_nodes
+                leftmost_new = f'16666012#{edge_id.split("#")[1]}'
+            if min_x_among_nodes > max_x:
+                max_x = min_x_among_nodes
+                rightmost_new = f'16666012#{edge_id.split("#")[1]}'
+
+        extreme_edge_dict = {'leftmost': {'old': '16666012#2', # One of the counterparts (among -ve, +ve) is enough.
+                                          'new': leftmost_new},
+
+                             'rightmost': {'old': '16666012#17', 
+                                          'new': rightmost_new}}
+        
+        for direction, direction_data in extreme_edge_dict.items():
+            old_edge = direction_data['old']
+            if old_edge in old_veh_edges_to_remove:
+                new_edge = direction_data['new']
+                all_crossings = updated_conn_root.findall('crossing')
+                for c in all_crossings:
+                    if c.get('edges') == f'{old_edge} -{old_edge}':
+                        c.set('edges', f'{new_edge} -{new_edge}')
+                
         # Then add new crossings here by making use of new_veh_edges_to_add.
         # All tags that refer to the old edges should now refer to the new edges (if the refering edges fall to the left, they will refer to the new left edge and vice versa) 
-        # They have the edges attribute and outlineShape attribute.
-        # Write here.
-
-
+        # They have the edges attribute (which are edges to the right) and outlineShape attribute (the shape of the crossing): 
+        # TODO: outlineShape seems hard to specify, lets not specify and see what it does. They mention it as optional here: https://github.com/eclipse-sumo/sumo/issues/11668
+        for e1, e1_data in new_veh_edges_to_add['top'].items(): # Just looking at one direction (top) is enough.
+            e2 = e1.replace('-', '') # To get the bottom edge id.
+            middle_node = e1_data.get('new_node')
+            width = networkx_graph.nodes[middle_node].get('width')
+            crossing_attribs = {'node': middle_node, 'edges': e1 + ' ' + e2, 'priority': '1', 'width': str(width)} # Width/ Thickness needs to come from the model.
+            crossing_element = ET.Element('crossing', crossing_attribs)
+            crossing_element.text = None  # Ensure there's no text content
+            crossing_element.text = "\n\t\t"
+            updated_conn_root.append(crossing_element)
+        
+        
         # Delete the old edges from the edg file i.e., just remove the tags with old edge ids.
-        # for edge in edge_root.findall('edge'):
-        #     if edge.get('id') in old_veh_edges_to_remove:
-        #         edge_root.remove(edge)
+        for edge in edge_root.findall('edge'):
+            if edge.get('id') in old_veh_edges_to_remove:
+                edge_root.remove(edge)
 
 
         # TODO: Might need to update the y_coordinate of the mid nodes to align with the vehicle edges/ nodes? 
