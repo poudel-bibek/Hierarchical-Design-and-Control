@@ -56,12 +56,6 @@
             <param key="origId" value="1060166190" />
         </lane>
     </edge>
-    <edge id="-16666012#11" from="9740155241" to="cluster_9740157181_9740483933" name="Craver Road" priority="10" type="highway.tertiary" numLanes="1" speed="8.94" shape="2752.25,2646.79 2727.82,2647.16 2689.61,2647.24 2682.42,2647.24" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway">
-        <lane index="0" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway" speed="8.94" shape="2746.68,2648.47 2727.83,2648.76 2689.61,2648.84 2687.58,2648.84">
-            <param key="origId" value="16666012" />
-        </lane>
-        <param key="origTo" value="9740157181" />
-    </edge>
     <edge id="-16666012#12" from="9740157194" to="9740155241" name="Craver Road" priority="10" type="highway.tertiary" numLanes="1" speed="8.94" shape="2786.37,2645.51 2772.88,2646.08 2752.25,2646.79" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway">
         <lane index="0" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway" speed="8.94" shape="2783.87,2647.22 2772.94,2647.68 2757.97,2648.19">
             <param key="origId" value="16666012" />
@@ -98,11 +92,6 @@
             <param key="origId" value="16666012" />
         </lane>
     </edge>
-    <edge id="-16666012#4" from="9727816623" to="9727779406" name="Craver Road" priority="10" type="highway.tertiary" numLanes="1" speed="8.94" shape="2452.25,2645.55 2435.12,2644.38 2411.47,2642.68 2401.40,2641.51 2393.00,2640.27 2380.93,2637.60 2368.12,2634.57 2361.22,2632.86" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway">
-        <lane index="0" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway" speed="8.94" shape="2449.34,2646.96 2435.01,2645.98 2411.32,2644.27 2401.19,2643.10 2392.71,2641.84 2380.57,2639.16 2367.91,2636.16">
-            <param key="origId" value="16666012" />
-        </lane>
-    </edge>
     <edge id="-16666012#5" from="9740484031" to="9727816623" name="Craver Road" priority="10" type="highway.tertiary" numLanes="1" speed="8.94" shape="2521.01,2647.54 2498.61,2647.40 2482.58,2646.98 2466.01,2646.30 2452.25,2645.55" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway">
         <lane index="0" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway" speed="8.94" shape="2513.82,2649.10 2498.58,2649.00 2482.53,2648.58 2465.93,2647.90 2454.91,2647.30">
             <param key="origId" value="16666012" />
@@ -118,13 +107,6 @@
             <param key="origId" value="16666012" />
         </lane>
         <param key="origFrom" value="9740411702" />
-    </edge>
-    <edge id="-16666012#9" from="cluster_9740157181_9740483933" to="cluster_9740411700_9740411702" name="Craver Road" priority="10" type="highway.tertiary" numLanes="1" speed="8.94" shape="2676.51,2647.24 2663.25,2647.24 2635.61,2647.34 2617.46,2647.28 2595.30,2647.42 2585.15,2647.39" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway">
-        <lane index="0" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway" speed="8.94" shape="2669.39,2648.84 2663.25,2648.84 2635.61,2648.94 2617.46,2648.88 2595.31,2649.02 2590.70,2649.01">
-            <param key="origId" value="16666012" />
-        </lane>
-        <param key="origFrom" value="9740483933" />
-        <param key="origTo" value="9740411700" />
     </edge>
     <edge id="-357518696#4" from="cluster_172228408_9739966907_9739966910" to="9739966918" name="Mary Alexander Road" priority="10" type="highway.tertiary" numLanes="1" speed="11.18" shape="2940.03,2641.80 2940.18,2614.90 2939.34,2592.99 2938.31,2578.98" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway">
         <lane index="0" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway" speed="11.18" shape="2938.45,2638.62 2938.58,2614.93 2937.74,2593.08 2936.90,2581.60">
@@ -1197,12 +1179,6 @@
             <param key="origId" value="1098062417" />
         </lane>
     </edge>
-    <edge id="16666012#11" from="cluster_9740157181_9740483933" to="9740155241" name="Craver Road" priority="10" type="highway.tertiary" numLanes="1" speed="8.94" shape="2682.42,2647.24 2689.61,2647.24 2727.82,2647.16 2752.25,2646.79" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway">
-        <lane index="0" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway" speed="8.94" shape="2687.58,2645.64 2689.61,2645.64 2727.81,2645.56 2746.63,2645.27">
-            <param key="origId" value="16666012" />
-        </lane>
-        <param key="origFrom" value="9740157181" />
-    </edge>
     <edge id="16666012#12" from="9740155241" to="9740157194" name="Craver Road" priority="10" type="highway.tertiary" numLanes="1" speed="8.94" shape="2752.25,2646.79 2772.88,2646.08 2786.37,2645.51" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway">
         <lane index="0" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway" speed="8.94" shape="2757.86,2645.00 2772.82,2644.48 2783.74,2644.02">
             <param key="origId" value="16666012" />
@@ -1239,11 +1215,6 @@
             <param key="origId" value="16666012" />
         </lane>
     </edge>
-    <edge id="16666012#4" from="9727779406" to="9727816623" name="Craver Road" priority="10" type="highway.tertiary" numLanes="1" speed="8.94" shape="2361.22,2632.86 2368.12,2634.57 2380.93,2637.60 2393.00,2640.27 2401.40,2641.51 2411.47,2642.68 2435.12,2644.38 2452.25,2645.55" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway">
-        <lane index="0" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway" speed="8.94" shape="2368.68,2633.06 2381.29,2636.04 2393.29,2638.70 2401.61,2639.92 2411.62,2641.09 2435.23,2642.78 2449.56,2643.76">
-            <param key="origId" value="16666012" />
-        </lane>
-    </edge>
     <edge id="16666012#5" from="9727816623" to="9740484031" name="Craver Road" priority="10" type="highway.tertiary" numLanes="1" speed="8.94" shape="2452.25,2645.55 2466.01,2646.30 2482.58,2646.98 2498.61,2647.40 2521.01,2647.54" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway">
         <lane index="0" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway" speed="8.94" shape="2455.08,2644.10 2466.09,2644.70 2482.63,2645.38 2498.64,2645.80 2513.84,2645.90">
             <param key="origId" value="16666012" />
@@ -1259,13 +1230,6 @@
             <param key="origId" value="16666012" />
         </lane>
         <param key="origTo" value="9740411702" />
-    </edge>
-    <edge id="16666012#9" from="cluster_9740411700_9740411702" to="cluster_9740157181_9740483933" name="Craver Road" priority="10" type="highway.tertiary" numLanes="1" speed="8.94" shape="2585.15,2647.39 2595.30,2647.42 2617.46,2647.28 2635.61,2647.34 2663.25,2647.24 2676.51,2647.24" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway">
-        <lane index="0" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway" speed="8.94" shape="2590.70,2645.81 2595.30,2645.82 2617.46,2645.68 2635.61,2645.74 2663.25,2645.64 2669.39,2645.64">
-            <param key="origId" value="16666012" />
-        </lane>
-        <param key="origFrom" value="9740411700" />
-        <param key="origTo" value="9740483933" />
     </edge>
     <edge id="357518696#4" from="9739966918" to="cluster_172228408_9739966907_9739966910" name="Mary Alexander Road" priority="10" type="highway.tertiary" numLanes="1" speed="11.18" shape="2938.31,2578.98 2939.34,2592.99 2940.18,2614.90 2940.03,2641.80" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway">
         <lane index="0" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway" speed="11.18" shape="2940.09,2581.37 2940.94,2592.90 2941.78,2614.87 2941.65,2638.64">
@@ -1349,319 +1313,19 @@
     <edge id="E9" from="J14" to="J15" priority="-1" numLanes="1" speed="13.89" allow="pedestrian">
         <lane index="0" allow="pedestrian" speed="13.89" shape="2892.87,2616.52 2890.74,2608.91" />
     </edge>
-<edge id="1060131394#2" from="9740157161" to="9740157173" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2528.5,2626.15 2531.94,2629.85">
-			<param key="origId" value="1060131394#2" />
+<edge id="1054116931" from="9687148182" to="9687148200" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2124.62,2639.78 2126.71,2636.66">
+			<param key="origId" value="1054116931" />
 		</lane>
 	</edge>
-	<edge id="1098062397#1" from="10054309041" to="10054309045" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2829.11,2666.5 2843.61,2672.93">
-			<param key="origId" value="1098062397#1" />
-		</lane>
-	</edge>
-	<edge id="1060131358#7" from="9740157079" to="9740157087" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2451.96,2624.13 2439.99,2619.25">
-			<param key="origId" value="1060131358#7" />
-		</lane>
-	</edge>
-	<edge id="1051865729#2" from="9666274798" to="9666274808" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2452.5,2655.23 2452.87,2666.46">
-			<param key="origId" value="1051865729#2" />
-		</lane>
-	</edge>
-	<edge id="1060131401#1" from="9740157180" to="9740483934" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2682.53,2636.96 2676.76,2637.23">
-			<param key="origId" value="1060131401#1" />
-		</lane>
-	</edge>
-	<edge id="1060166182#1" from="9740411694" to="9740484023" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2666.29,2620.89 2666.64,2605.01">
-			<param key="origId" value="1060166182#1" />
-		</lane>
-	</edge>
-	<edge id="1060131388#2" from="9740157154" to="9740157171" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2566.97,2639.86 2541.25,2636.79">
-			<param key="origId" value="1060131388#2" />
-		</lane>
-	</edge>
-	<edge id="1060112790" from="9739966895" to="9739966904" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2927.8,2635.9 2931.0,2638.76">
-			<param key="origId" value="1060112790" />
-		</lane>
-	</edge>
-	<edge id="1051046791#1" from="9658681335" to="9739966911" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2948.01,2659.85 2947.87,2642.94">
-			<param key="origId" value="1051046791#1" />
-		</lane>
-	</edge>
-	<edge id="1060112794#1" from="9658681347" to="9739966918" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2946.08,2578.35 2938.31,2578.98">
-			<param key="origId" value="1060112794#1" />
-		</lane>
-	</edge>
-	<edge id="1060131409#1" from="10054309041" to="9740157210" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2829.11,2666.5 2829.62,2655.93">
-			<param key="origId" value="1060131409#1" />
-		</lane>
-	</edge>
-	<edge id="1054116926#4.273" from="9687148182" to="J3" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2124.62,2639.78 2030.74,2638.97">
-			<param key="origId" value="1054116926#4.273" />
-		</lane>
-	</edge>
-	<edge id="1098062416#2" from="10054309105" to="10054309112" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2932.32,2708.74 2928.38,2690.21">
-			<param key="origId" value="1098062416#2" />
-		</lane>
-	</edge>
-	<edge id="1060112787#3" from="9739966895" to="9739966899" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2927.8,2635.9 2909.19,2637.87">
-			<param key="origId" value="1060112787#3" />
-		</lane>
-	</edge>
-	<edge id="1060166262#0" from="10054309112" to="10054309115" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2928.38,2690.21 2917.17,2697.07">
-			<param key="origId" value="1060166262#0" />
-		</lane>
-	</edge>
-	<edge id="1060131411#1" from="9740484522" to="9740484523" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2865.95,2638.33 2844.1,2637.73">
-			<param key="origId" value="1060131411#1" />
-		</lane>
-	</edge>
-	<edge id="1060131397#1" from="9740157171" to="9740157172" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2541.25,2636.79 2541.28,2629.89">
-			<param key="origId" value="1060131397#1" />
-		</lane>
-	</edge>
-	<edge id="1051865717" from="9666274719" to="cluster9666274718_9666274720_9666274727_9666274730" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2204.95,2640.15 2285.15,2667.74">
-			<param key="origId" value="1051865717" />
-		</lane>
-	</edge>
-	<edge id="1058666217" from="9727816862" to="cluster9727816848_9727816852" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2241.14,2617.93 2261.21,2558.09">
-			<param key="origId" value="1058666217" />
-		</lane>
-	</edge>
-	<edge id="1054116928#2" from="9666242291" to="9687148317" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2134.77,2728.71 2128.14,2656.07">
-			<param key="origId" value="1054116928#2" />
-		</lane>
-	</edge>
-	<edge id="1098062397#0" from="10054309045" to="10054309051" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2843.61,2672.93 2859.91,2656.82">
-			<param key="origId" value="1098062397#0" />
-		</lane>
-	</edge>
-	<edge id="1054121752#1" from="9687187524" to="9687187526" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2127.77,2564.68 2130.72,2544.36">
-			<param key="origId" value="1054121752#1" />
-		</lane>
-	</edge>
-	<edge id="1060131399#1" from="9740157176" to="9740484029" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2542.3,2605.92 2573.97,2609.77">
-			<param key="origId" value="1060131399#1" />
-		</lane>
-	</edge>
-	<edge id="1060131389#1" from="9740411701" to="9740411703" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2585.07,2638.88 2579.03,2639.53">
-			<param key="origId" value="1060131389#1" />
-		</lane>
-	</edge>
-	<edge id="1051865729#0" from="9666274802" to="cluster9666274797_J8" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2453.09,2673.05 2441.82,2691.05">
-			<param key="origId" value="1051865729#0" />
-		</lane>
-	</edge>
-	<edge id="1060112791#1" from="9739966911" to="cluster_172228408_9739966907_9739966910" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2947.87,2642.94 2936.95,2646.53">
-			<param key="origId" value="1060112791#1" />
-		</lane>
-	</edge>
-	<edge id="1058666191#3" from="9727816638" to="9727816862" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2155.65,2615.25 2241.14,2617.93">
-			<param key="origId" value="1058666191#3" />
-		</lane>
-	</edge>
-	<edge id="1050677005#10" from="9666274635" to="9666274798" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2494.74,2656.42 2452.5,2655.23">
-			<param key="origId" value="1050677005#10" />
-		</lane>
-	</edge>
-	<edge id="1060131392#1" from="9740157159" to="cluster_9740411690_9740411697_9740411699_9740484028" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2573.88,2630.08 2582.6,2616.02">
-			<param key="origId" value="1060131392#1" />
-		</lane>
-	</edge>
-	<edge id="1060112787#4" from="9739966889" to="9739966895" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2930.06,2616.41 2927.8,2635.9">
-			<param key="origId" value="1060112787#4" />
-		</lane>
-	</edge>
-	<edge id="1060131387#1" from="9740157174" to="9740484033" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2532.01,2637.41 2521.12,2638.29">
-			<param key="origId" value="1060131387#1" />
-		</lane>
-	</edge>
-	<edge id="1060112787#2" from="9739966899" to="9740484528" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2909.19,2637.87 2895.09,2639.97">
-			<param key="origId" value="1060112787#2" />
-		</lane>
-	</edge>
-	<edge id="1050677005#14" from="9655154527" to="9655154530" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2762.18,2657.16 2682.08,2655.11">
-			<param key="origId" value="1050677005#14" />
-		</lane>
-	</edge>
-	<edge id="1050677005#8" from="9666274574" to="9666274744" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2440.99,2654.84 2378.84,2648.03">
-			<param key="origId" value="1050677005#8" />
-		</lane>
-	</edge>
-	<edge id="1051865722" from="9666274568" to="9666274729" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2421.52,2658.88 2405.51,2660.98">
-			<param key="origId" value="1051865722" />
-		</lane>
-	</edge>
-	<edge id="1050676976#9.10" from="9655154423" to="J10" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2769.27,2664.96 2762.03,2699.71">
-			<param key="origId" value="1050676976#9.10" />
-		</lane>
-	</edge>
-	<edge id="1051046791#2" from="9655154897" to="9658681335" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2947.29,2711.08 2948.01,2659.85">
-			<param key="origId" value="1051046791#2" />
-		</lane>
-	</edge>
-	<edge id="1051865730#1" from="9666274802" to="9666274813" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2453.09,2673.05 2475.26,2673.32">
-			<param key="origId" value="1051865730#1" />
-		</lane>
-	</edge>
-	<edge id="1060131413#1" from="9740484512" to="9740484522" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2870.43,2638.5 2865.95,2638.33">
-			<param key="origId" value="1060131413#1" />
-		</lane>
-	</edge>
-	<edge id="1098062411#2" from="10054309101" to="10054309115" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2917.62,2677.28 2917.17,2697.07">
-			<param key="origId" value="1098062411#2" />
-		</lane>
-	</edge>
-	<edge id="1051865675#2" from="9666242291" to="9666242293" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2134.77,2728.71 2138.36,2728.71">
-			<param key="origId" value="1051865675#2" />
-		</lane>
-	</edge>
-	<edge id="1051865689#2.53" from="9666274568" to="cluster9666274797_J8" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2421.52,2658.88 2441.82,2691.05">
-			<param key="origId" value="1051865689#2.53" />
-		</lane>
-	</edge>
-	<edge id="1098062416#0" from="10054309101" to="9740484524" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2917.62,2677.28 2894.87,2657.61">
-			<param key="origId" value="1098062416#0" />
-		</lane>
-	</edge>
-	<edge id="1058666187#2" from="9727816625" to="9740157142" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2452.03,2636.0 2485.99,2637.54">
-			<param key="origId" value="1058666187#2" />
-		</lane>
-	</edge>
-	<edge id="1060131395#1" from="9740157169" to="9740484032" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2510.89,2638.07 2521.26,2626.06">
-			<param key="origId" value="1060131395#1" />
-		</lane>
-	</edge>
-	<edge id="1060166235#5.41" from="9740484420" to="J11" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2826.28,2637.23 2827.07,2615.39">
-			<param key="origId" value="1060166235#5.41" />
-		</lane>
-	</edge>
-	<edge id="1060131400#1" from="9740483934" to="9740483978" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2676.76,2637.23 2666.44,2636.22">
-			<param key="origId" value="1060131400#1" />
+	<edge id="1054121752#2" from="9687187518" to="9687187524" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2128.04,2578.94 2127.77,2564.68">
+			<param key="origId" value="1054121752#2" />
 		</lane>
 	</edge>
 	<edge id="1051865718" from="9666274721" to="cluster9666274718_9666274720_9666274727_9666274730" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
 		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2303.07,2638.43 2285.15,2667.74">
 			<param key="origId" value="1051865718" />
-		</lane>
-	</edge>
-	<edge id="1058666187#4" from="9727779405" to="9740157080" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2363.94,2623.01 2413.81,2631.92">
-			<param key="origId" value="1058666187#4" />
-		</lane>
-	</edge>
-	<edge id="1060166257.41" from="9740484512" to="J15" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2870.43,2638.5 2891.6,2606.06">
-			<param key="origId" value="1060166257.41" />
-		</lane>
-	</edge>
-	<edge id="1060166188#1" from="9740484029" to="cluster_9740411690_9740411697_9740411699_9740484028" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2573.97,2609.77 2582.6,2616.02">
-			<param key="origId" value="1060166188#1" />
-		</lane>
-	</edge>
-	<edge id="1051865704#0" from="9666274634" to="9666274635" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2488.22,2662.64 2494.74,2656.42">
-			<param key="origId" value="1051865704#0" />
-		</lane>
-	</edge>
-	<edge id="1058666187#1" from="9740157142" to="9740157169" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2485.99,2637.54 2510.89,2638.07">
-			<param key="origId" value="1058666187#1" />
-		</lane>
-	</edge>
-	<edge id="1050677005#13" from="9655154530" to="9666274886" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2682.08,2655.11 2567.01,2656.15">
-			<param key="origId" value="1050677005#13" />
-		</lane>
-	</edge>
-	<edge id="1050677005#2" from="9666242268" to="9666274693" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2156.19,2639.55 2157.2,2696.88">
-			<param key="origId" value="1050677005#2" />
-		</lane>
-	</edge>
-	<edge id="1060166262#2" from="9740484524" to="9740484531" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2894.87,2657.61 2928.21,2661.41">
-			<param key="origId" value="1060166262#2" />
-		</lane>
-	</edge>
-	<edge id="1060112789#2" from="9740484531" to="cluster_172228408_9739966907_9739966910" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2928.21,2661.41 2936.95,2646.53">
-			<param key="origId" value="1060112789#2" />
-		</lane>
-	</edge>
-	<edge id="1098062397#2" from="10054309038" to="10054309041" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2817.56,2675.66 2829.11,2666.5">
-			<param key="origId" value="1098062397#2" />
-		</lane>
-	</edge>
-	<edge id="1050677005#19" from="10054309051" to="9740157210" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2859.91,2656.82 2829.62,2655.93">
-			<param key="origId" value="1050677005#19" />
-		</lane>
-	</edge>
-	<edge id="1050677005#7" from="9666274744" to="9727816851" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2378.84,2648.03 2331.21,2639.04">
-			<param key="origId" value="1050677005#7" />
-		</lane>
-	</edge>
-	<edge id="1050677005#15" from="9655154520" to="9655154527" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2776.25,2656.56 2762.18,2657.16">
-			<param key="origId" value="1050677005#15" />
-		</lane>
-	</edge>
-	<edge id="1060131403#1" from="9740157204" to="9740483946" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2786.38,2633.95 2751.52,2635.1">
-			<param key="origId" value="1060131403#1" />
-		</lane>
-	</edge>
-	<edge id="1054121751#1" from="9687187512" to="9687187513" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2140.15,2510.72 2128.85,2510.53">
-			<param key="origId" value="1054121751#1" />
 		</lane>
 	</edge>
 	<edge id="1050677005#16" from="10054309033" to="9655154520" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
@@ -1674,39 +1338,54 @@
 			<param key="origId" value="1060131393#1" />
 		</lane>
 	</edge>
-	<edge id="1050677005#11" from="9666274616" to="9666274635" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2544.72,2655.92 2494.74,2656.42">
-			<param key="origId" value="1050677005#11" />
-		</lane>
-	</edge>
-	<edge id="1054121752#2" from="9687187518" to="9687187524" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2128.04,2578.94 2127.77,2564.68">
-			<param key="origId" value="1054121752#2" />
-		</lane>
-	</edge>
-	<edge id="1060131404#2" from="9740157211" to="9740484420" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2830.01,2637.34 2826.28,2637.23">
-			<param key="origId" value="1060131404#2" />
-		</lane>
-	</edge>
-	<edge id="1054116932#0" from="9687148211" to="9687187522" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2129.37,2612.59 2132.16,2582.7">
-			<param key="origId" value="1054116932#0" />
-		</lane>
-	</edge>
-	<edge id="1054116931" from="9687148182" to="9687148200" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2124.62,2639.78 2126.71,2636.66">
-			<param key="origId" value="1054116931" />
-		</lane>
-	</edge>
 	<edge id="1060112793#2" from="9739966916" to="9740484514" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
 		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2930.66,2580.11 2910.9,2582.25">
 			<param key="origId" value="1060112793#2" />
 		</lane>
 	</edge>
-	<edge id="1060112788" from="9739966889" to="9739966899" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2930.06,2616.41 2909.19,2637.87">
-			<param key="origId" value="1060112788" />
+	<edge id="1060131399#1" from="9740157176" to="9740484029" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2542.3,2605.92 2573.97,2609.77">
+			<param key="origId" value="1060131399#1" />
+		</lane>
+	</edge>
+	<edge id="1054116926#4.273" from="9687148182" to="J3" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2124.62,2639.78 2030.74,2638.97">
+			<param key="origId" value="1054116926#4.273" />
+		</lane>
+	</edge>
+	<edge id="1060131401#1" from="9740157180" to="9740483934" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2682.53,2636.96 2676.76,2637.23">
+			<param key="origId" value="1060131401#1" />
+		</lane>
+	</edge>
+	<edge id="1098062397#1" from="10054309041" to="10054309045" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2829.11,2666.5 2843.61,2672.93">
+			<param key="origId" value="1098062397#1" />
+		</lane>
+	</edge>
+	<edge id="1060112787#4" from="9739966889" to="9739966895" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2930.06,2616.41 2927.8,2635.9">
+			<param key="origId" value="1060112787#4" />
+		</lane>
+	</edge>
+	<edge id="1051046791#2" from="9655154897" to="9658681335" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2947.29,2711.08 2948.01,2659.85">
+			<param key="origId" value="1051046791#2" />
+		</lane>
+	</edge>
+	<edge id="1098062416#0" from="10054309101" to="9740484524" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2917.62,2677.28 2894.87,2657.61">
+			<param key="origId" value="1098062416#0" />
+		</lane>
+	</edge>
+	<edge id="1060131403#1" from="9740157204" to="9740483946" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2786.38,2633.95 2751.52,2635.1">
+			<param key="origId" value="1060131403#1" />
+		</lane>
+	</edge>
+	<edge id="1051865717" from="9666274719" to="cluster9666274718_9666274720_9666274727_9666274730" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2204.95,2640.15 2285.15,2667.74">
+			<param key="origId" value="1051865717" />
 		</lane>
 	</edge>
 	<edge id="1060131388#1" from="9740157171" to="9740157174" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
@@ -1714,58 +1393,493 @@
 			<param key="origId" value="1060131388#1" />
 		</lane>
 	</edge>
+	<edge id="1050677005#19" from="10054309051" to="9740157210" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2859.91,2656.82 2829.62,2655.93">
+			<param key="origId" value="1050677005#19" />
+		</lane>
+	</edge>
+	<edge id="1060131413#1" from="9740484512" to="9740484522" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2870.43,2638.5 2865.95,2638.33">
+			<param key="origId" value="1060131413#1" />
+		</lane>
+	</edge>
+	<edge id="1060166262#2" from="9740484524" to="9740484531" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2894.87,2657.61 2928.21,2661.41">
+			<param key="origId" value="1060166262#2" />
+		</lane>
+	</edge>
+	<edge id="1060166188#1" from="9740484029" to="cluster_9740411690_9740411697_9740411699_9740484028" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2573.97,2609.77 2582.6,2616.02">
+			<param key="origId" value="1060166188#1" />
+		</lane>
+	</edge>
+	<edge id="1050677005#14" from="9655154527" to="9655154530" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2762.18,2657.16 2682.08,2655.11">
+			<param key="origId" value="1050677005#14" />
+		</lane>
+	</edge>
+	<edge id="1060112790" from="9739966895" to="9739966904" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2927.8,2635.9 2931.0,2638.76">
+			<param key="origId" value="1060112790" />
+		</lane>
+	</edge>
+	<edge id="1051865729#0" from="9666274802" to="cluster9666274797_J8" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2453.09,2673.05 2441.82,2691.05">
+			<param key="origId" value="1051865729#0" />
+		</lane>
+	</edge>
+	<edge id="1060131395#1" from="9740157169" to="9740484032" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2510.89,2638.07 2521.26,2626.06">
+			<param key="origId" value="1060131395#1" />
+		</lane>
+	</edge>
+	<edge id="1060112788" from="9739966889" to="9739966899" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2930.06,2616.41 2909.19,2637.87">
+			<param key="origId" value="1060112788" />
+		</lane>
+	</edge>
+	<edge id="1060131388#2" from="9740157154" to="9740157171" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2566.97,2639.86 2541.25,2636.79">
+			<param key="origId" value="1060131388#2" />
+		</lane>
+	</edge>
+	<edge id="1060131387#1" from="9740157174" to="9740484033" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2532.01,2637.41 2521.12,2638.29">
+			<param key="origId" value="1060131387#1" />
+		</lane>
+	</edge>
+	<edge id="1054116932#0" from="9687148211" to="9687187522" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2129.37,2612.59 2132.16,2582.7">
+			<param key="origId" value="1054116932#0" />
+		</lane>
+	</edge>
+	<edge id="1054116928#2" from="9666242291" to="9687148317" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2134.77,2728.71 2128.14,2656.07">
+			<param key="origId" value="1054116928#2" />
+		</lane>
+	</edge>
+	<edge id="1060166235#5.41" from="9740484420" to="J11" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2826.28,2637.23 2827.07,2615.39">
+			<param key="origId" value="1060166235#5.41" />
+		</lane>
+	</edge>
+	<edge id="1058666187#4" from="9727779405" to="9740157080" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2363.94,2623.01 2413.81,2631.92">
+			<param key="origId" value="1058666187#4" />
+		</lane>
+	</edge>
+	<edge id="1050677005#11" from="9666274616" to="9666274635" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2544.72,2655.92 2494.74,2656.42">
+			<param key="origId" value="1050677005#11" />
+		</lane>
+	</edge>
+	<edge id="1054121751#1" from="9687187512" to="9687187513" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2140.15,2510.72 2128.85,2510.53">
+			<param key="origId" value="1054121751#1" />
+		</lane>
+	</edge>
+	<edge id="1060166182#1" from="9740411694" to="9740484023" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2666.29,2620.89 2666.64,2605.01">
+			<param key="origId" value="1060166182#1" />
+		</lane>
+	</edge>
+	<edge id="1060131409#1" from="10054309041" to="9740157210" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2829.11,2666.5 2829.62,2655.93">
+			<param key="origId" value="1060131409#1" />
+		</lane>
+	</edge>
+	<edge id="1098062416#2" from="10054309105" to="10054309112" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2932.32,2708.74 2928.38,2690.21">
+			<param key="origId" value="1098062416#2" />
+		</lane>
+	</edge>
+	<edge id="1051046791#1" from="9658681335" to="9739966911" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2948.01,2659.85 2947.87,2642.94">
+			<param key="origId" value="1051046791#1" />
+		</lane>
+	</edge>
+	<edge id="1060112794#1" from="9658681347" to="9739966918" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2946.08,2578.35 2938.31,2578.98">
+			<param key="origId" value="1060112794#1" />
+		</lane>
+	</edge>
+	<edge id="1060131392#1" from="9740157159" to="cluster_9740411690_9740411697_9740411699_9740484028" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2573.88,2630.08 2582.6,2616.02">
+			<param key="origId" value="1060131392#1" />
+		</lane>
+	</edge>
+	<edge id="1060112787#3" from="9739966895" to="9739966899" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2927.8,2635.9 2909.19,2637.87">
+			<param key="origId" value="1060112787#3" />
+		</lane>
+	</edge>
+	<edge id="1060112789#2" from="9740484531" to="cluster_172228408_9739966907_9739966910" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2928.21,2661.41 2936.95,2646.53">
+			<param key="origId" value="1060112789#2" />
+		</lane>
+	</edge>
+	<edge id="1050677005#2" from="9666242268" to="9666274693" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2156.19,2639.55 2157.2,2696.88">
+			<param key="origId" value="1050677005#2" />
+		</lane>
+	</edge>
+	<edge id="1060131404#2" from="9740157211" to="9740484420" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2830.01,2637.34 2826.28,2637.23">
+			<param key="origId" value="1060131404#2" />
+		</lane>
+	</edge>
+	<edge id="1058666187#2" from="9727816625" to="9740157142" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2452.03,2636.0 2485.99,2637.54">
+			<param key="origId" value="1058666187#2" />
+		</lane>
+	</edge>
+	<edge id="1051865730#1" from="9666274802" to="9666274813" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2453.09,2673.05 2475.26,2673.32">
+			<param key="origId" value="1051865730#1" />
+		</lane>
+	</edge>
 	<edge id="1050677005#5" from="9666274721" to="9666274722" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
 		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2303.07,2638.43 2263.78,2638.25">
 			<param key="origId" value="1050677005#5" />
 		</lane>
 	</edge>
-	<edge id="edge_9727816862_iter1_0_bottom" from="9727816862" to="iter1_0_bottom" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2241.14,2617.93 2287.08,2618.62">
-			<param key="origId" value="edge_9727816862_iter1_0_bottom" />
+	<edge id="1098062397#0" from="10054309045" to="10054309051" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2843.61,2672.93 2859.91,2656.82">
+			<param key="origId" value="1098062397#0" />
 		</lane>
 	</edge>
-	<edge id="edge_iter1_0_top_iter1_0_mid" from="iter1_0_top" to="iter1_0_mid" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.6290479" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.6290479" speed="2.78" shape="2287.08,2638.36 2287.08,2628.49">
-			<param key="origId" value="edge_iter1_0_top_iter1_0_mid" />
+	<edge id="1050676976#9.10" from="9655154423" to="J10" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2769.27,2664.96 2762.03,2699.71">
+			<param key="origId" value="1050676976#9.10" />
 		</lane>
 	</edge>
-	<edge id="edge_iter1_0_bottom_iter1_0_mid" from="iter1_0_bottom" to="iter1_0_mid" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.6290479" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.6290479" speed="2.78" shape="2287.08,2618.62 2287.08,2628.49">
+	<edge id="1060112791#1" from="9739966911" to="cluster_172228408_9739966907_9739966910" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2947.87,2642.94 2936.95,2646.53">
+			<param key="origId" value="1060112791#1" />
+		</lane>
+	</edge>
+	<edge id="1060131394#2" from="9740157161" to="9740157173" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2528.5,2626.15 2531.94,2629.85">
+			<param key="origId" value="1060131394#2" />
+		</lane>
+	</edge>
+	<edge id="1051865729#2" from="9666274798" to="9666274808" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2452.5,2655.23 2452.87,2666.46">
+			<param key="origId" value="1051865729#2" />
+		</lane>
+	</edge>
+	<edge id="1051865722" from="9666274568" to="9666274729" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2421.52,2658.88 2405.51,2660.98">
+			<param key="origId" value="1051865722" />
+		</lane>
+	</edge>
+	<edge id="1051865675#2" from="9666242291" to="9666242293" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2134.77,2728.71 2138.36,2728.71">
+			<param key="origId" value="1051865675#2" />
+		</lane>
+	</edge>
+	<edge id="1050677005#13" from="9655154530" to="9666274886" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2682.08,2655.11 2567.01,2656.15">
+			<param key="origId" value="1050677005#13" />
+		</lane>
+	</edge>
+	<edge id="1098062397#2" from="10054309038" to="10054309041" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2817.56,2675.66 2829.11,2666.5">
+			<param key="origId" value="1098062397#2" />
+		</lane>
+	</edge>
+	<edge id="1058666187#1" from="9740157142" to="9740157169" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2485.99,2637.54 2510.89,2638.07">
+			<param key="origId" value="1058666187#1" />
+		</lane>
+	</edge>
+	<edge id="1060166257.41" from="9740484512" to="J15" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2870.43,2638.5 2891.6,2606.06">
+			<param key="origId" value="1060166257.41" />
+		</lane>
+	</edge>
+	<edge id="1060131411#1" from="9740484522" to="9740484523" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2865.95,2638.33 2844.1,2637.73">
+			<param key="origId" value="1060131411#1" />
+		</lane>
+	</edge>
+	<edge id="1060166262#0" from="10054309112" to="10054309115" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2928.38,2690.21 2917.17,2697.07">
+			<param key="origId" value="1060166262#0" />
+		</lane>
+	</edge>
+	<edge id="1060112787#2" from="9739966899" to="9740484528" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2909.19,2637.87 2895.09,2639.97">
+			<param key="origId" value="1060112787#2" />
+		</lane>
+	</edge>
+	<edge id="1050677005#15" from="9655154520" to="9655154527" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2776.25,2656.56 2762.18,2657.16">
+			<param key="origId" value="1050677005#15" />
+		</lane>
+	</edge>
+	<edge id="1098062411#2" from="10054309101" to="10054309115" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2917.62,2677.28 2917.17,2697.07">
+			<param key="origId" value="1098062411#2" />
+		</lane>
+	</edge>
+	<edge id="1050677005#8" from="9666274574" to="9666274744" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2440.99,2654.84 2378.84,2648.03">
+			<param key="origId" value="1050677005#8" />
+		</lane>
+	</edge>
+	<edge id="1051865689#2.53" from="9666274568" to="cluster9666274797_J8" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2421.52,2658.88 2441.82,2691.05">
+			<param key="origId" value="1051865689#2.53" />
+		</lane>
+	</edge>
+	<edge id="1058666191#3" from="9727816638" to="9727816862" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2155.65,2615.25 2241.14,2617.93">
+			<param key="origId" value="1058666191#3" />
+		</lane>
+	</edge>
+	<edge id="1060131389#1" from="9740411701" to="9740411703" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2585.07,2638.88 2579.03,2639.53">
+			<param key="origId" value="1060131389#1" />
+		</lane>
+	</edge>
+	<edge id="1060131358#7" from="9740157079" to="9740157087" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2451.96,2624.13 2439.99,2619.25">
+			<param key="origId" value="1060131358#7" />
+		</lane>
+	</edge>
+	<edge id="1054121752#1" from="9687187524" to="9687187526" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2127.77,2564.68 2130.72,2544.36">
+			<param key="origId" value="1054121752#1" />
+		</lane>
+	</edge>
+	<edge id="1060131397#1" from="9740157171" to="9740157172" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2541.25,2636.79 2541.28,2629.89">
+			<param key="origId" value="1060131397#1" />
+		</lane>
+	</edge>
+	<edge id="1060131400#1" from="9740483934" to="9740483978" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2676.76,2637.23 2666.44,2636.22">
+			<param key="origId" value="1060131400#1" />
+		</lane>
+	</edge>
+	<edge id="1050677005#7" from="9666274744" to="9727816851" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2378.84,2648.03 2331.21,2639.04">
+			<param key="origId" value="1050677005#7" />
+		</lane>
+	</edge>
+	<edge id="1051865704#0" from="9666274634" to="9666274635" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2488.22,2662.64 2494.74,2656.42">
+			<param key="origId" value="1051865704#0" />
+		</lane>
+	</edge>
+	<edge id="1050677005#10" from="9666274635" to="9666274798" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2494.74,2656.42 2452.5,2655.23">
+			<param key="origId" value="1050677005#10" />
+		</lane>
+	</edge>
+	<edge id="1058666217" from="9727816862" to="cluster9727816848_9727816852" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2241.14,2617.93 2261.21,2558.09">
+			<param key="origId" value="1058666217" />
+		</lane>
+	</edge>
+	<edge id="edge_iter1_2_top_iter1_2_mid" from="iter1_2_top" to="iter1_2_mid" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="6.5687675" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="6.5687675" speed="2.78" shape="2296.79,2638.4 2296.79,2628.58">
+			<param key="origId" value="edge_iter1_2_top_iter1_2_mid" />
+		</lane>
+	</edge>
+	<edge id="edge_iter1_1_top_iter1_1_mid" from="iter1_1_top" to="iter1_1_mid" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="5.6500044" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="5.6500044" speed="2.78" shape="2713.83,2655.92 2713.83,2646.02">
+			<param key="origId" value="edge_iter1_1_top_iter1_1_mid" />
+		</lane>
+	</edge>
+	<edge id="edge_9727816862_iter1_2_bottom" from="9727816862" to="iter1_2_bottom" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2241.14,2617.93 2296.79,2618.76">
+			<param key="origId" value="edge_9727816862_iter1_2_bottom" />
+		</lane>
+	</edge>
+	<edge id="edge_iter1_0_bottom_iter1_0_mid" from="iter1_0_bottom" to="iter1_0_mid" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="3.140178" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="3.140178" speed="2.78" shape="2603.05,2638.29 2603.05,2647.06">
 			<param key="origId" value="edge_iter1_0_bottom_iter1_0_mid" />
 		</lane>
 	</edge>
-	<edge id="edge_9666274722_iter1_0_top" from="9666274722" to="iter1_0_top" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2263.78,2638.25 2287.08,2638.36">
-			<param key="origId" value="edge_9666274722_iter1_0_top" />
+	<edge id="edge_9740157080_iter1_3_bottom" from="9740157080" to="iter1_3_bottom" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2413.81,2631.92 2432.51,2633.92">
+			<param key="origId" value="edge_9740157080_iter1_3_bottom" />
 		</lane>
 	</edge>
-	<edge id="edge_9666274721_iter1_0_top" from="9666274721" to="iter1_0_top" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2303.07,2638.43 2287.08,2638.36">
-			<param key="origId" value="edge_9666274721_iter1_0_top" />
+	<edge id="edge_9666274574_iter1_3_top" from="9666274574" to="iter1_3_top" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2440.99,2654.84 2432.51,2653.91">
+			<param key="origId" value="edge_9666274574_iter1_3_top" />
 		</lane>
 	</edge>
-	<edge id="edge_9727816846_iter1_0_bottom" from="9727816846" to="iter1_0_bottom" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
-		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2331.2,2619.28 2287.08,2618.62">
-			<param key="origId" value="edge_9727816846_iter1_0_bottom" />
+	<edge id="edge_9655154527_iter1_1_top" from="9655154527" to="iter1_1_top" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2762.18,2657.16 2713.83,2655.92">
+			<param key="origId" value="edge_9655154527_iter1_1_top" />
 		</lane>
 	</edge>
-	<edge id="-16666012#2right0" from="9727816850" to="iter1_0_mid" name="Craver Road Iterative Addition" priority="10" type="highway.tertiary" numLanes="1" speed="8.94" shape="2331.40,2628.38 2318.71,2627.98 2292.59,2627.47 2287.08,2628.38" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway">
-		<lane index="0" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway" speed="8.94" shape="2328.83,2629.90 2318.67,2629.58 2292.58,2629.07 2287.08,2629.90">
+	<edge id="edge_9740483946_iter1_1_bottom" from="9740483946" to="iter1_1_bottom" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2751.52,2635.1 2713.83,2636.12">
+			<param key="origId" value="edge_9740483946_iter1_1_bottom" />
+		</lane>
+	</edge>
+	<edge id="edge_9666274886_iter1_0_top" from="9666274886" to="iter1_0_top" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2567.01,2656.15 2603.05,2655.82">
+			<param key="origId" value="edge_9666274886_iter1_0_top" />
+		</lane>
+	</edge>
+	<edge id="edge_9740157180_iter1_1_bottom" from="9740157180" to="iter1_1_bottom" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2682.53,2636.96 2713.83,2636.12">
+			<param key="origId" value="edge_9740157180_iter1_1_bottom" />
+		</lane>
+	</edge>
+	<edge id="edge_iter1_0_top_iter1_0_mid" from="iter1_0_top" to="iter1_0_mid" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="3.140178" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="3.140178" speed="2.78" shape="2603.05,2655.82 2603.05,2647.06">
+			<param key="origId" value="edge_iter1_0_top_iter1_0_mid" />
+		</lane>
+	</edge>
+	<edge id="edge_9666274721_iter1_2_top" from="9666274721" to="iter1_2_top" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2303.07,2638.43 2296.79,2638.4">
+			<param key="origId" value="edge_9666274721_iter1_2_top" />
+		</lane>
+	</edge>
+	<edge id="edge_9727816625_iter1_3_bottom" from="9727816625" to="iter1_3_bottom" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2452.03,2636.0 2432.51,2633.92">
+			<param key="origId" value="edge_9727816625_iter1_3_bottom" />
+		</lane>
+	</edge>
+	<edge id="edge_9666274722_iter1_2_top" from="9666274722" to="iter1_2_top" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2263.78,2638.25 2296.79,2638.4">
+			<param key="origId" value="edge_9666274722_iter1_2_top" />
+		</lane>
+	</edge>
+	<edge id="edge_9727816846_iter1_2_bottom" from="9727816846" to="iter1_2_bottom" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2331.2,2619.28 2296.79,2618.76">
+			<param key="origId" value="edge_9727816846_iter1_2_bottom" />
+		</lane>
+	</edge>
+	<edge id="edge_9740483978_iter1_0_bottom" from="9740483978" to="iter1_0_bottom" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2666.44,2636.22 2603.05,2638.29">
+			<param key="origId" value="edge_9740483978_iter1_0_bottom" />
+		</lane>
+	</edge>
+	<edge id="edge_iter1_1_bottom_iter1_1_mid" from="iter1_1_bottom" to="iter1_1_mid" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="5.6500044" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="5.6500044" speed="2.78" shape="2713.83,2636.12 2713.83,2646.02">
+			<param key="origId" value="edge_iter1_1_bottom_iter1_1_mid" />
+		</lane>
+	</edge>
+	<edge id="edge_iter1_2_bottom_iter1_2_mid" from="iter1_2_bottom" to="iter1_2_mid" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="6.5687675" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="6.5687675" speed="2.78" shape="2296.79,2618.76 2296.79,2628.58">
+			<param key="origId" value="edge_iter1_2_bottom_iter1_2_mid" />
+		</lane>
+	</edge>
+	<edge id="edge_9666274744_iter1_3_top" from="9666274744" to="iter1_3_top" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2378.84,2648.03 2432.51,2653.91">
+			<param key="origId" value="edge_9666274744_iter1_3_top" />
+		</lane>
+	</edge>
+	<edge id="edge_9740411701_iter1_0_bottom" from="9740411701" to="iter1_0_bottom" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2585.07,2638.88 2603.05,2638.29">
+			<param key="origId" value="edge_9740411701_iter1_0_bottom" />
+		</lane>
+	</edge>
+	<edge id="edge_9655154530_iter1_1_top" from="9655154530" to="iter1_1_top" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2682.08,2655.11 2713.83,2655.92">
+			<param key="origId" value="edge_9655154530_iter1_1_top" />
+		</lane>
+	</edge>
+	<edge id="edge_iter1_3_bottom_iter1_3_mid" from="iter1_3_bottom" to="iter1_3_mid" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="5.046159" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="5.046159" speed="2.78" shape="2432.51,2633.92 2432.51,2643.91">
+			<param key="origId" value="edge_iter1_3_bottom_iter1_3_mid" />
+		</lane>
+	</edge>
+	<edge id="edge_9655154530_iter1_0_top" from="9655154530" to="iter1_0_top" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="2.0" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="2.0" speed="2.78" shape="2682.08,2655.11 2603.05,2655.82">
+			<param key="origId" value="edge_9655154530_iter1_0_top" />
+		</lane>
+	</edge>
+	<edge id="edge_iter1_3_top_iter1_3_mid" from="iter1_3_top" to="iter1_3_mid" name="Iterative addition" priority="1" type="highway.footway" numLanes="1" speed="2.78" spreadType="center" width="5.046159" allow="pedestrian">
+		<lane index="0" allow="pedestrian" width="5.046159" speed="2.78" shape="2432.51,2653.91 2432.51,2643.91">
+			<param key="origId" value="edge_iter1_3_top_iter1_3_mid" />
+		</lane>
+	</edge>
+	<edge id="-16666012#9right0" from="cluster_9740157181_9740483933" to="iter1_0_mid" name="Craver Road Iterative Addition" priority="10" type="highway.tertiary" numLanes="1" speed="8.94" shape="2676.51,2647.24 2663.25,2647.24 2635.61,2647.34 2617.46,2647.28 2603.05,2647.24" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway">
+		<lane index="0" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway" speed="8.94" shape="2669.39,2648.84 2663.25,2648.84 2635.61,2648.94 2617.46,2648.88 2603.05,2648.84">
 			<param key="origId" value="16666012" />
 		</lane>
 	</edge>
-	<edge id="-16666012#2left0" from="iter1_0_mid" to="cluster_172228464_482708521_9687148201_9687148202_#5more" name="Craver Road Iterative Addition" priority="10" type="highway.tertiary" numLanes="1" speed="8.94" shape="2287.08,2628.38 2211.77,2627.57 2177.92,2627.09 2162.02,2626.66 2154.79,2626.51" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway">
-		<lane index="0" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway" speed="8.94" shape="2287.08,2629.90 2211.76,2629.17 2177.89,2628.69 2161.98,2628.26 2157.33,2628.16">
+	<edge id="-16666012#9left0" from="iter1_0_mid" to="cluster_9740411700_9740411702" name="Craver Road Iterative Addition" priority="10" type="highway.tertiary" numLanes="1" speed="8.94" shape="2603.05,2647.24 2595.30,2647.42 2585.15,2647.39" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway">
+		<lane index="0" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway" speed="8.94" shape="2603.05,2648.84 2595.31,2649.02 2590.70,2649.01">
 			<param key="origId" value="16666012" />
 		</lane>
 	</edge>
-	<edge id="16666012#2left0" from="cluster_172228464_482708521_9687148201_9687148202_#5more" to="iter1_0_mid" name="Craver Road Iterative Addition" priority="10" type="highway.tertiary" numLanes="1" speed="8.94" shape="2154.79,2626.51 2162.02,2626.66 2177.92,2627.09 2211.77,2627.57 2287.08,2627.48" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway">
-		<lane index="0" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway" speed="8.94" shape="2157.40,2624.96 2162.06,2625.06 2177.95,2625.49 2211.78,2625.97 2287.08,2625.88">
+	<edge id="-16666012#4right1" from="9727816623" to="iter1_3_mid" name="Craver Road Iterative Addition" priority="10" type="highway.tertiary" numLanes="1" speed="8.94" shape="2452.25,2645.55 2435.12,2644.38 2432.51,2645.55" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway">
+		<lane index="0" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway" speed="8.94" shape="2449.34,2646.96 2435.01,2645.98 2432.51,2646.96">
 			<param key="origId" value="16666012" />
 		</lane>
 	</edge>
-	<edge id="16666012#2right0" from="iter1_0_mid" to="9727816850" name="Craver Road Iterative Addition" priority="10" type="highway.tertiary" numLanes="1" speed="8.94" shape="2287.08,2627.48 2292.59,2627.47 2318.71,2627.98 2331.40,2628.38" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway">
-		<lane index="0" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway" speed="8.94" shape="2287.08,2625.88 2292.60,2625.87 2318.75,2626.38 2328.93,2626.70">
+	<edge id="-16666012#4left1" from="iter1_3_mid" to="9727779406" name="Craver Road Iterative Addition" priority="10" type="highway.tertiary" numLanes="1" speed="8.94" shape="2432.51,2645.55 2411.47,2642.68 2401.40,2641.51 2393.00,2640.27 2380.93,2637.60 2368.12,2634.57 2361.22,2632.86" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway">
+		<lane index="0" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway" speed="8.94" shape="2432.51,2646.96 2411.32,2644.27 2401.19,2643.10 2392.71,2641.84 2380.57,2639.16 2367.91,2636.16">
+			<param key="origId" value="16666012" />
+		</lane>
+	</edge>
+	<edge id="-16666012#2right2" from="9727816850" to="iter1_2_mid" name="Craver Road Iterative Addition" priority="10" type="highway.tertiary" numLanes="1" speed="8.94" shape="2331.40,2628.38 2318.71,2627.98 2296.79,2628.38" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway">
+		<lane index="0" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway" speed="8.94" shape="2328.83,2629.90 2318.67,2629.58 2296.79,2629.90">
+			<param key="origId" value="16666012" />
+		</lane>
+	</edge>
+	<edge id="-16666012#2left2" from="iter1_2_mid" to="cluster_172228464_482708521_9687148201_9687148202_#5more" name="Craver Road Iterative Addition" priority="10" type="highway.tertiary" numLanes="1" speed="8.94" shape="2296.79,2628.38 2292.59,2627.47 2211.77,2627.57 2177.92,2627.09 2162.02,2626.66 2154.79,2626.51" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway">
+		<lane index="0" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway" speed="8.94" shape="2296.79,2629.90 2292.58,2629.07 2211.76,2629.17 2177.89,2628.69 2161.98,2628.26 2157.33,2628.16">
+			<param key="origId" value="16666012" />
+		</lane>
+	</edge>
+	<edge id="-16666012#11right3" from="9740155241" to="iter1_1_mid" name="Craver Road Iterative Addition" priority="10" type="highway.tertiary" numLanes="1" speed="8.94" shape="2752.25,2646.79 2727.82,2647.16 2713.83,2646.79" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway">
+		<lane index="0" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway" speed="8.94" shape="2746.68,2648.47 2727.83,2648.76 2713.83,2648.47">
+			<param key="origId" value="16666012" />
+		</lane>
+	</edge>
+	<edge id="-16666012#11left3" from="iter1_1_mid" to="cluster_9740157181_9740483933" name="Craver Road Iterative Addition" priority="10" type="highway.tertiary" numLanes="1" speed="8.94" shape="2713.83,2646.79 2689.61,2647.24 2682.42,2647.24" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway">
+		<lane index="0" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway" speed="8.94" shape="2713.83,2648.47 2689.61,2648.84 2687.58,2648.84">
+			<param key="origId" value="16666012" />
+		</lane>
+	</edge>
+	<edge id="16666012#9left0" from="cluster_9740411700_9740411702" to="iter1_0_mid" name="Craver Road Iterative Addition" priority="10" type="highway.tertiary" numLanes="1" speed="8.94" shape="2585.15,2647.39 2595.30,2647.42 2603.05,2647.37" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway">
+		<lane index="0" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway" speed="8.94" shape="2590.70,2645.81 2595.30,2645.82 2603.05,2645.77">
+			<param key="origId" value="16666012" />
+		</lane>
+	</edge>
+	<edge id="16666012#9right0" from="iter1_0_mid" to="cluster_9740157181_9740483933" name="Craver Road Iterative Addition" priority="10" type="highway.tertiary" numLanes="1" speed="8.94" shape="2603.05,2647.37 2617.46,2647.28 2635.61,2647.34 2663.25,2647.24 2676.51,2647.24" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway">
+		<lane index="0" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway" speed="8.94" shape="2603.05,2645.77 2617.46,2645.68 2635.61,2645.74 2663.25,2645.64 2669.39,2645.64">
+			<param key="origId" value="16666012" />
+		</lane>
+	</edge>
+	<edge id="16666012#4left1" from="9727779406" to="iter1_3_mid" name="Craver Road Iterative Addition" priority="10" type="highway.tertiary" numLanes="1" speed="8.94" shape="2361.22,2632.86 2368.12,2634.57 2380.93,2637.60 2393.00,2640.27 2401.40,2641.51 2411.47,2642.68 2432.51,2644.19" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway">
+		<lane index="0" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway" speed="8.94" shape="2368.68,2633.06 2381.29,2636.04 2393.29,2638.70 2401.61,2639.92 2411.62,2641.09 2432.51,2642.59">
+			<param key="origId" value="16666012" />
+		</lane>
+	</edge>
+	<edge id="16666012#4right1" from="iter1_3_mid" to="9727816623" name="Craver Road Iterative Addition" priority="10" type="highway.tertiary" numLanes="1" speed="8.94" shape="2432.51,2644.19 2435.12,2644.38 2452.25,2645.55" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway">
+		<lane index="0" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway" speed="8.94" shape="2432.51,2642.59 2435.23,2642.78 2449.56,2643.76">
+			<param key="origId" value="16666012" />
+		</lane>
+	</edge>
+	<edge id="16666012#2left2" from="cluster_172228464_482708521_9687148201_9687148202_#5more" to="iter1_2_mid" name="Craver Road Iterative Addition" priority="10" type="highway.tertiary" numLanes="1" speed="8.94" shape="2154.79,2626.51 2162.02,2626.66 2177.92,2627.09 2211.77,2627.57 2292.59,2627.47 2296.79,2627.55" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway">
+		<lane index="0" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway" speed="8.94" shape="2157.40,2624.96 2162.06,2625.06 2177.95,2625.49 2211.78,2625.97 2292.60,2625.87 2296.79,2625.95">
+			<param key="origId" value="16666012" />
+		</lane>
+	</edge>
+	<edge id="16666012#2right2" from="iter1_2_mid" to="9727816850" name="Craver Road Iterative Addition" priority="10" type="highway.tertiary" numLanes="1" speed="8.94" shape="2296.79,2627.55 2318.71,2627.98 2331.40,2628.38" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway">
+		<lane index="0" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway" speed="8.94" shape="2296.79,2625.95 2318.75,2626.38 2328.93,2626.70">
+			<param key="origId" value="16666012" />
+		</lane>
+	</edge>
+	<edge id="16666012#11left3" from="cluster_9740157181_9740483933" to="iter1_1_mid" name="Craver Road Iterative Addition" priority="10" type="highway.tertiary" numLanes="1" speed="8.94" shape="2682.42,2647.24 2689.61,2647.24 2713.83,2647.19" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway">
+		<lane index="0" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway" speed="8.94" shape="2687.58,2645.64 2689.61,2645.64 2713.83,2645.59">
+			<param key="origId" value="16666012" />
+		</lane>
+	</edge>
+	<edge id="16666012#11right3" from="iter1_1_mid" to="9740155241" name="Craver Road Iterative Addition" priority="10" type="highway.tertiary" numLanes="1" speed="8.94" shape="2713.83,2647.19 2727.82,2647.16 2752.25,2646.79" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway">
+		<lane index="0" disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway" speed="8.94" shape="2713.83,2645.59 2727.81,2645.56 2746.63,2645.27">
 			<param key="origId" value="16666012" />
 		</lane>
 	</edge>

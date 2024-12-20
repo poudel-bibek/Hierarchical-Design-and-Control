@@ -655,7 +655,7 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
                     attributes = {'from': edge_1, 'to': edge_2, 'fromLane': str(0), 'toLane': str(0)}
                     new_connection = ET.Element('connection', attributes)
                     new_connection.text = None  # Ensure there's no text content
-                    new_connection.text = "\n\t\t"
+                    new_connection.tail = "\n\t\t"
                     conn_root.append(new_connection)
 
 
