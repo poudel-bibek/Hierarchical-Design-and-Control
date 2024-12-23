@@ -27,7 +27,7 @@ def get_config():
         "seed": None,  # Random seed (default: None)
         "gpu": True,  # Use GPU if available (default: use CPU)
         "total_timesteps": 1500000,  # Total number of timesteps the simulation will run
-        "max_timesteps": 720,  # Maximum number of steps in one episode (for the lower level agent)
+        "max_timesteps": 1500,  # Maximum number of steps in one episode (for the lower level agent)
         "total_sweep_trials": 128,  # Total number of trials for the wandb sweep
         "memory_transfer_freq": 16,  # Frequency of memory transfer from worker to main process (Only applicable for lower level agent)
 

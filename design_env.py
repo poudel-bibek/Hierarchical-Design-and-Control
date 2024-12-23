@@ -830,31 +830,34 @@ class DesignEnv(gym.Env):
             - end with </lane></edge>
         """
 
-        prefix = "original" if iteration == 'base' else "iteration_base" # Every iteration will have the same base XML files.
-        node_file = f'{self.component_dir}/{prefix}.nod.xml'
-        edge_file = f'{self.component_dir}/{prefix}.edg.xml'
-        connection_file = f'{self.component_dir}/{prefix}.con.xml'
-        type_file = f'{self.component_dir}/{prefix}.typ.xml'
-        traffic_light_file = f'{self.component_dir}/{prefix}.tll.xml'
-
         # Parse the XML files
+        prefix = "original" if iteration == 'base' else "iteration_base" # Every iteration will have the same base XML files.
+        
+        node_file = f'{self.component_dir}/{prefix}.nod.xml'
         node_tree = ET.parse(node_file)
-        edge_tree = ET.parse(edge_file)
-        connection_tree = ET.parse(connection_file)
-        type_tree = ET.parse(type_file)
-        traffic_light_tree = ET.parse(traffic_light_file)
-
         node_root = node_tree.getroot()
+
+        edge_file = f'{self.component_dir}/{prefix}.edg.xml'
+        edge_tree = ET.parse(edge_file)
         edge_root = edge_tree.getroot()
-        connection_root = connection_tree.getroot()
-        type_root = type_tree.getroot() 
+
+        connection_file = f'{self.component_dir}/{prefix}.con.xml'
+        connection_tree = ET.parse(connection_file)
+        connection_root = connection_tree.getroot() 
+
+        traffic_light_file = f'{self.component_dir}/{prefix}.tll.xml'
+        traffic_light_tree = ET.parse(traffic_light_file)
         traffic_light_root = traffic_light_tree.getroot()
 
-        # Find all the nodes and edges in the XML component files ()
-        nodes_in_xml = { node.get('id'): node for node in node_root.findall('node') } # save the node element itself.
-        edges_in_xml = { (e.get('from'), e.get('to')): e for e in edge_root.findall('edge') } # save the edge element itself.
+        type_file = f'{self.component_dir}/{prefix}.typ.xml'
+        type_tree = ET.parse(type_file)
+        type_root = type_tree.getroot()
 
-        # Find pedestrian nodes and edges in the XML component .edg file. 
+        # Find ALL the nodes and edges in the XML component files (nod.xml and edg.xml)
+        nodes_in_xml = { n.get('id'): n for n in node_root.findall('node') } # save the node element itself.
+        edges_in_xml = { (e.get('from'), e.get('to')): e for e in edge_root.findall('edge') } # save the from, to nodes and edge element.
+
+        # Find PEDESTRIAN nodes and edges in the XML component .edg file. 
         pedestrian_edges_in_xml = {}
         pedestrian_nodes_in_xml = set()
         for (f, t), e in edges_in_xml.items():
@@ -873,48 +876,46 @@ class DesignEnv(gym.Env):
         print(f"Pedestrian edges in XML: {list(pedestrian_edges_in_xml.keys())}\n")
         print(f"Pedestrian edges in graph: {pedestrian_edges_in_graph}\n")
         
-        # Remove pedestrian nodes that are in XML component file but not in networkx graph.
+        # Remove PEDESTRIAN nodes that are in XML component file but not in networkx graph.
         potential_nodes_to_remove = pedestrian_nodes_in_xml - pedestrian_nodes_in_graph
         print(f"Potential Nodes to remove: Total: {len(potential_nodes_to_remove)},\n {potential_nodes_to_remove}\n")
         
-        # Some edges may still access the nodes that are removed above.
-        # Find the edges that still access the nodes that are removed above.
-        edges_in_xml_that_access_removed_nodes = {}
+        # Some edges may still access the nodes that are in potential_nodes_to_remove.
+        # Find the edges that still access the nodes that are in potential_nodes_to_remove.
+        edges_in_xml_that_access_removal_nodes = {}
         for (f, t) in edges_in_xml:
             if f in potential_nodes_to_remove or t in potential_nodes_to_remove:
-                edges_in_xml_that_access_removed_nodes[(f, t)] = edges_in_xml[(f, t)] # These can be vehicle edges as well.
+                edges_in_xml_that_access_removal_nodes[(f, t)] = edges_in_xml[(f, t)] # These can be vehicle edges as well.
 
-        print(f"Edges in XML that still access the potential removed nodes: Total: {len(edges_in_xml_that_access_removed_nodes)}")
-        for (f, t), e in edges_in_xml_that_access_removed_nodes.items():
+        print(f"Edges in XML that still access the potential removal nodes: Total: {len(edges_in_xml_that_access_removal_nodes)}")
+        for (f, t), e in edges_in_xml_that_access_removal_nodes.items():
             print(f"Edge: {f} -> {t}")
             print(f"Edge attributes: {e.attrib}\n")
 
-        # In the potential nodes selected for removal, some of them are vehicle edges (The old TL was removed) (highway.tertiary and disallowed pedestrian).
-        vehicle_edges_linked_to_potential_removal_nodes = {}
-        for (f, t), e in edges_in_xml_that_access_removed_nodes.items():
+        # In the edges that access nodes in potential_nodes_to_remove, some of the edges are vehicle edges (For e.g., when the old TL was removed).
+        vehicle_edges_that_access_removal_nodes = {}
+        for (f, t), e in edges_in_xml_that_access_removal_nodes.items():
             e_type = e.get('type')
             disallow = e.get('disallow', '')
-            if e_type == 'highway.tertiary' and 'pedestrian' in disallow:
-                vehicle_edges_linked_to_potential_removal_nodes[(f, t)] = e
-        print(f"Vehicle edges linked to potential removal nodes: Total: {len(vehicle_edges_linked_to_potential_removal_nodes)},\n {vehicle_edges_linked_to_potential_removal_nodes}\n")
+            if e_type == 'highway.tertiary' and 'pedestrian' in disallow: # vehicle edge attributes: highway.tertiary and disallowed pedestrian
+                vehicle_edges_that_access_removal_nodes[(f, t)] = e
+        print(f"Vehicle edges that access removal nodes: Total: {len(vehicle_edges_that_access_removal_nodes)},\n {vehicle_edges_that_access_removal_nodes}\n")
         
         # Get all nodes that appear in vehicle edges
         nodes_in_vehicle_edges = set()
-        for f, t in vehicle_edges_linked_to_potential_removal_nodes.keys():
+        for f, t in vehicle_edges_that_access_removal_nodes.keys():
             nodes_in_vehicle_edges.add(f)
             nodes_in_vehicle_edges.add(t)
-
-        print(f"Potential nodes to be removed: {potential_nodes_to_remove}\n")
-        print(f"Nodes in vehicle edges: {nodes_in_vehicle_edges}\n")
-        
-        # Remove nodes that appear in vehicle edges from potential nodes to remove
+        print(f"Potential nodes to be removed: {potential_nodes_to_remove}\n Nodes in vehicle edges: {nodes_in_vehicle_edges}\n")
+ 
+        # The nodes that appear in vehicle edges can be removed because they are not needed for the pedestrian network. Remove them
         pedestrian_nodes_to_remove = potential_nodes_to_remove - nodes_in_vehicle_edges
         print(f"Actual pedestrian nodes to remove: Total: {len(pedestrian_nodes_to_remove)},\n {pedestrian_nodes_to_remove}\n")
 
-        # Remove the pedestrian edges that are not present in the vehicle edges.
+        # Some pedestrian edges (at crossings) link to vehicle edges. Remove the pedestrian edges that are not linked to the vehicle edges. 
         pedestrian_edges_to_remove = {}
-        for (f, t), e in edges_in_xml_that_access_removed_nodes.items():
-            if (f, t) not in vehicle_edges_linked_to_potential_removal_nodes:
+        for (f, t), e in edges_in_xml_that_access_removal_nodes.items():
+            if (f, t) not in vehicle_edges_that_access_removal_nodes:
                 pedestrian_edges_to_remove[(f, t)] = e
         print(f"Actual pedestrian edges to remove: Total: {len(pedestrian_edges_to_remove)}, \n {pedestrian_edges_to_remove}\n")
 
@@ -929,11 +930,12 @@ class DesignEnv(gym.Env):
                 edge_root.remove(edges_in_xml[(f, t)]) # remove from edg component file
                 del edges_in_xml[(f, t)] # remove from dictionary
 
-        # Node additions at the end nodes (in iterations other than base) and middle nodes.
-        # Find the pedestrian nodes to add (present in networkx graph but not in XML component file). 
+        # Find the pedestrian nodes to add (present in networkx graph but not in XML component file) i.e., end nodes and middle nodes
+        # In iterations other than base i.e., in iteration base, there will be no new nodes to add.
         # For regular nodes: <node id=" " x=" " y=" " />
-        # For all the nodes in networkx graph with type "middle" in the XML component file: add a node attribute type with value "traffic_light" and tl with value "node_id" and add a TL logic and a connection.
-        node_ids_to_add = pedestrian_nodes_in_graph - set(nodes_in_xml.keys()) # In the iteration base, there will be no nodes to add.
+        # For the nodes with type "middle": also add attributes: type = "traffic_light" and tl = "node_id" 
+        node_ids_to_add = pedestrian_nodes_in_graph - set(nodes_in_xml.keys()) 
+        middle_nodes_to_add = []
         print(f"\nNodes to add: {node_ids_to_add}")
 
         for nid in node_ids_to_add:
@@ -945,27 +947,27 @@ class DesignEnv(gym.Env):
             if n_type == 'regular':
                 attribs['type'] = 'dead_end'
             elif n_type == 'middle':
+                middle_nodes_to_add.append(nid)
                 attribs['type'] = 'traffic_light'
                 attribs['tl'] = nid
 
             new_node = ET.Element('node', attribs)
+            new_node.tail = "\n\t"
             node_root.append(new_node)
             nodes_in_xml[nid] = new_node
 
-        # Edge additions
         # Find the edges to add (present in networkx graph but not in XML component file).
-        # For each edge, add a new edge element with the same attributes.
         edges_to_add = set(networkx_graph.edges()) - set(edges_in_xml.keys()) # These are all pedestrian edges.
         edges_to_add = list(edges_to_add)
         print(f"\nPedestrian edges to add: Total: {len(edges_to_add)},\n {edges_to_add}\n")
 
-        # The edge could be a Regular node to Regular node or Regular node to middle node (crosswalk).
+        # The edge could be from a type = "regular" node to a type = "regular" node or from a type = "regular" node to a type = "middle" node (crossing).
         for (f, t) in edges_to_add:
 
             # Do Regular to Regular and Regular to Middle need some different treatment?
             edge_data = networkx_graph.get_edge_data(f, t)
             edge_id = edge_data.get('id', f'edge_{f}_{t}') # Get it from the networkx graph.
-            width = edge_data.get('width', 2.0)
+            width = edge_data.get('width', None) # There should be a width for all edges.
             edge_attribs = {
                 'id': edge_id,
                 'from': f,
@@ -1010,11 +1012,11 @@ class DesignEnv(gym.Env):
             edge_root.append(edge_element)
 
 
-        # Whenever a middle node falls on a vehicle edge: For all the mid nodes, find two new edges.
-        # Split the old edge into two edges with left and right attached to the names (the new edges inherit shape property of the original edge)
-        # This happens iteratively and is much more complex than what is written above.
-        middle_nodes_to_add = [nid for nid in node_ids_to_add if networkx_graph.nodes[nid].get('type') == 'middle']
-        old_veh_edges_to_remove, new_veh_edges_to_add, updated_conn_root = get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, 
+        # Every middle node (present in middle_nodes_to_add) falls on a certain vehicle edge. Split the vehicle edges into two new edges.
+        # The new edge names have left and right attached to the old names (the new edges inherit respective portions of the edge shape and lane shape property of the old edge)
+        # This happens iteratively (because multiple middle nodes may fall on the same vehicle edge) and is a bit complex.
+        old_veh_edges_to_remove, new_veh_edges_to_add, updated_conn_root = get_new_veh_edges_connections(middle_nodes_to_add, 
+                                                                                                         networkx_graph, 
                                                                                                          f'{self.component_dir}/original.edg.xml', 
                                                                                                          f'{self.component_dir}/original.nod.xml', 
                                                                                                          connection_root)
@@ -1088,7 +1090,7 @@ class DesignEnv(gym.Env):
                 conn_attribs = {'from': from_edge_id, 'to': to_edge_id, 'fromLane': "0", 'toLane': "0", 'tl': tl_id, 'linkIndex': str(linkindex)} # Since inside the corridor, there is only one lane.
                 connection_element = ET.Element('connection', conn_attribs)
                 connection_element.text = None  # Ensure there's no text content
-                connection_element.tail = "\n\t\t"
+                connection_element.tail = "\n\t"
                 traffic_light_root.append(connection_element)
         
         # For the crossing tags in the Conn file ( which also dont need to be changed iteratively). # The width here needs to come from the model. 
@@ -1171,6 +1173,8 @@ class DesignEnv(gym.Env):
             connection_element.tail = "\n\t\t"
             updated_conn_root.append(connection_element)
 
+            print(f"\n\ne1: {e1}, e2: {e2}\n\n")
+            
             # Then, a crossing element should be added with those edges.
             middle_node = e1_data.get('new_node')
             width = networkx_graph.nodes[middle_node].get('width')
