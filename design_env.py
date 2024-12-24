@@ -1081,22 +1081,25 @@ class DesignEnv(gym.Env):
         # Due to split of split, the names of these edges may not be symmetrical (i.e., just replace left with right and vice versa wont work).
         # Use linkIndex 0 for connecting -ve direction and linkIndex 1 for connecting +ve direction.
         for direction in ['top', 'bottom']:
-            for m_node in m_node_mapping.keys(): # m_node is the tl_id
-                tl_id = m_node
+            for tl_id, mapping_data in m_node_mapping.items(): # m_node is the tl_id
                 linkindex = 0 if direction == 'top' else 1 # Top is -ve direction and bottom is +ve direction.
-                 # using left as from and right as to
-                conn_attribs = {'from': m_node_mapping[m_node][direction]['left'], 'to': m_node_mapping[m_node][direction]['right'], 'fromLane': "0", 'toLane': "0", 'tl': tl_id, 'linkIndex': str(linkindex)} # Since inside the corridor, there is only one lane.
-                connection_element = ET.Element('connection', conn_attribs)
-                connection_element.text = None  # Ensure there's no text content
-                connection_element.tail = "\n\t"
-                traffic_light_root.append(connection_element)
-        
+                # These connections should be present in both the TLL and connections files.
+                # using left as from and right as to
+                tl_conn_attribs = {'from': mapping_data[direction]['left'], 'to': mapping_data[direction]['right'], 'fromLane': "0", 'toLane': "0", 'tl': tl_id, 'linkIndex': str(linkindex)} # Since inside the corridor, there is only one lane.
+                tl_conn_element = ET.Element('connection', tl_conn_attribs)
+                tl_conn_element.text = None  # Ensure there's no text content
+                tl_conn_element.tail = "\n\t"
+                traffic_light_root.append(tl_conn_element)
 
+                conn_attribs = {'from': mapping_data[direction]['left'], 'to': mapping_data[direction]['right'], 'fromLane': "0", 'toLane': "0"} # Since inside the corridor, there is only one lane.
+                conn_element = ET.Element('connection', conn_attribs)
+                conn_element.text = None  # Ensure there's no text content
+                conn_element.tail = "\n\t\t"
+                updated_conn_root.append(conn_element)
 
-
+        print(f"m_node_mapping: {m_node_mapping}")
 
         # Verify stuff below.
-
 
         # For the crossing tags in the Conn file ( which also dont need to be changed iteratively). # The width here needs to come from the model. 
         # They are already updated while obtaining the new edges. Nothing to do here.
