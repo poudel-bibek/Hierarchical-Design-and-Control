@@ -516,8 +516,7 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
         node_coords[node_id] = round(float(node.get('x')), 2)
 
     edges_dict = {edge.get('id'): edge for edge in edge_root.findall('edge')}
-    original_edges = get_initial_veh_edge_config(edge_root, edges_dict, node_coords) # Initialize iterative_edges with initial edge config.
-    iterative_edges = original_edges.copy()
+    iterative_edges = get_initial_veh_edge_config(edge_root, edges_dict, node_coords) # Initialize iterative_edges with initial edge config.
 
     all_edges = {} # also contain all the connected vehicle edges outside the corridor.
     for edge_id in edges_dict.keys():
@@ -530,6 +529,14 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
     edges_to_remove = []
     edges_to_add = {'top': {}, 'bottom': {}}
     
+    # For left-right connections with middle nodes. Each middle node will have an edge to the left and right of it.
+    m_node_mapping = {
+        m_node: {
+            'top': {'left': None, 'right': None},
+            'bottom': {'left': None, 'right': None}
+        } for m_node in middle_nodes_to_add
+    }
+
     # As multiple middle nodes can intersect with the same vehicle edge, the splitting of one old edge into multiple new edges has to happen iteratively (splitting one edge at a time).
     # In the same process, the connections (in the conn file) need to change as we go. i.e., Find intersects for each middle node and then update the conn file.
     # The old edge in a connection could either be a 'to' or a 'from' edge. 
@@ -538,22 +545,16 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
         x_coord = round(networkx_graph.nodes[m_node]['pos'][0], 2)
         
         # Handle top edges and top connection
-        for edge_id, edge_data in iterative_edges['top'].items():
+        for edge_id, edge_data in list(iterative_edges['top'].items()): # convert to list first 
             # The directions are reversed in top and bottom. For top, greater than `to` and less than `from`.
-            print(f"edge_id={edge_id}, from_x={edge_data['from_x']}, to_x={edge_data['to_x']}, x_coord={x_coord}")
-            if (x_coord <= edge_data['from_x']) and (x_coord >= edge_data['to_x']): 
-                print(f"Top edge {edge_id} intersects mnode {m_node} at x={x_coord:.2f}.")
+            if (edge_data['to_x'] <= x_coord <= edge_data['from_x']) and edge_id not in edges_to_remove: 
 
-                # This edge needs to be removed only if it was part of the original edges. No need to remove if its a split of a split.
-                if edge_id in original_edges['top'].keys():
-                    edges_to_remove.append(edge_id)
+                print(f"Top edge {edge_id} intersects mnode {m_node} at x={x_coord:.2f}.")
+                edges_to_remove.append(edge_id)
                 
                 # Split edge and lane shapes at intersection point
-                edge_shape_points = [tuple(map(float, point.split(','))) 
-                                    for point in edge_data['edge_shape'].split()]
-                
-                lane_shape_points = [tuple(map(float, point.split(','))) 
-                                    for point in edge_data['lane_shape'].split()]
+                edge_shape_points = [tuple(map(float, point.split(','))) for point in edge_data['edge_shape'].split()]
+                lane_shape_points = [tuple(map(float, point.split(','))) for point in edge_data['lane_shape'].split()]
                 
                 # Split edge shape points (note: for top edges, right is from, left is to)
                 # Split points without including end point
@@ -601,6 +602,18 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
                 iterative_edges['top'][left_edge_id_top] = left_edge_data # new_node attribute is extra here.
                 all_edges[left_edge_id_top] = left_edge_data # only from_x and to_x are used.
 
+                # Update current node mapping
+                m_node_mapping[m_node]['top']['right'] = right_edge_id_top
+                m_node_mapping[m_node]['top']['left'] = left_edge_id_top
+                
+                # Update previous nodes' mappings if they referenced this split edge
+                for prev_node in middle_nodes_to_add[:i]:  # Only look at nodes we've processed before
+                    prev_mapping = m_node_mapping[prev_node]['top']
+                    if prev_mapping['right'] == edge_id:
+                        prev_mapping['right'] = right_edge_id_top
+                    if prev_mapping['left'] == edge_id:
+                        prev_mapping['left'] = left_edge_id_top
+
                 # Now add new connections to conn_root and remove old connections.
                 for connection in conn_root.findall('connection'): # This root is updated later so find all works
                     from_edge, to_edge = connection.get('from'), connection.get('to') # Existing connection edge ids 
@@ -608,7 +621,7 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
                         print(f"mnode {m_node} intersects top edge {edge_id} at x={x_coord:.2f} and is ref in conn: {connection}.")
 
                         if edge_id == from_edge: 
-                            attributes = {'from': left_edge_id_top, 'to': to_edge, 'fromLane': str(0), 'toLane': connection.get('toLane')}
+                            attributes = {'from': left_edge_id_top  , 'to': to_edge, 'fromLane': str(0), 'toLane': connection.get('toLane')}
                         else:
                             attributes = {'from': from_edge, 'to': right_edge_id_top, 'fromLane': connection.get('fromLane'), 'toLane': str(0)}
 
@@ -619,24 +632,18 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
 
                         conn_root.append(new_connection)
                         conn_root.remove(connection) # remove old connection
-                    
-                break # For each m_node, only one edge is split at a time.
 
         # Check bottom edges and bottom connection
-        for edge_id, edge_data in iterative_edges['bottom'].items():
-            print(f"edge_id={edge_id}, from_x={edge_data['from_x']}, to_x={edge_data['to_x']}, x_coord={x_coord}")
+        for edge_id, edge_data in list(iterative_edges['bottom'].items()):
             # For bottom, greater than `from` and less than `to`.
-            if (x_coord <= edge_data['to_x']) and (x_coord >= edge_data['from_x']):
+            if (edge_data['from_x'] <= x_coord <= edge_data['to_x']) and edge_id not in edges_to_remove:
+
                 print(f"Bottom edge {edge_id} intersects mnode {m_node} at x={x_coord:.2f}.")
-                if edge_id in original_edges['bottom'].keys():
-                    edges_to_remove.append(edge_id)
+                edges_to_remove.append(edge_id) # Need to check both in top and bottom.
                 
                 # Split edge and lane shapes at intersection point
-                edge_shape_points = [tuple(map(float, point.split(','))) 
-                                    for point in edge_data['edge_shape'].split()]
-                
-                lane_shape_points = [tuple(map(float, point.split(','))) 
-                                    for point in edge_data['lane_shape'].split()]
+                edge_shape_points = [tuple(map(float, point.split(','))) for point in edge_data['edge_shape'].split()]
+                lane_shape_points = [tuple(map(float, point.split(','))) for point in edge_data['lane_shape'].split()]
                 
                 # Split edge shape points (note: for bottom edges, left is from, right is to)
                 # Split points without including end point
@@ -682,6 +689,18 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
                 iterative_edges['bottom'][left_edge_id_bottom] = left_edge_data # new_node attribute is extra here.
                 all_edges[left_edge_id_bottom] = left_edge_data # only from_x and to_x are used.
 
+                # Update current node mapping
+                m_node_mapping[m_node]['bottom']['left'] = left_edge_id_bottom
+                m_node_mapping[m_node]['bottom']['right'] = right_edge_id_bottom
+                
+                # Update previous nodes' mappings if they referenced this split edge
+                for prev_node in middle_nodes_to_add[:i]:
+                    prev_mapping = m_node_mapping[prev_node]['bottom']
+                    if prev_mapping['right'] == edge_id:
+                        prev_mapping['right'] = right_edge_id_bottom
+                    if prev_mapping['left'] == edge_id:
+                        prev_mapping['left'] = left_edge_id_bottom
+                        
                 # Now add new connections to conn_root and remove old connections.
                 for connection in conn_root.findall('connection'): # This root is updated later so find all works.
                     from_edge, to_edge = connection.get('from'), connection.get('to') # Existing connection edge ids 
@@ -689,9 +708,9 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
                         print(f"mnode {m_node} intersects bottom edge {edge_id} at x={x_coord:.2f} and is ref in conn: {connection}.")
 
                         if edge_id == from_edge: 
-                            attributes = {'from': left_edge_id_bottom, 'to': to_edge, 'fromLane': str(0), 'toLane': connection.get('toLane')}
+                            attributes = {'from': right_edge_id_bottom, 'to': to_edge, 'fromLane': str(0), 'toLane': connection.get('toLane')}
                         else:
-                            attributes = {'from': from_edge, 'to': right_edge_id_bottom, 'fromLane': connection.get('fromLane'), 'toLane': str(0)}
+                            attributes = {'from': from_edge, 'to': left_edge_id_bottom, 'fromLane': connection.get('fromLane'), 'toLane': str(0)}
                         
                         print(f"Adding new connection: {attributes}")
                         new_connection = ET.Element('connection', attributes)
@@ -700,10 +719,27 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
 
                         conn_root.append(new_connection)
                         conn_root.remove(connection)
+    
+    # corrections.
+    # We may have added a connection, but one of those edges may have gotten split later.
+    # If a `from` or a `to` edge in a connection contains an edge in edges_to_remove, then we need to remove that connection.
+    for connection in conn_root.findall('connection'):
+        from_edge, to_edge = connection.get('from'), connection.get('to')
+        if from_edge in edges_to_remove or to_edge in edges_to_remove:
+            conn_root.remove(connection)
 
-                break # For each m_node, only one edge is split at a time.
-                
-    return edges_to_remove, edges_to_add, conn_root
+    # If the edges are present in edges_to_remove, then they should not be present in edges_to_add (they may be because of a split of a split).
+    for edge_id in edges_to_remove:
+        if edge_id in edges_to_add['top']:
+            del edges_to_add['top'][edge_id]
+        if edge_id in edges_to_add['bottom']:
+            del edges_to_add['bottom'][edge_id]
+
+    # This edges_to_remove edge list will be used to remove edges from the edg file.
+    # Hence Filter edges to remove that are not part of the original edges (edges that are split of a split will not be there).
+    # Remove edges that have `right` or `left` in their id.
+    edges_to_remove = [edge_id for edge_id in edges_to_remove if not 'right' in edge_id and not 'left' in edge_id]
+    return edges_to_remove, edges_to_add, conn_root, m_node_mapping
 
 # # Instead of interpolation, the y-coordinate of the middle node is set as mid_point in networkx_graph.
 # def interpolate_y_coordinate(points, x_coord):

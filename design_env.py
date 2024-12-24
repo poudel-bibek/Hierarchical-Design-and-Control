@@ -1015,7 +1015,7 @@ class DesignEnv(gym.Env):
         # Every middle node (present in middle_nodes_to_add) falls on a certain vehicle edge. Split the vehicle edges into two new edges.
         # The new edge names have left and right attached to the old names (the new edges inherit respective portions of the edge shape and lane shape property of the old edge)
         # This happens iteratively (because multiple middle nodes may fall on the same vehicle edge) and is a bit complex.
-        old_veh_edges_to_remove, new_veh_edges_to_add, updated_conn_root = get_new_veh_edges_connections(middle_nodes_to_add, 
+        old_veh_edges_to_remove, new_veh_edges_to_add, updated_conn_root, m_node_mapping = get_new_veh_edges_connections(middle_nodes_to_add, 
                                                                                                          networkx_graph, 
                                                                                                          f'{self.component_dir}/original.edg.xml', 
                                                                                                          f'{self.component_dir}/original.nod.xml', 
@@ -1077,22 +1077,27 @@ class DesignEnv(gym.Env):
         for conn in connections_to_remove:
             traffic_light_root.remove(conn)
             
-        # The TLL file connections (vehicle edges with right and left attached in the names, with middle node in between) dont need to iteratively change. Although connection tags may refer to the old edges, dont need to take care of these as much.
+        # The TLL file connections contains connections between edges that are left and right of every midde node.
+        # Due to split of split, the names of these edges may not be symmetrical (i.e., just replace left with right and vice versa wont work).
         # Use linkIndex 0 for connecting -ve direction and linkIndex 1 for connecting +ve direction.
         for direction in ['top', 'bottom']:
-            all_edge_ids = [edge_id for edge_id in new_veh_edges_to_add[direction].keys()]
-            # get the edge ids with right in the name
-            right_edge_ids = [edge_id for edge_id in all_edge_ids if 'right' in edge_id]
-            for from_edge_id in right_edge_ids: # using left as from and right as to
-                to_edge_id = from_edge_id.replace('right', 'left')
+            for m_node in m_node_mapping.keys(): # m_node is the tl_id
+                tl_id = m_node
                 linkindex = 0 if direction == 'top' else 1 # Top is -ve direction and bottom is +ve direction.
-                tl_id = new_veh_edges_to_add[direction][from_edge_id].get('new_node')
-                conn_attribs = {'from': from_edge_id, 'to': to_edge_id, 'fromLane': "0", 'toLane': "0", 'tl': tl_id, 'linkIndex': str(linkindex)} # Since inside the corridor, there is only one lane.
+                 # using left as from and right as to
+                conn_attribs = {'from': m_node_mapping[m_node][direction]['left'], 'to': m_node_mapping[m_node][direction]['right'], 'fromLane': "0", 'toLane': "0", 'tl': tl_id, 'linkIndex': str(linkindex)} # Since inside the corridor, there is only one lane.
                 connection_element = ET.Element('connection', conn_attribs)
                 connection_element.text = None  # Ensure there's no text content
                 connection_element.tail = "\n\t"
                 traffic_light_root.append(connection_element)
         
+
+
+
+
+        # Verify stuff below.
+
+
         # For the crossing tags in the Conn file ( which also dont need to be changed iteratively). # The width here needs to come from the model. 
         # They are already updated while obtaining the new edges. Nothing to do here.
         # Whereas for the crossing tags,
@@ -1116,11 +1121,9 @@ class DesignEnv(gym.Env):
                 max_x = min_x_among_nodes
                 rightmost_new = f'16666012#{edge_id.split("#")[1]}'
 
-        extreme_edge_dict = {'leftmost': {'old': "16666012#2", # One of the counterparts (among -ve, +ve) is enough.
-                                          'new': leftmost_new},
-
-                             'rightmost': {'old': "16666012#17", 
-                                          'new': rightmost_new}}
+        # One of the counterparts (among -ve, +ve) is enough.
+        extreme_edge_dict = {'leftmost': {'old': "16666012#2", 'new': leftmost_new},
+                             'rightmost': {'old': "16666012#17", 'new': rightmost_new}}
         
         # The default crossings in TL (that were kept above) may still refer to the old edges.
         # In addition, there may also be a connection of the -ve and +ve sides of the old edges.
@@ -1138,16 +1141,14 @@ class DesignEnv(gym.Env):
                         conn.set('to', new_edge)
                     if conn.get('to') == f"-{old_edge}": # negative
                         conn.set('to', f"-{new_edge}")
-                    
 
-        # Updates to connections file.
+        # Updates to crossings in connections file.
         for direction, direction_data in extreme_edge_dict.items():
             old_edge = direction_data['old']
             if old_edge in old_veh_edges_to_remove:
                 new_edge = direction_data['new']
                 print(f"\n\nold_edge: {old_edge}, new_edge: {new_edge}\n\n")
                 
-                # Update the connection con file.
                 for c in updated_conn_root.findall('crossing'):
                     if c.get('edges') == f'{old_edge} -{old_edge}':
 
@@ -1160,8 +1161,7 @@ class DesignEnv(gym.Env):
                         # Then, it can be updated in crossing.
                         c.set('edges', f'{new_edge} -{new_edge}')
                 
-
-        # Then add new crossings here by making use of new_veh_edges_to_add.
+        # Add new connections (between top and bottom edges) and crossings (making use of new_veh_edges_to_add).
         # All tags that refer to the old edges should now refer to the new edges (if the refering edges fall to the left, they will refer to the new left edge and vice versa) 
         # They have the edges attribute (which are edges to the right) and outlineShape attribute (the shape of the crossing): 
         # TODO: outlineShape seems hard to specify, lets not specify and see what it does. They mention it as optional here: https://github.com/eclipse-sumo/sumo/issues/11668
@@ -1188,10 +1188,6 @@ class DesignEnv(gym.Env):
         for edge in edge_root.findall('edge'):
             if edge.get('id') in old_veh_edges_to_remove:
                 edge_root.remove(edge)
-
-
-        # TODO: Might need to update the y_coordinate of the mid nodes to align with the vehicle edges/ nodes? 
-        # The difference is minute.
 
         # TL logic additions
         for nid in middle_nodes_to_add:
@@ -1267,9 +1263,6 @@ class DesignEnv(gym.Env):
         except subprocess.CalledProcessError as e:
             print(f"Error running netconvert: {e}")
             print("Error output:", e.stderr)
-
-        # terminate the program here
-        #os._exit(0)
 
     def _initialize_normalizers(self, graph):
         """
