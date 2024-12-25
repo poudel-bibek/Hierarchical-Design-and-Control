@@ -532,8 +532,8 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
     # For left-right connections with middle nodes. Each middle node will have an edge to the left and right of it.
     m_node_mapping = {
         m_node: {
-            'top': {'left': None, 'right': None},
-            'bottom': {'left': None, 'right': None}
+            'top': {'from': None, 'to': None},
+            'bottom': {'from': None, 'to': None}
         } for m_node in middle_nodes_to_add
     }
 
@@ -602,17 +602,17 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
                 iterative_edges['top'][left_edge_id_top] = left_edge_data # new_node attribute is extra here.
                 all_edges[left_edge_id_top] = left_edge_data # only from_x and to_x are used.
 
-                # Update current node mapping
-                m_node_mapping[m_node]['top']['right'] = right_edge_id_top
-                m_node_mapping[m_node]['top']['left'] = left_edge_id_top
+                # Update current node mapping (for connections). On Top, connections go from right to left.
+                m_node_mapping[m_node]['top']['from'] = right_edge_id_top
+                m_node_mapping[m_node]['top']['to'] = left_edge_id_top
                 
                 # Update previous nodes' mappings if they referenced this split edge
                 for prev_node in middle_nodes_to_add[:i]:  # Only look at nodes we've processed before
                     prev_mapping = m_node_mapping[prev_node]['top']
-                    if prev_mapping['right'] == edge_id:
-                        prev_mapping['right'] = left_edge_id_top # It should be the left one because the new left will connect to previous left 
-                    if prev_mapping['left'] == edge_id:
-                        prev_mapping['left'] = right_edge_id_top # Similar reasoning as above. Previous left will connect to new right.
+                    if prev_mapping['from'] == edge_id:
+                        prev_mapping['from'] = left_edge_id_top # If the previous `from` edge was split, the new left will connect to it.
+                    if prev_mapping['to'] == edge_id:
+                        prev_mapping['to'] = right_edge_id_top # Similar reasoning as above. Previous left will connect to new right.
 
                 # Now add new connections to conn_root and remove old connections.
                 for connection in conn_root.findall('connection'): # This root is updated later so find all works
@@ -689,17 +689,17 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
                 iterative_edges['bottom'][left_edge_id_bottom] = left_edge_data # new_node attribute is extra here.
                 all_edges[left_edge_id_bottom] = left_edge_data # only from_x and to_x are used.
 
-                # Update current node mapping
-                m_node_mapping[m_node]['bottom']['left'] = left_edge_id_bottom
-                m_node_mapping[m_node]['bottom']['right'] = right_edge_id_bottom
+                # Update current node mapping (for connections). On Bottom, connections go from left to right.
+                m_node_mapping[m_node]['bottom']['from'] = left_edge_id_bottom
+                m_node_mapping[m_node]['bottom']['to'] = right_edge_id_bottom
                 
                 # Update previous nodes' mappings if they referenced this split edge
                 for prev_node in middle_nodes_to_add[:i]:  # Only look at nodes we've processed before
-                    prev_mapping = m_node_mapping[prev_node]['top']
-                    if prev_mapping['right'] == edge_id:
-                        prev_mapping['right'] = left_edge_id_top # It should be the left one because the new left will connect to previous left 
-                    if prev_mapping['left'] == edge_id:
-                        prev_mapping['left'] = right_edge_id_top # Similar reasoning as above. Previous left will connect to new right.
+                    prev_mapping = m_node_mapping[prev_node]['bottom']
+                    if prev_mapping['from'] == edge_id:
+                        prev_mapping['from'] = right_edge_id_bottom # If the previous `from` edge was split, the new right will connect to it. 
+                    if prev_mapping['to'] == edge_id:
+                        prev_mapping['to'] = left_edge_id_bottom # If the previous `to` edge was split, the new left will connect to it.
 
                 # Now add new connections to conn_root and remove old connections.
                 for connection in conn_root.findall('connection'): # This root is updated later so find all works.

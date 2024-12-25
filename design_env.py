@@ -1085,19 +1085,19 @@ class DesignEnv(gym.Env):
                 linkindex = 0 if direction == 'top' else 1 # Top is -ve direction and bottom is +ve direction.
                 # These connections should be present in both the TLL and connections files.
                 # using left as from and right as to
-                tl_conn_attribs = {'from': mapping_data[direction]['left'], 'to': mapping_data[direction]['right'], 'fromLane': "0", 'toLane': "0", 'tl': tl_id, 'linkIndex': str(linkindex)} # Since inside the corridor, there is only one lane.
+                tl_conn_attribs = {'from': mapping_data[direction]['from'], 'to': mapping_data[direction]['to'], 'fromLane': "0", 'toLane': "0", 'tl': tl_id, 'linkIndex': str(linkindex)} # Since inside the corridor, there is only one lane.
                 tl_conn_element = ET.Element('connection', tl_conn_attribs)
                 tl_conn_element.text = None  # Ensure there's no text content
                 tl_conn_element.tail = "\n\t"
                 traffic_light_root.append(tl_conn_element)
 
-                conn_attribs = {'from': mapping_data[direction]['left'], 'to': mapping_data[direction]['right'], 'fromLane': "0", 'toLane': "0"} # Since inside the corridor, there is only one lane.
+                conn_attribs = {'from': mapping_data[direction]['from'], 'to': mapping_data[direction]['to'], 'fromLane': "0", 'toLane': "0"} # Since inside the corridor, there is only one lane.
                 conn_element = ET.Element('connection', conn_attribs)
                 conn_element.text = None  # Ensure there's no text content
                 conn_element.tail = "\n\t\t"
                 updated_conn_root.append(conn_element)
 
-        print(f"m_node_mapping: {m_node_mapping}")
+
 
         # Verify stuff below.
 
@@ -1194,6 +1194,16 @@ class DesignEnv(gym.Env):
 
         # TL logic additions
         for nid in middle_nodes_to_add:
+            
+            # For a complete TL definition, the pedestrian edges that connect the "mid node with top node" and "mid node with bottom node" should also be added as a connection.
+            top_edge = f"edge_{'_'.join(nid.split('_')[0:2])}_top_{nid}"
+            bottom_edge = f"edge_{'_'.join(nid.split('_')[0:2])}_bottom_{nid}"
+            tl_conn_attribs = {'from': top_edge, 'to': bottom_edge, 'fromLane': "0", 'toLane': "0", 'tl': nid, 'linkIndex': str(2)}
+            tl_conn_element = ET.Element('connection', tl_conn_attribs)
+            tl_conn_element.text = None  # Ensure there's no text content
+            tl_conn_element.tail = "\n\t"
+            traffic_light_root.append(tl_conn_element)
+            
             node_data = networkx_graph.nodes[nid]
             tlLogic_element = ET.Element('tlLogic', id=nid, type='static', programID='0', offset='0')
             tlLogic_element.text = "\n\t\t" # Inside <tlLogic>: phases start at two tabs
