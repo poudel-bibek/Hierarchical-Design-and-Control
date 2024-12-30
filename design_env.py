@@ -930,6 +930,16 @@ class DesignEnv(gym.Env):
                 edge_root.remove(edges_in_xml[(f, t)]) # remove from edg component file
                 del edges_in_xml[(f, t)] # remove from dictionary
 
+        # Before new nodes are added.
+        # All the nodes with tl other than default tl need to have type="dead_end" and tl attribute removed.
+        default_tl = ['cluster_172228464_482708521_9687148201_9687148202_#5more'] # By default in base, there will the one TL at the left intersection. present.
+        for node in node_root.findall('node'):
+            tl_name = node.get('tl')
+            if tl_name:
+                if tl_name not in default_tl:
+                    node.set('type', 'dead_end')
+                    del node.attrib['tl']
+
         # Find the pedestrian nodes to add (present in networkx graph but not in XML component file) i.e., end nodes and middle nodes
         # In iterations other than base i.e., in iteration base, there will be no new nodes to add.
         # For regular nodes: <node id=" " x=" " y=" " />
@@ -942,7 +952,7 @@ class DesignEnv(gym.Env):
             node_data = networkx_graph.nodes[nid]
             x, y = node_data['pos']
             n_type = node_data.get('type', 'regular')
-            attribs = {'id': nid, 'x': str(x), 'y': str(y)}
+            attribs = {'id': nid, 'x': str(round(x, 2)), 'y': str(round(y, 2))}
 
             if n_type == 'regular':
                 attribs['type'] = 'dead_end'
@@ -963,6 +973,13 @@ class DesignEnv(gym.Env):
 
         # The edge could be from a type = "regular" node to a type = "regular" node or from a type = "regular" node to a type = "middle" node (crossing).
         for (f, t) in edges_to_add:
+
+            # For edges associated with TL, we need to make them directional i.e., top to mid and mid to bottom.
+            f_type = networkx_graph.nodes[f].get('type', 'regular') # If no type, it is a regular node.
+            t_type = networkx_graph.nodes[t].get('type', 'regular')
+            # only this (connections from bottom to middle) is problematic, switch the f and t.
+            if (f_type == 'regular' and t_type == 'middle') and "bottom" in f: 
+                f, t = t, f
 
             # Do Regular to Regular and Regular to Middle need some different treatment?
             edge_data = networkx_graph.get_edge_data(f, t)
@@ -1057,10 +1074,12 @@ class DesignEnv(gym.Env):
                 edge_element.tail = "\n\t"
 
                 edge_root.append(edge_element)
-
-        # Remove the associated TLs 
-        # Remove all TLs and connections except the default one.
-        default_tl = ['cluster_172228464_482708521_9687148201_9687148202_#5more'] # By default in base, there will the one TL at the left intersection. present.
+        
+        # For TL logics,
+        # TL logics should come before the connections. (https://github.com/eclipse-sumo/sumo/issues/6160)
+        # In order to do this, we first remove all existing TL logics except the default one.
+        # We collect the connections associated with default TL and remove all connections.
+        # TL 1. Remove all TLs and except the default one.
         tls_to_remove = []
         for tl in traffic_light_root.findall('tlLogic'):
             if tl.get('id') not in default_tl:
@@ -1068,38 +1087,33 @@ class DesignEnv(gym.Env):
         for tl in tls_to_remove:
             traffic_light_root.remove(tl)
 
-        # Since the vehicle nodes are not removed, perhaps the connections dont need to be removed (because they connect the vehicle edges). However, removing them for now.
-        # Perhaps each connection here needs to be converted to an edge? No.
-        connections_to_remove = []
+        # TL 2. Remove all connections and store the default ones.
+        tl_connections_to_add = [] # collect the connection elements.
+        connections_to_remove = [] # Connections except the default TL should be removed from the connections file as well.
         for conn in traffic_light_root.findall('connection'):
-            if conn.get('tl') not in default_tl:
-                connections_to_remove.append(conn)
-        for conn in connections_to_remove:
-            traffic_light_root.remove(conn)
-            
+            traffic_light_root.remove(conn) # remove from the TLL file whether its default or not. We will add it back later.
+            if conn.get('tl') in default_tl:
+                tl_connections_to_add.append(conn)
+            else:
+                connections_to_remove.append(conn) # remove later from the connections file.
+
         # The TLL file connections contains connections between edges that are left and right of every midde node.
         # Due to split of split, the names of these edges may not be symmetrical (i.e., just replace left with right and vice versa wont work).
         # Use linkIndex 0 for connecting -ve direction and linkIndex 1 for connecting +ve direction.
         for direction in ['top', 'bottom']:
             for tl_id, mapping_data in m_node_mapping.items(): # m_node is the tl_id
                 linkindex = 0 if direction == 'top' else 1 # Top is -ve direction and bottom is +ve direction.
-                # These connections should be present in both the TLL and connections files.
-                # using left as from and right as to
+                # These connections should be present in both the TLL and connections files (using left as from and right as to).
+                # TL 3. Add the new connections.
                 tl_conn_attribs = {'from': mapping_data[direction]['from'], 'to': mapping_data[direction]['to'], 'fromLane': "0", 'toLane': "0", 'tl': tl_id, 'linkIndex': str(linkindex)} # Since inside the corridor, there is only one lane.
                 tl_conn_element = ET.Element('connection', tl_conn_attribs)
-                tl_conn_element.text = None  # Ensure there's no text content
-                tl_conn_element.tail = "\n\t"
-                traffic_light_root.append(tl_conn_element)
+                tl_connections_to_add.append(tl_conn_element)
 
                 conn_attribs = {'from': mapping_data[direction]['from'], 'to': mapping_data[direction]['to'], 'fromLane': "0", 'toLane': "0"} # Since inside the corridor, there is only one lane.
                 conn_element = ET.Element('connection', conn_attribs)
                 conn_element.text = None  # Ensure there's no text content
                 conn_element.tail = "\n\t\t"
                 updated_conn_root.append(conn_element)
-
-
-
-        # Verify stuff below.
 
         # For the crossing tags in the Conn file ( which also dont need to be changed iteratively). # The width here needs to come from the model. 
         # They are already updated while obtaining the new edges. Nothing to do here.
@@ -1128,55 +1142,48 @@ class DesignEnv(gym.Env):
         extreme_edge_dict = {'leftmost': {'old': "16666012#2", 'new': leftmost_new},
                              'rightmost': {'old': "16666012#17", 'new': rightmost_new}}
         
-        # The default crossings in TL (that were kept above) may still refer to the old edges.
-        # In addition, there may also be a connection of the -ve and +ve sides of the old edges.
-        # These need to be updated.
-        for direction, direction_data in extreme_edge_dict.items():
-            old_edge = direction_data['old']
-            if old_edge in old_veh_edges_to_remove:
-                new_edge = direction_data['new']
-                for conn in traffic_light_root.findall('connection'):
-                    if conn.get('from') == old_edge: # positive
-                        conn.set('from', new_edge)
-                    if conn.get('from') == f"-{old_edge}": # negative
-                        conn.set('from', f"-{new_edge}") 
-                    if conn.get('to') == old_edge: # positive
-                        conn.set('to', new_edge)
-                    if conn.get('to') == f"-{old_edge}": # negative
-                        conn.set('to', f"-{new_edge}")
-
-        # Updates to crossings in connections file.
+        # Updates to connections and crossings in connections file.
         for direction, direction_data in extreme_edge_dict.items():
             old_edge = direction_data['old']
             if old_edge in old_veh_edges_to_remove:
                 new_edge = direction_data['new']
                 print(f"\n\nold_edge: {old_edge}, new_edge: {new_edge}\n\n")
                 
-                for c in updated_conn_root.findall('crossing'):
-                    if c.get('edges') == f'{old_edge} -{old_edge}':
-
+                for crossing in updated_conn_root.findall('crossing'):
+                    if crossing.get('edges') == f'{old_edge} -{old_edge}':
                         # First, a connection between the two new edges should be added.
                         connection_element = ET.Element('connection', {'from': new_edge, 'to': f'-{new_edge}', 'fromLane': '0', 'toLane': '0'})
                         connection_element.text = None  # Ensure there's no text content
                         connection_element.tail = "\n\t\t"
                         updated_conn_root.append(connection_element)
+                        # Then, it can be updated in crossing.
+                        crossing.set('edges', f'{new_edge} -{new_edge}')
+
+                    elif crossing.get('edges') == f'-{old_edge} {old_edge}':
+                        # First, a connection between the two new edges should be added.
+                        connection_element = ET.Element('connection', {'from': f'-{new_edge}', 'to': new_edge, 'fromLane': '0', 'toLane': '0'})
+                        connection_element.text = None  # Ensure there's no text content
+                        connection_element.tail = "\n\t\t"
+                        updated_conn_root.append(connection_element)
 
                         # Then, it can be updated in crossing.
-                        c.set('edges', f'{new_edge} -{new_edge}')
-                
+                        crossing.set('edges', f'-{new_edge} {new_edge}')
+
         # Add new connections (between top and bottom edges) and crossings (making use of new_veh_edges_to_add).
         # All tags that refer to the old edges should now refer to the new edges (if the refering edges fall to the left, they will refer to the new left edge and vice versa) 
         # They have the edges attribute (which are edges to the right) and outlineShape attribute (the shape of the crossing): 
-        # TODO: outlineShape seems hard to specify, lets not specify and see what it does. They mention it as optional here: https://github.com/eclipse-sumo/sumo/issues/11668
+        # outlineShape seems hard to specify, lets not specify and see what it does. They mention it as optional here: https://github.com/eclipse-sumo/sumo/issues/11668
+        # TODO: same node contains right and left components which creates two crossings instead of one. Find a way to avoid this.
         for e1, e1_data in new_veh_edges_to_add['top'].items(): # Just looking at one direction (top) is enough.
             e2 = e1.replace('-', '') # To get the bottom edge id.
-            # First, a connection between the two edges e1 and e2 should be added.
-            connection_element = ET.Element('connection', {'from': e1, 'to': e2, 'fromLane': '0', 'toLane': '0'})
-            connection_element.text = None  # Ensure there's no text content
-            connection_element.tail = "\n\t\t"
-            updated_conn_root.append(connection_element)
+            # U turn (No need)
+            # # First, a connection between the two edges e1 and e2 should be added.
+            # connection_element = ET.Element('connection', {'from': e1, 'to': e2, 'fromLane': '0', 'toLane': '0'})
+            # connection_element.text = None  # Ensure there's no text content
+            # connection_element.tail = "\n\t\t"
+            # updated_conn_root.append(connection_element)
 
-            print(f"\n\ne1: {e1}, e2: {e2}\n\n")
+            # print(f"\n\ne1: {e1}, e2: {e2}\n\n")
             
             # Then, a crossing element should be added with those edges.
             middle_node = e1_data.get('new_node')
@@ -1192,19 +1199,8 @@ class DesignEnv(gym.Env):
             if edge.get('id') in old_veh_edges_to_remove:
                 edge_root.remove(edge)
 
-        # TL logic additions
+        # TL 4. Add the new TL logics.
         for nid in middle_nodes_to_add:
-            
-            # For a complete TL definition, the pedestrian edges that connect the "mid node with top node" and "mid node with bottom node" should also be added as a connection.
-            top_edge = f"edge_{'_'.join(nid.split('_')[0:2])}_top_{nid}"
-            bottom_edge = f"edge_{'_'.join(nid.split('_')[0:2])}_bottom_{nid}"
-            tl_conn_attribs = {'from': top_edge, 'to': bottom_edge, 'fromLane': "0", 'toLane': "0", 'tl': nid, 'linkIndex': str(2)}
-            tl_conn_element = ET.Element('connection', tl_conn_attribs)
-            tl_conn_element.text = None  # Ensure there's no text content
-            tl_conn_element.tail = "\n\t"
-            traffic_light_root.append(tl_conn_element)
-            
-            node_data = networkx_graph.nodes[nid]
             tlLogic_element = ET.Element('tlLogic', id=nid, type='static', programID='0', offset='0')
             tlLogic_element.text = "\n\t\t" # Inside <tlLogic>: phases start at two tabs
 
@@ -1220,7 +1216,44 @@ class DesignEnv(gym.Env):
 
             tlLogic_element.tail = "\n\t"
             traffic_light_root.append(tlLogic_element)
-                
+        
+        # TL 5. Add all the new connections.
+        for conn in tl_connections_to_add:
+            conn.text = None  # Ensure there's no text content
+            conn.tail = "\n\t"
+            traffic_light_root.append(conn)
+
+        for nid in middle_nodes_to_add:
+            # For a complete TL definition, the pedestrian edges that connect the "mid node with top node" and "mid node with bottom node" should also be added as a connection.
+            top_edge = f"edge_{'_'.join(nid.split('_')[0:2])}_top_{nid}" # top to mid
+            bottom_edge = f"edge_{nid}_{'_'.join(nid.split('_')[0:2])}_bottom" # mid to bottom
+            tl_conn_attribs = {'from': top_edge, 'to': bottom_edge, 'fromLane': "0", 'toLane': "0", 'tl': nid, 'linkIndex': str(2)}
+            tl_conn_element = ET.Element('connection', tl_conn_attribs)
+            tl_conn_element.text = None  # Ensure there's no text content
+            tl_conn_element.tail = "\n\t"
+            traffic_light_root.append(tl_conn_element)
+
+            conn_element = ET.Element('connection', {'from': top_edge, 'to': bottom_edge, 'fromLane': '0', 'toLane': '0'})
+            conn_element.text = None  # Ensure there's no text content
+            conn_element.tail = "\n\t\t"
+            updated_conn_root.append(conn_element)
+
+        # TL 6. The default crossings in TL (that were kept above) may still refer to the old edges.
+        # In addition, there may also be a connection of the -ve and +ve sides of the old edges.
+        for direction, direction_data in extreme_edge_dict.items():
+            old_edge = direction_data['old']
+            if old_edge in old_veh_edges_to_remove:
+                new_edge = direction_data['new']
+                for conn in traffic_light_root.findall('connection'):
+                    if conn.get('from') == old_edge: # positive
+                        conn.set('from', new_edge)
+                    if conn.get('from') == f"-{old_edge}": # negative
+                        conn.set('from', f"-{new_edge}") 
+                    if conn.get('to') == old_edge: # positive
+                        conn.set('to', new_edge)
+                    if conn.get('to') == f"-{old_edge}": # negative
+                        conn.set('to', f"-{new_edge}")
+
         # Respective changes to the connections file.
         # All the connections present in the TLL file should also be present in the connections file. But the connection file will have more of them.
         # In iteration base, there will be a bunch of connections to remove from original file (remove connections with the same from and to edges).
@@ -1267,7 +1300,19 @@ class DesignEnv(gym.Env):
 
         # Generate the final net file using netconvert
         output_file = f'{self.network_dir}/network_iteration_{iteration}.net.xml'
-        command = f"netconvert --node-files={iteration_prefix}.nod.xml --edge-files={iteration_prefix}.edg.xml --connection-files={iteration_prefix}.con.xml --type-files={iteration_prefix}.typ.xml --tllogic-files={iteration_prefix}.tll.xml --output-file={output_file}"
+        netconvert_log_file = f'SUMO_files/netconvert_log.txt'
+        command = (
+            f"netconvert "
+            f"--node-files={iteration_prefix}.nod.xml "
+            f"--edge-files={iteration_prefix}.edg.xml "
+            f"--connection-files={iteration_prefix}.con.xml "
+            f"--type-files={iteration_prefix}.typ.xml "
+            f"--tllogic-files={iteration_prefix}.tll.xml "
+            f"--output-file={output_file} "
+            f"--log={netconvert_log_file}"
+            # f"--junctions.join-same"
+            # f"--edges.join"
+        )
 
         try:
             result = subprocess.run(command, shell=True, check=True, capture_output=True, text=True)

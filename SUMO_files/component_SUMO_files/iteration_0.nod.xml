@@ -81,13 +81,13 @@
     <node id="9727779401" x="2341.41" y="2565.94" type="priority" />
     <node id="9727779405" x="2363.94" y="2623.01" type="priority" />
     <node id="9727779406" x="2361.22" y="2632.86" type="priority" />
-    <node id="9727816623" x="2452.25" y="2645.55" type="traffic_light" tl="9727816623" />
+    <node id="9727816623" x="2452.25" y="2645.55" type="dead_end" />
     <node id="9727816625" x="2452.03" y="2636.00" type="dead_end" />
     <node id="9727816629" x="2352.07" y="2619.84" type="dead_end" />
     <node id="9727816638" x="2155.65" y="2615.25" type="dead_end" />
     <node id="9727816658" x="2156.45" y="2544.69" type="dead_end" />
     <node id="9727816846" x="2331.20" y="2619.28" type="dead_end" />
-    <node id="9727816850" x="2331.40" y="2628.38" type="traffic_light" tl="9727816850" />
+    <node id="9727816850" x="2331.40" y="2628.38" type="dead_end" />
     <node id="9727816851" x="2331.21" y="2639.04" type="dead_end" />
     <node id="9727816862" x="2241.14" y="2617.93" type="dead_end" />
     <node id="9727816863" x="2156.26" y="2511.88" type="dead_end" />
@@ -110,7 +110,7 @@
     <node id="9740157142" x="2485.99" y="2637.54" type="dead_end" />
     <node id="9740157145" x="2518.53" y="2638.26" type="dead_end" />
     <node id="9740157154" x="2566.97" y="2639.86" type="dead_end" />
-    <node id="9740157155" x="2566.98" y="2647.35" type="traffic_light" tl="9740157155" />
+    <node id="9740157155" x="2566.98" y="2647.35" type="dead_end" />
     <node id="9740157156" x="2573.94" y="2613.87" type="dead_end" />
     <node id="9740157158" x="2573.91" y="2639.93" type="dead_end" />
     <node id="9740157159" x="2573.88" y="2630.08" type="dead_end" />
@@ -122,10 +122,10 @@
     <node id="9740157174" x="2532.01" y="2637.41" type="dead_end" />
     <node id="9740157176" x="2542.30" y="2605.92" type="dead_end" />
     <node id="9740157180" x="2682.53" y="2636.96" type="dead_end" />
-    <node id="9740157194" x="2786.37" y="2645.51" type="traffic_light" tl="9740157194" />
+    <node id="9740157194" x="2786.37" y="2645.51" type="dead_end" />
     <node id="9740157195" x="2786.63" y="2656.05" type="dead_end" />
     <node id="9740157204" x="2786.38" y="2633.95" type="dead_end" />
-    <node id="9740157209" x="2829.85" y="2645.06" type="traffic_light" tl="9740157209" />
+    <node id="9740157209" x="2829.85" y="2645.06" type="dead_end" />
     <node id="9740157210" x="2829.62" y="2655.93" type="dead_end" />
     <node id="9740157211" x="2830.01" y="2637.34" type="dead_end" />
     <node id="9740411689" x="2545.11" y="2617.82" type="priority" />
@@ -152,7 +152,7 @@
     <node id="9740484522" x="2865.95" y="2638.33" type="priority" />
     <node id="9740484523" x="2844.10" y="2637.73" type="priority" />
     <node id="9740484524" x="2894.87" y="2657.61" type="dead_end" />
-    <node id="9740484527" x="2894.96" y="2647.68" type="traffic_light" tl="9740484527" />
+    <node id="9740484527" x="2894.96" y="2647.68" type="dead_end" />
     <node id="9740484528" x="2895.09" y="2639.97" type="dead_end" />
     <node id="9740484531" x="2928.21" y="2661.41" type="dead_end" />
     <node id="J0" x="2284.26" y="2693.28" type="dead_end" />
@@ -183,7 +183,7 @@
         <param key="origEdgeIds" value="-1060131306#1 -1060131306#2 -16666012#0 -16666012#1 1054116929#3 1054116929#8 1060131306#1 1060131306#2 1078803478#1 16666012#0 16666012#1 452522817#0 773672648#1 773672649#0" />
         <param key="origId" value="172228464 482708521 9687148201 9687148202 9687148203 9687148204 9687148205 9687148206 9740155237" />
     </node>
-    <node id="cluster_9740157181_9740483933" x="2679.47" y="2647.24" type="traffic_light" tl="cluster_9740157181_9740483933">
+    <node id="cluster_9740157181_9740483933" x="2679.47" y="2647.24" type="dead_end">
         <param key="origEdgeIds" value="-16666012#10 16666012#10" />
         <param key="origId" value="9740157181 9740483933" />
     </node>
@@ -195,11 +195,11 @@
         <param key="origEdgeIds" value="-16666012#8 16666012#8" />
         <param key="origId" value="9740411700 9740411702" />
     </node>
-<node id="9740157155_c0_mid" x="2566.99" y="2648.005" type="traffic_light" tl="9740157155_c0_mid" />
-	<node id="cluster_9740157181_9740483933_c0_mid" x="2682.3050000000003" y="2646.035" type="traffic_light" tl="cluster_9740157181_9740483933_c0_mid" />
-	<node id="9727816850_c0_mid" x="2331.205" y="2629.16" type="traffic_light" tl="9727816850_c0_mid" />
-	<node id="9727816623_c0_mid" x="2452.2650000000003" y="2645.615" type="traffic_light" tl="9727816623_c0_mid" />
-	<node id="9740157194_c0_mid" x="2786.505" y="2645.0" type="traffic_light" tl="9740157194_c0_mid" />
+<node id="9740157194_c0_mid" x="2786.51" y="2645.0" type="traffic_light" tl="9740157194_c0_mid" />
+	<node id="9727816623_c0_mid" x="2452.27" y="2645.61" type="traffic_light" tl="9727816623_c0_mid" />
 	<node id="9740157209_c0_mid" x="2827.95" y="2646.58" type="traffic_light" tl="9740157209_c0_mid" />
 	<node id="9740484527_c0_mid" x="2894.98" y="2648.79" type="traffic_light" tl="9740484527_c0_mid" />
+	<node id="9740157155_c0_mid" x="2566.99" y="2648.01" type="traffic_light" tl="9740157155_c0_mid" />
+	<node id="9727816850_c0_mid" x="2331.2" y="2629.16" type="traffic_light" tl="9727816850_c0_mid" />
+	<node id="cluster_9740157181_9740483933_c0_mid" x="2682.31" y="2646.03" type="traffic_light" tl="cluster_9740157181_9740483933_c0_mid" />
 	</nodes>
