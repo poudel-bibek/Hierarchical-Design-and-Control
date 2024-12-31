@@ -559,9 +559,9 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
                 # Split edge shape points (note: for top edges, right is from, left is to)
                 # Split points without including end point
                 right_edge_points = [p for p in edge_shape_points if p[0] >= x_coord]
-                left_edge_points = [p for p in edge_shape_points if p[0] < x_coord]
+                left_edge_points = [p for p in edge_shape_points if p[0] <= x_coord]
                 right_lane_points = [p for p in lane_shape_points if p[0] >= x_coord]
-                left_lane_points = [p for p in lane_shape_points if p[0] < x_coord]
+                left_lane_points = [p for p in lane_shape_points if p[0] <= x_coord]
                 
                 # Convert points back to shape strings
                 right_edge_shape = ' '.join(f"{x:.2f},{y:.2f}" for x, y in right_edge_points)
@@ -571,7 +571,7 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
                 
                 # Add new edges to edges_to_add
                 # Right part of split (from original from to middle)
-                right_edge_id_top = f"{edge_id}right{i}" # The same edge can be split multiple times. Value of i not neceaasrily corresponding to number of times split.
+                right_edge_id_top = f"{edge_id}_right{i}" # The same edge can be split multiple times. Value of i not neceaasrily corresponding to number of times split.
                 right_edge_data = {
                     'new_node': m_node,
                     'from': edge_data['from'],
@@ -587,7 +587,7 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
                 all_edges[right_edge_id_top] = right_edge_data # only from_x and to_x are used.
 
                 # Left part of split (from middle to original to)
-                left_edge_id_top = f"{edge_id}left{i}" # The same edge can be split multiple times.
+                left_edge_id_top = f"{edge_id}_left{i}" # The same edge can be split multiple times.
                 left_edge_data = {
                     'new_node': m_node,
                     'from': m_node,
@@ -647,9 +647,9 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
                 
                 # Split edge shape points (note: for bottom edges, left is from, right is to)
                 # Split points without including end point
-                right_edge_points = [p for p in edge_shape_points if p[0] > x_coord]
+                right_edge_points = [p for p in edge_shape_points if p[0] >= x_coord]
                 left_edge_points = [p for p in edge_shape_points if p[0] <= x_coord]
-                right_lane_points = [p for p in lane_shape_points if p[0] > x_coord]
+                right_lane_points = [p for p in lane_shape_points if p[0] >= x_coord]
                 left_lane_points = [p for p in lane_shape_points if p[0] <= x_coord]
                 
                 # Convert points back to shape strings
@@ -660,7 +660,7 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
                 
                 # Add new edges to edges_to_add
                 # Right part of split (In bottom, 'to' nodes are in the right, 'from' nodes are in the left)
-                right_edge_id_bottom = f"{edge_id}right{i}" # The same edge can be split multiple times.
+                right_edge_id_bottom = f"{edge_id}_right{i}" # The same edge can be split multiple times.
                 right_edge_data = {
                     'new_node': m_node,
                     'to': edge_data['to'],
@@ -675,7 +675,7 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
                 all_edges[right_edge_id_bottom] = right_edge_data # only from_x and to_x are used.
 
                 # Left part of split
-                left_edge_id_bottom = f"{edge_id}left{i}" # The same edge can be split multiple times.
+                left_edge_id_bottom = f"{edge_id}_left{i}" # The same edge can be split multiple times.
                 left_edge_data = {
                     'new_node': m_node,
                     'to': m_node,

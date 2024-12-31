@@ -974,12 +974,12 @@ class DesignEnv(gym.Env):
         # The edge could be from a type = "regular" node to a type = "regular" node or from a type = "regular" node to a type = "middle" node (crossing).
         for (f, t) in edges_to_add:
 
-            # For edges associated with TL, we need to make them directional i.e., top to mid and mid to bottom.
-            f_type = networkx_graph.nodes[f].get('type', 'regular') # If no type, it is a regular node.
-            t_type = networkx_graph.nodes[t].get('type', 'regular')
-            # only this (connections from bottom to middle) is problematic, switch the f and t.
-            if (f_type == 'regular' and t_type == 'middle') and "bottom" in f: 
-                f, t = t, f
+            # # For edges associated with TL, we need to make them directional i.e., top to mid and mid to bottom.
+            # f_type = networkx_graph.nodes[f].get('type', 'regular') # If no type, it is a regular node.
+            # t_type = networkx_graph.nodes[t].get('type', 'regular')
+            # # only this (connections from bottom to middle) is problematic, switch the f and t.
+            # if (f_type == 'regular' and t_type == 'middle') and "bottom" in f: 
+            #     f, t = t, f
 
             # Do Regular to Regular and Regular to Middle need some different treatment?
             edge_data = networkx_graph.get_edge_data(f, t)
@@ -1005,7 +1005,6 @@ class DesignEnv(gym.Env):
             f_x, f_y = round(f_data['pos'][0], 2), round(f_data['pos'][1], 2)
             t_x, t_y = round(t_data['pos'][0], 2), round(t_data['pos'][1], 2)
             shape = f'{f_x},{f_y} {t_x},{t_y}'
-            #print(f"Shape: {shape}")
 
             edge_element = ET.Element('edge', edge_attribs)
             edge_element.text = "\n\t\t" 
@@ -1017,17 +1016,14 @@ class DesignEnv(gym.Env):
                 allow='pedestrian',
                 width=str(width),
                 speed='2.78', 
-                shape=shape
-            )
+                shape=shape)
 
             lane_element.text = "\n\t\t\t" 
             param_element = ET.SubElement(lane_element, 'param', key='origId', value=edge_id)
             param_element.tail = "\n\t\t" 
             lane_element.tail = "\n\t"
             edge_element.tail = "\n\t"
-
             edge_root.append(edge_element)
-
 
         # Every middle node (present in middle_nodes_to_add) falls on a certain vehicle edge. Split the vehicle edges into two new edges.
         # The new edge names have left and right attached to the old names (the new edges inherit respective portions of the edge shape and lane shape property of the old edge)
@@ -1172,27 +1168,38 @@ class DesignEnv(gym.Env):
         # Add new connections (between top and bottom edges) and crossings (making use of new_veh_edges_to_add).
         # All tags that refer to the old edges should now refer to the new edges (if the refering edges fall to the left, they will refer to the new left edge and vice versa) 
         # They have the edges attribute (which are edges to the right) and outlineShape attribute (the shape of the crossing): 
+        
         # outlineShape seems hard to specify, lets not specify and see what it does. They mention it as optional here: https://github.com/eclipse-sumo/sumo/issues/11668
-        # TODO: same node contains right and left components which creates two crossings instead of one. Find a way to avoid this.
+        # TODO: same node contains right and left components which creates two crossings instead of one. Find a way to avoid this (Only add the right part of the crossing).
+    
         for e1, e1_data in new_veh_edges_to_add['top'].items(): # Just looking at one direction (top) is enough.
-            e2 = e1.replace('-', '') # To get the bottom edge id.
-            # U turn (No need)
-            # # First, a connection between the two edges e1 and e2 should be added.
-            # connection_element = ET.Element('connection', {'from': e1, 'to': e2, 'fromLane': '0', 'toLane': '0'})
-            # connection_element.text = None  # Ensure there's no text content
-            # connection_element.tail = "\n\t\t"
-            # updated_conn_root.append(connection_element)
+            # Add only the right part: 
+            if 'right' in e1.split('_')[-1]:
 
-            # print(f"\n\ne1: {e1}, e2: {e2}\n\n")
-            
-            # Then, a crossing element should be added with those edges.
-            middle_node = e1_data.get('new_node')
-            width = networkx_graph.nodes[middle_node].get('width')
-            crossing_attribs = {'node': middle_node, 'edges': e1 + ' ' + e2, 'priority': '1', 'width': str(width)} # Width/ Thickness needs to come from the model.
-            crossing_element = ET.Element('crossing', crossing_attribs)
-            crossing_element.text = None  # Ensure there's no text content
-            crossing_element.tail = "\n\t\t"
-            updated_conn_root.append(crossing_element)
+                e2 = e1.replace('-', '') # To get the bottom edge id.
+
+                # U turn (No need)
+                # # First, a connection between the two edges e1 and e2 should be added.
+                # connection_element = ET.Element('connection', {'from': e1, 'to': e2, 'fromLane': '0', 'toLane': '0'})
+                # connection_element.text = None  # Ensure there's no text content
+                # connection_element.tail = "\n\t\t"
+                # updated_conn_root.append(connection_element)
+
+                # print(f"\n\ne1: {e1}, e2: {e2}\n\n")
+                
+
+                # Outline shape just needs 4 coordinates. The difference between x_coordinates is equal to width. 
+                # The difference between y_coordinates is equal to size of road (fixed)
+
+
+                # Then, a crossing element should be added with those edges.
+                middle_node = e1_data.get('new_node')
+                width = networkx_graph.nodes[middle_node].get('width')
+                crossing_attribs = {'node': middle_node, 'edges': e1 + ' ' + e2, 'priority': '1', 'width': str(width)} # Width/ Thickness needs to come from the model.
+                crossing_element = ET.Element('crossing', crossing_attribs)
+                crossing_element.text = None  # Ensure there's no text content
+                crossing_element.tail = "\n\t\t"
+                updated_conn_root.append(crossing_element)
 
         # Delete the old edges from the edg file i.e., just remove the tags with old edge ids.
         for edge in edge_root.findall('edge'):
@@ -1223,20 +1230,18 @@ class DesignEnv(gym.Env):
             conn.tail = "\n\t"
             traffic_light_root.append(conn)
 
-        for nid in middle_nodes_to_add:
-            # For a complete TL definition, the pedestrian edges that connect the "mid node with top node" and "mid node with bottom node" should also be added as a connection.
-            top_edge = f"edge_{'_'.join(nid.split('_')[0:2])}_top_{nid}" # top to mid
-            bottom_edge = f"edge_{nid}_{'_'.join(nid.split('_')[0:2])}_bottom" # mid to bottom
-            tl_conn_attribs = {'from': top_edge, 'to': bottom_edge, 'fromLane': "0", 'toLane': "0", 'tl': nid, 'linkIndex': str(2)}
-            tl_conn_element = ET.Element('connection', tl_conn_attribs)
-            tl_conn_element.text = None  # Ensure there's no text content
-            tl_conn_element.tail = "\n\t"
-            traffic_light_root.append(tl_conn_element)
+        # for nid in middle_nodes_to_add:
+        #     # For a complete TL definition, the pedestrian edges that connect the "mid node with top node" and "mid node with bottom node" should also be added as a connection.
+        #     # top_edge = f"edge_{'_'.join(nid.split('_')[0:2])}_top_{nid}" # top to mid
+        #     # bottom_edge = f"edge_{nid}_{'_'.join(nid.split('_')[0:2])}_bottom" # mid to bottom
 
-            conn_element = ET.Element('connection', {'from': top_edge, 'to': bottom_edge, 'fromLane': '0', 'toLane': '0'})
-            conn_element.text = None  # Ensure there's no text content
-            conn_element.tail = "\n\t\t"
-            updated_conn_root.append(conn_element)
+        #     top_edge = f"edge_{'_'.join(nid.split('_')[0:2])}_top_{nid}"
+        #     bottom_edge = f"edge_{'_'.join(nid.split('_')[0:2])}_bottom_{nid}"
+        #     tl_conn_attribs = {'from': top_edge, 'to': bottom_edge, 'fromLane': "0", 'toLane': "0", 'tl': nid, 'linkIndex': str(2)}
+        #     tl_conn_element = ET.Element('connection', tl_conn_attribs)
+        #     tl_conn_element.text = None  # Ensure there's no text content
+        #     tl_conn_element.tail = "\n\t"
+        #     traffic_light_root.append(tl_conn_element)
 
         # TL 6. The default crossings in TL (that were kept above) may still refer to the old edges.
         # In addition, there may also be a connection of the -ve and +ve sides of the old edges.

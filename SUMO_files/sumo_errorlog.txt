@@ -1,164 +1,65 @@
-Warning: Teleporting vehicle '63'; waited too long (yield), lane='1060131306#0_0', time=313.00.
-Warning: Vehicle '63' ends teleporting on edge '16666012#2', time=313.00.
-Warning: Person '1035' is jammed on edge ':iter1_2_mid_c0', time=404.00.
-Warning: Person '1286' is jammed on edge ':iter1_2_mid_c0', time=404.00.
-Warning: Person '1373' is jammed on edge ':iter1_2_mid_c0', time=404.00.
-Warning: Person '2086' is jammed on edge ':iter1_2_mid_c0', time=405.00.
-Warning: Person '1359' is jammed on edge ':iter1_2_mid_c0', time=406.00.
-Warning: Person '1332' is jammed on edge ':iter1_2_mid_c0', time=407.00.
-Warning: Person '1325' is jammed on edge ':iter1_2_mid_c0', time=417.00.
-Warning: Person '1286' is jammed on edge ':iter1_2_mid_c0', time=418.00.
-Warning: Person '1292' is jammed on edge ':iter1_2_mid_c0', time=419.00.
-Warning: Person '1386' is jammed on edge ':iter1_2_mid_c0', time=420.00.
-Warning: Person '1097' is jammed on edge ':iter1_2_mid_c0', time=431.00.
-Warning: Person '1346' is jammed on edge ':iter1_2_mid_c0', time=432.00.
-Warning: Teleporting vehicle '198'; waited too long (yield), lane='-16666012#2_0', time=446.00.
-Warning: Vehicle '198' ends teleporting on edge '452522817#1', time=446.00.
-Warning: Person '1055' is jammed on edge ':iter1_2_mid_c0', time=507.00.
-Warning: Person '2200' is jammed on edge ':iter1_2_mid_c0', time=511.00.
-Warning: Person '1283' is jammed on edge ':iter1_2_mid_c0', time=511.00.
-Warning: Person '1392' is jammed on edge ':iter1_2_mid_c0', time=513.00.
-Warning: Person '1291' is jammed on edge ':iter1_2_mid_c0', time=516.00.
-Warning: Person '2039' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w4', time=517.00.
-Warning: Person '1941' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=538.00.
-Warning: Person '57' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w4', time=548.00.
-Warning: Person '1948' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=583.00.
-Warning: Teleporting vehicle '5'; waited too long (yield), lane='1060131306#0_0', time=617.00.
-Warning: Vehicle '5' ends teleporting on edge '16666012#2', time=617.00.
-Warning: Person '1463' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=644.00.
-Warning: Person '2209' is jammed on edge ':iter1_2_mid_c0', time=706.00.
-Warning: Person '1050' is jammed on edge ':iter1_2_mid_c0', time=707.00.
-Warning: Person '1327' is jammed on edge ':iter1_2_mid_c0', time=710.00.
-Warning: Person '1039' is jammed on edge ':iter1_2_mid_c0', time=711.00.
-Warning: Person '2219' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w4', time=717.00.
-Warning: Teleporting vehicle '142'; waited too long (yield), lane='-16666012#2_0', time=751.00.
-Warning: Vehicle '142' ends teleporting on edge '-1060131306#0', time=751.00.
-Warning: Teleporting vehicle '169'; waited too long (jam), lane='-16666012#4left2_0', time=785.00.
-Warning: Vehicle '169' ends teleporting on edge '-16666012#3', time=786.00.
-Warning: Person '833' is jammed on edge ':iter1_2_mid_c0', time=807.00.
-Warning: Person '616' is jammed on edge ':iter1_2_mid_c0', time=807.00.
-Warning: Person '1393' is jammed on edge ':iter1_2_mid_c0', time=810.00.
-Warning: Person '1000' is jammed on edge ':iter1_2_mid_c0', time=811.00.
-Warning: Person '2210' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w4', time=822.00.
-Warning: Person '1945' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=840.00.
-Warning: Person '2211' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w4', time=850.00.
-Warning: Person '2036' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=886.00.
-Warning: Person '420' is jammed on edge ':iter1_2_mid_c0', time=903.00.
-Warning: Person '1352' is jammed on edge ':iter1_2_mid_c0', time=904.00.
-Warning: Person '1815' is jammed on edge ':iter1_2_mid_c0', time=904.00.
-Warning: Person '1022' is jammed on edge ':iter1_2_mid_c0', time=906.00.
-Warning: Person '1044' is jammed on edge ':iter1_2_mid_c0', time=915.00.
-Warning: Person '1009' is jammed on edge ':iter1_2_mid_c0', time=917.00.
-Warning: Person '1270' is jammed on edge ':iter1_2_mid_c0', time=917.00.
-Warning: Person '1371' is jammed on edge ':iter1_2_mid_c0', time=917.00.
-Warning: Person '837' is jammed on edge ':iter1_2_mid_c0', time=918.00.
-Warning: Person '416' is jammed on edge ':iter1_2_mid_c0', time=920.00.
-Warning: Teleporting vehicle '19'; waited too long (yield), lane='1060131306#0_0', time=922.00.
-Warning: Vehicle '19' ends teleporting on edge '16666012#2', time=922.00.
-Warning: Person '1054' is jammed on edge ':iter1_2_mid_c0', time=929.00.
-Warning: Person '1020' is jammed on edge ':iter1_2_mid_c0', time=931.00.
-Warning: Person '1371' is jammed on edge ':iter1_2_mid_c0', time=934.00.
-Warning: Person '56' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w4', time=968.00.
-Warning: Person '1953' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=974.00.
-Warning: Person '1470' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=980.00.
-Warning: Person '1731' is jammed on edge ':iter1_2_mid_c0', time=1002.00.
-Warning: Person '588' is jammed on edge ':iter1_2_mid_c0', time=1003.00.
-Warning: Person '1053' is jammed on edge ':iter1_2_mid_c0', time=1004.00.
-Warning: Person '1331' is jammed on edge ':iter1_2_mid_c0', time=1005.00.
-Warning: Person '1267' is jammed on edge ':iter1_2_mid_c0', time=1006.00.
-Warning: Person '1330' is jammed on edge ':iter1_2_mid_c0', time=1006.00.
-Warning: Person '1007' is jammed on edge ':iter1_2_mid_c0', time=1007.00.
-Warning: Person '2204' is jammed on edge ':iter1_2_mid_c0', time=1018.00.
-Warning: Person '1025' is jammed on edge ':iter1_2_mid_c0', time=1019.00.
-Warning: Person '1322' is jammed on edge ':iter1_2_mid_c0', time=1019.00.
-Warning: Person '1306' is jammed on edge ':iter1_2_mid_c0', time=1020.00.
-Warning: Person '13' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w4', time=1020.00.
-Warning: Person '605' is jammed on edge ':iter1_2_mid_c0', time=1030.00.
-Warning: Person '1330' is jammed on edge ':iter1_2_mid_c0', time=1031.00.
-Warning: Person '1360' is jammed on edge ':iter1_2_mid_c0', time=1032.00.
-Warning: Person '2199' is jammed on edge ':iter1_2_mid_c0', time=1032.00.
-Warning: Person '1053' is jammed on edge ':iter1_2_mid_c0', time=1042.00.
-Warning: Person '1348' is jammed on edge ':iter1_2_mid_c0', time=1044.00.
-Warning: Teleporting vehicle '111'; waited too long (yield), lane='-16666012#2_0', time=1055.00.
-Warning: Vehicle '111' ends teleporting on edge '773672649#1', time=1055.00.
-Warning: Person '1494' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=1101.00.
-Warning: Person '1356' is jammed on edge ':iter1_2_mid_c0', time=1106.00.
-Warning: Person '590' is jammed on edge ':iter1_2_mid_c0', time=1107.00.
-Warning: Person '587' is jammed on edge ':iter1_2_mid_c0', time=1108.00.
-Warning: Person '2208' is jammed on edge ':iter1_2_mid_c0', time=1108.00.
-Warning: Person '1260' is jammed on edge ':iter1_2_mid_c0', time=1109.00.
-Warning: Person '1363' is jammed on edge ':iter1_2_mid_c0', time=1119.00.
-Warning: Person '419' is jammed on edge ':iter1_2_mid_c0', time=1120.00.
-Warning: Person '2208' is jammed on edge ':iter1_2_mid_c0', time=1121.00.
-Warning: Person '2220' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w4', time=1126.00.
-Warning: Teleporting vehicle '195'; waited too long (jam), lane='-16666012#6right0_0', time=1128.00.
-Warning: Vehicle '195' ends teleporting on edge '-16666012#6left0', time=1128.00.
-Warning: Person '2194' is jammed on edge ':iter1_2_mid_c0', time=1131.00.
-Warning: Teleporting vehicle '187'; waited too long (jam), lane='-16666012#9right1_0', time=1131.00.
-Warning: Vehicle '187' ends teleporting on edge '-16666012#9left1', time=1131.00.
-Warning: Person '1334' is jammed on edge ':iter1_2_mid_c0', time=1133.00.
-Warning: Person '1957' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=1142.00.
-Warning: Person '1502' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=1150.00.
-Warning: Person '2216' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w4', time=1153.00.
-Warning: Person '1515' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=1158.00.
-Warning: Person '1503' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=1189.00.
-Warning: Person '1488' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=1193.00.
-Warning: Person '1514' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=1193.00.
-Warning: Person '1974' is jammed on edge ':iter1_2_mid_c0', time=1202.00.
-Warning: Person '1341' is jammed on edge ':iter1_2_mid_c0', time=1203.00.
-Warning: Person '1728' is jammed on edge ':iter1_2_mid_c0', time=1203.00.
-Warning: Person '1016' is jammed on edge ':iter1_2_mid_c0', time=1204.00.
-Warning: Person '1917' is jammed on edge ':iter1_2_mid_c0', time=1205.00.
-Warning: Person '424' is jammed on edge ':iter1_2_mid_c0', time=1211.00.
-Warning: Person '1341' is jammed on edge ':iter1_2_mid_c0', time=1217.00.
-Warning: Person '1317' is jammed on edge ':iter1_2_mid_c0', time=1218.00.
-Warning: Teleporting vehicle '92'; waited too long (yield), lane='1060131306#0_0', time=1227.00.
-Warning: Vehicle '92' ends teleporting on edge '16666012#2', time=1227.00.
-Warning: Person '998' is jammed on edge ':iter1_2_mid_c0', time=1228.00.
-Warning: Person '1002' is jammed on edge ':iter1_2_mid_c0', time=1228.00.
-Warning: Person '1374' is jammed on edge ':iter1_2_mid_c0', time=1229.00.
-Warning: Person '2206' is jammed on edge ':iter1_2_mid_c0', time=1241.00.
-Warning: Person '1287' is jammed on edge ':iter1_2_mid_c0', time=1241.00.
-Warning: Person '1516' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=1282.00.
-Warning: Person '60' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w4', time=1283.00.
-Warning: Person '1387' is jammed on edge ':iter1_2_mid_c0', time=1310.00.
-Warning: Person '1303' is jammed on edge ':iter1_2_mid_c0', time=1310.00.
-Warning: Person '1010' is jammed on edge ':iter1_2_mid_c0', time=1310.00.
-Warning: Person '1355' is jammed on edge ':iter1_2_mid_c0', time=1311.00.
-Warning: Person '2198' is jammed on edge ':iter1_2_mid_c0', time=1313.00.
-Warning: Person '1378' is jammed on edge ':iter1_2_mid_c0', time=1322.00.
-Warning: Person '1303' is jammed on edge ':iter1_2_mid_c0', time=1324.00.
-Warning: Person '1491' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=1338.00.
-Warning: Teleporting vehicle '129'; waited too long (yield), lane='-16666012#2_0', time=1359.00.
-Warning: Vehicle '129' ends teleporting on edge '773672649#1', time=1359.00.
-Warning: Teleporting vehicle '162'; waited too long (jam), lane='-16666012#4left2_0', time=1393.00.
-Warning: Vehicle '162' ends teleporting on edge '-16666012#3', time=1393.00.
-Warning: Person '1480' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=1399.00.
-Warning: Person '1804' is jammed on edge ':iter1_2_mid_c0', time=1402.00.
-Warning: Person '1796' is jammed on edge ':iter1_2_mid_c0', time=1402.00.
-Warning: Person '1040' is jammed on edge ':iter1_2_mid_c0', time=1403.00.
-Warning: Person '2205' is jammed on edge ':iter1_2_mid_c0', time=1403.00.
-Warning: Person '2197' is jammed on edge ':iter1_2_mid_c0', time=1403.00.
-Warning: Person '1294' is jammed on edge ':iter1_2_mid_c0', time=1403.00.
-Warning: Person '1691' is jammed on edge ':iter1_2_mid_c0', time=1403.00.
-Warning: Person '835' is jammed on edge ':iter1_2_mid_c0', time=1404.00.
-Warning: Person '1903' is jammed on edge ':iter1_2_mid_c0', time=1414.00.
-Warning: Person '1838' is jammed on edge ':iter1_2_mid_c0', time=1414.00.
-Warning: Person '1281' is jammed on edge ':iter1_2_mid_c0', time=1415.00.
-Warning: Person '1335' is jammed on edge ':iter1_2_mid_c0', time=1415.00.
-Warning: Person '414' is jammed on edge ':iter1_2_mid_c0', time=1415.00.
-Warning: Person '1290' is jammed on edge ':iter1_2_mid_c0', time=1416.00.
-Warning: Person '1384' is jammed on edge ':iter1_2_mid_c0', time=1417.00.
-Warning: Person '2205' is jammed on edge ':iter1_2_mid_c0', time=1428.00.
-Warning: Person '1376' is jammed on edge ':iter1_2_mid_c0', time=1428.00.
-Warning: Person '1319' is jammed on edge ':iter1_2_mid_c0', time=1428.00.
-Warning: Person '2212' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w4', time=1431.00.
-Warning: Teleporting vehicle '154'; waited too long (jam), lane='-16666012#6right0_0', time=1433.00.
-Warning: Vehicle '154' ends teleporting on edge '-16666012#6left0', time=1433.00.
-Warning: Teleporting vehicle '144'; waited too long (jam), lane='-16666012#9right1_0', time=1437.00.
-Warning: Vehicle '144' ends teleporting on edge '-16666012#9left1', time=1437.00.
-Warning: Person '1261' is jammed on edge ':iter1_2_mid_c0', time=1440.00.
-Warning: Person '1049' is jammed on edge ':iter1_2_mid_c0', time=1440.00.
-Warning: Person '414' is jammed on edge ':iter1_2_mid_c0', time=1442.00.
+Warning: Unused states in tlLogic 'iter1_0_mid', program '0' in phase 0 after tl-index 1
+Warning: Unused states in tlLogic 'iter1_6_mid', program '0' in phase 0 after tl-index 1
+Warning: Teleporting vehicle '63'; waited too long (yield), lane='1060131306#0_0', time=315.00.
+Warning: Vehicle '63' ends teleporting on edge '16666012#2_left2', time=315.00.
+Warning: Teleporting vehicle '62'; waited too long (yield), lane='1078803478#0_1', time=402.00.
+Warning: Vehicle '62' ends teleporting on edge '16666012#2_left2', time=402.00.
+Warning: Teleporting vehicle '198'; waited too long (yield), lane='-16666012#2_left2_0', time=442.00.
+Warning: Vehicle '198' ends teleporting on edge '452522817#1', time=442.00.
+Warning: Person '1945' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=499.00.
+Warning: Person '57' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w4', time=500.00.
+Warning: Person '1941' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=514.00.
+Warning: Person '27' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=543.00.
+Warning: Person '1948' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=551.00.
+Warning: Teleporting vehicle '5'; waited too long (yield), lane='1060131306#0_0', time=621.00.
+Warning: Vehicle '5' ends teleporting on edge '16666012#2_left2', time=621.00.
+Warning: Person '2039' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w4', time=665.00.
+Warning: Teleporting vehicle '142'; waited too long (yield), lane='-16666012#2_left2_0', time=748.00.
+Warning: Vehicle '142' ends teleporting on edge '-1060131306#0', time=748.00.
+Warning: Person '1488' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=784.00.
+Warning: Person '1480' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=801.00.
+Warning: Person '1950' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=806.00.
+Warning: Person '1502' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=816.00.
+Warning: Person '1491' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=847.00.
+Warning: Person '1953' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=853.00.
+Warning: Person '1957' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=856.00.
+Warning: Person '56' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w4', time=922.00.
+Warning: Teleporting vehicle '19'; waited too long (yield), lane='1060131306#0_0', time=925.00.
+Warning: Vehicle '19' ends teleporting on edge '16666012#2_left2', time=925.00.
+Warning: Person '1515' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=929.00.
+Warning: Person '60' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w4', time=954.00.
+Warning: Teleporting vehicle '111'; waited too long (yield), lane='-16666012#2_left2_0', time=1053.00.
+Warning: Vehicle '111' ends teleporting on edge '773672649#1', time=1053.00.
+Warning: Teleporting vehicle '150'; waited too long (jam), lane='-16666012#4_left5_0', time=1069.00.
+Warning: Vehicle '150' ends teleporting on edge '-16666012#3', time=1070.00.
+Warning: Teleporting vehicle '107'; waited too long (yield), lane='-16666012#4_right5_0', time=1072.00.
+Warning: Vehicle '107' ends teleporting on edge '-16666012#4_left5', time=1072.00.
+Warning: Teleporting vehicle '140'; waited too long (yield), lane='-16666012#5_right6_0', time=1078.00.
+Warning: Vehicle '140' ends teleporting on edge '-16666012#5_left6', time=1078.00.
+Warning: Teleporting vehicle '181'; waited too long (jam), lane='-16666012#9_right1_0', time=1095.00.
+Warning: Vehicle '181' ends teleporting on edge '-16666012#9_left1_right3_right7', time=1095.00.
+Warning: Person '10' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=1103.00.
+Warning: Person '1954' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=1110.00.
+Warning: Person '1497' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=1112.00.
+Warning: Person '1514' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=1118.00.
+Warning: Person '1489' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=1118.00.
+Warning: Person '1463' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=1130.00.
+Warning: Person '1494' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=1155.00.
+Warning: Teleporting vehicle '92'; waited too long (yield), lane='1060131306#0_0', time=1230.00.
+Warning: Vehicle '92' ends teleporting on edge '16666012#2_left2', time=1230.00.
+Warning: Person '1506' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=1232.00.
+Warning: Person '1470' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=1332.00.
+Warning: Teleporting vehicle '129'; waited too long (yield), lane='-16666012#2_left2_0', time=1358.00.
+Warning: Vehicle '129' ends teleporting on edge '773672649#1', time=1358.00.
+Warning: Person '14' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w4', time=1362.00.
+Warning: Teleporting vehicle '128'; waited too long (jam), lane='-16666012#4_left5_0', time=1374.00.
+Warning: Vehicle '128' ends teleporting on edge '-16666012#3', time=1375.00.
+Warning: Person '59' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w4', time=1391.00.
+Warning: Teleporting vehicle '164'; waited too long (jam), lane='-16666012#9_right1_0', time=1399.00.
+Warning: Vehicle '164' ends teleporting on edge '-16666012#9_left1_right3_right7', time=1399.00.
+Warning: Person '1937' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=1406.00.
+Warning: Person '1503' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=1406.00.
+Warning: Person '1511' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=1432.00.
+Warning: Person '1471' is jammed on edge ':cluster_172228464_482708521_9687148201_9687148202_#5more_w3', time=1432.00.
 Error: tcpip::Socket::recvAndCheck @ recv: peer shutdown
 Quitting (on error).

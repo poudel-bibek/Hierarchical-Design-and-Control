@@ -195,13 +195,28 @@
         <param key="origEdgeIds" value="-16666012#8 16666012#8" />
         <param key="origId" value="9740411700 9740411702" />
     </node>
-<node id="iter1_1_bottom" x="2535.56" y="2637.17" type="dead_end" />
-	<node id="iter1_1_top" x="2535.56" y="2656.01" type="dead_end" />
-	<node id="iter1_1_mid" x="2535.56" y="2646.59" type="traffic_light" tl="iter1_1_mid" />
-	<node id="iter1_0_mid" x="2602.74" y="2647.06" type="traffic_light" tl="iter1_0_mid" />
-	<node id="iter1_2_bottom" x="2443.64" y="2635.1" type="dead_end" />
-	<node id="iter1_2_mid" x="2443.64" y="2645.02" type="traffic_light" tl="iter1_2_mid" />
-	<node id="iter1_0_bottom" x="2602.74" y="2638.3" type="dead_end" />
-	<node id="iter1_0_top" x="2602.74" y="2655.83" type="dead_end" />
-	<node id="iter1_2_top" x="2443.64" y="2654.93" type="dead_end" />
+<node id="iter1_5_bottom" x="2272.2" y="2618.4" type="dead_end" />
+	<node id="iter1_3_mid" x="2707.17" y="2646.02" type="traffic_light" tl="iter1_3_mid" />
+	<node id="iter1_4_top" x="2462.34" y="2655.51" type="dead_end" />
+	<node id="iter1_0_top" x="2269.84" y="2638.28" type="dead_end" />
+	<node id="iter1_2_bottom" x="2600.77" y="2638.37" type="dead_end" />
+	<node id="iter1_0_bottom" x="2269.84" y="2618.36" type="dead_end" />
+	<node id="iter1_2_top" x="2600.77" y="2655.84" type="dead_end" />
+	<node id="iter1_2_mid" x="2600.77" y="2647.11" type="traffic_light" tl="iter1_2_mid" />
+	<node id="iter1_3_bottom" x="2707.17" y="2636.3" type="dead_end" />
+	<node id="iter1_1_top" x="2400.07" y="2650.36" type="dead_end" />
+	<node id="iter1_0_mid" x="2269.84" y="2628.32" type="traffic_light" tl="iter1_0_mid" />
+	<node id="iter1_7_top" x="2593.26" y="2655.91" type="dead_end" />
+	<node id="iter1_6_bottom" x="2586.83" y="2638.82" type="dead_end" />
+	<node id="iter1_6_mid" x="2586.83" y="2647.4" type="traffic_light" tl="iter1_6_mid" />
+	<node id="iter1_6_top" x="2586.83" y="2655.97" type="dead_end" />
+	<node id="iter1_7_bottom" x="2593.26" y="2638.61" type="dead_end" />
+	<node id="iter1_5_mid" x="2272.2" y="2628.34" type="traffic_light" tl="iter1_5_mid" />
+	<node id="iter1_1_mid" x="2400.07" y="2639.91" type="traffic_light" tl="iter1_1_mid" />
+	<node id="iter1_4_mid" x="2462.34" y="2645.99" type="traffic_light" tl="iter1_4_mid" />
+	<node id="iter1_4_bottom" x="2462.34" y="2636.47" type="dead_end" />
+	<node id="iter1_3_top" x="2707.17" y="2655.75" type="dead_end" />
+	<node id="iter1_7_mid" x="2593.26" y="2647.26" type="traffic_light" tl="iter1_7_mid" />
+	<node id="iter1_1_bottom" x="2400.07" y="2629.47" type="dead_end" />
+	<node id="iter1_5_top" x="2272.2" y="2638.29" type="dead_end" />
 	</nodes>
