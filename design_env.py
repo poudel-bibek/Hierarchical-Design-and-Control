@@ -463,7 +463,7 @@ class DesignEnv(gym.Env):
 
         for i, (location, thickness) in enumerate(proposals):
             
-            # 1. Denormalize the location (x-coordinate)
+            # 1. Denormalize the location (x-coordinate). 
             denorm_location = self.normalizer_x['min'] + location * (self.normalizer_x['max'] - self.normalizer_x['min'])
             #print(f"\nLocation: {location} Denormalized location: {denorm_location}\n")
 
@@ -488,7 +488,6 @@ class DesignEnv(gym.Env):
                 end_node_pos = new_intersects[side]['intersection_pos']
                 end_node_id = f"iter{iteration}_{i}_{side}"
                 self.iterative_networkx_graph.add_node(end_node_id, pos=end_node_pos, type='regular', width=-1) # type for this is regular (width specified for completeness as -1: Not used)
-
                 self.iterative_networkx_graph.add_edge(from_node, end_node_id, width=2.0) # The width of these edges is default (Not from the proposal)
                 self.iterative_networkx_graph.add_edge(end_node_id, to_node, width=2.0)
 
@@ -851,7 +850,6 @@ class DesignEnv(gym.Env):
 
         type_file = f'{self.component_dir}/{prefix}.typ.xml'
         type_tree = ET.parse(type_file)
-        type_root = type_tree.getroot()
 
         # Find ALL the nodes and edges in the XML component files (nod.xml and edg.xml)
         nodes_in_xml = { n.get('id'): n for n in node_root.findall('node') } # save the node element itself.
@@ -869,16 +867,14 @@ class DesignEnv(gym.Env):
 
         # Extract pedestrian nodes and edges from networkx_graph
         pedestrian_nodes_in_graph = set(networkx_graph.nodes())
-        pedestrian_edges_in_graph = set(networkx_graph.edges())
-        
-        print(f"Pedestrian nodes in XML: {pedestrian_nodes_in_xml}\n")
-        print(f"Pedestrian nodes in graph: {pedestrian_nodes_in_graph}\n")
-        print(f"Pedestrian edges in XML: {list(pedestrian_edges_in_xml.keys())}\n")
-        print(f"Pedestrian edges in graph: {pedestrian_edges_in_graph}\n")
+        # print(f"Pedestrian nodes in XML: {pedestrian_nodes_in_xml}\n")
+        # print(f"Pedestrian nodes in graph: {pedestrian_nodes_in_graph}\n")
+        # print(f"Pedestrian edges in XML: {list(pedestrian_edges_in_xml.keys())}\n")
+        # print(f"Pedestrian edges in graph: {set(networkx_graph.edges())}\n")
         
         # Remove PEDESTRIAN nodes that are in XML component file but not in networkx graph.
         potential_nodes_to_remove = pedestrian_nodes_in_xml - pedestrian_nodes_in_graph
-        print(f"Potential Nodes to remove: Total: {len(potential_nodes_to_remove)},\n {potential_nodes_to_remove}\n")
+        # print(f"Potential Nodes to remove: Total: {len(potential_nodes_to_remove)},\n {potential_nodes_to_remove}\n")
         
         # Some edges may still access the nodes that are in potential_nodes_to_remove.
         # Find the edges that still access the nodes that are in potential_nodes_to_remove.
@@ -887,7 +883,7 @@ class DesignEnv(gym.Env):
             if f in potential_nodes_to_remove or t in potential_nodes_to_remove:
                 edges_in_xml_that_access_removal_nodes[(f, t)] = edges_in_xml[(f, t)] # These can be vehicle edges as well.
 
-        print(f"Edges in XML that still access the potential removal nodes: Total: {len(edges_in_xml_that_access_removal_nodes)}")
+        # print(f"Edges in XML that still access the potential removal nodes: Total: {len(edges_in_xml_that_access_removal_nodes)}")
         for (f, t), e in edges_in_xml_that_access_removal_nodes.items():
             print(f"Edge: {f} -> {t}")
             print(f"Edge attributes: {e.attrib}\n")
@@ -899,25 +895,25 @@ class DesignEnv(gym.Env):
             disallow = e.get('disallow', '')
             if e_type == 'highway.tertiary' and 'pedestrian' in disallow: # vehicle edge attributes: highway.tertiary and disallowed pedestrian
                 vehicle_edges_that_access_removal_nodes[(f, t)] = e
-        print(f"Vehicle edges that access removal nodes: Total: {len(vehicle_edges_that_access_removal_nodes)},\n {vehicle_edges_that_access_removal_nodes}\n")
+        # print(f"Vehicle edges that access removal nodes: Total: {len(vehicle_edges_that_access_removal_nodes)},\n {vehicle_edges_that_access_removal_nodes}\n")
         
         # Get all nodes that appear in vehicle edges
         nodes_in_vehicle_edges = set()
         for f, t in vehicle_edges_that_access_removal_nodes.keys():
             nodes_in_vehicle_edges.add(f)
             nodes_in_vehicle_edges.add(t)
-        print(f"Potential nodes to be removed: {potential_nodes_to_remove}\n Nodes in vehicle edges: {nodes_in_vehicle_edges}\n")
+        # print(f"Potential nodes to be removed: {potential_nodes_to_remove}\n Nodes in vehicle edges: {nodes_in_vehicle_edges}\n")
  
         # The nodes that appear in vehicle edges can be removed because they are not needed for the pedestrian network. Remove them
         pedestrian_nodes_to_remove = potential_nodes_to_remove - nodes_in_vehicle_edges
-        print(f"Actual pedestrian nodes to remove: Total: {len(pedestrian_nodes_to_remove)},\n {pedestrian_nodes_to_remove}\n")
+        # print(f"Actual pedestrian nodes to remove: Total: {len(pedestrian_nodes_to_remove)},\n {pedestrian_nodes_to_remove}\n")
 
         # Some pedestrian edges (at crossings) link to vehicle edges. Remove the pedestrian edges that are not linked to the vehicle edges. 
         pedestrian_edges_to_remove = {}
         for (f, t), e in edges_in_xml_that_access_removal_nodes.items():
             if (f, t) not in vehicle_edges_that_access_removal_nodes:
                 pedestrian_edges_to_remove[(f, t)] = e
-        print(f"Actual pedestrian edges to remove: Total: {len(pedestrian_edges_to_remove)}, \n {pedestrian_edges_to_remove}\n")
+        # print(f"Actual pedestrian edges to remove: Total: {len(pedestrian_edges_to_remove)}, \n {pedestrian_edges_to_remove}\n")
 
         # Removing selected nodes and edges
         for node_id in pedestrian_nodes_to_remove:
@@ -967,20 +963,12 @@ class DesignEnv(gym.Env):
             nodes_in_xml[nid] = new_node
 
         # Find the edges to add (present in networkx graph but not in XML component file).
-        edges_to_add = set(networkx_graph.edges()) - set(edges_in_xml.keys()) # These are all pedestrian edges.
-        edges_to_add = list(edges_to_add)
-        print(f"\nPedestrian edges to add: Total: {len(edges_to_add)},\n {edges_to_add}\n")
+        ped_edges_to_add = set(networkx_graph.edges()) - set(edges_in_xml.keys()) # These are all pedestrian edges.
+        ped_edges_to_add = list(ped_edges_to_add)
+        # print(f"\nPedestrian edges to add: Total: {len(ped_edges_to_add)},\n {ped_edges_to_add}\n")
 
         # The edge could be from a type = "regular" node to a type = "regular" node or from a type = "regular" node to a type = "middle" node (crossing).
-        for (f, t) in edges_to_add:
-
-            # # For edges associated with TL, we need to make them directional i.e., top to mid and mid to bottom.
-            # f_type = networkx_graph.nodes[f].get('type', 'regular') # If no type, it is a regular node.
-            # t_type = networkx_graph.nodes[t].get('type', 'regular')
-            # # only this (connections from bottom to middle) is problematic, switch the f and t.
-            # if (f_type == 'regular' and t_type == 'middle') and "bottom" in f: 
-            #     f, t = t, f
-
+        for (f, t) in ped_edges_to_add:
             # Do Regular to Regular and Regular to Middle need some different treatment?
             edge_data = networkx_graph.get_edge_data(f, t)
             edge_id = edge_data.get('id', f'edge_{f}_{t}') # Get it from the networkx graph.
@@ -1033,8 +1021,8 @@ class DesignEnv(gym.Env):
                                                                                                          f'{self.component_dir}/original.edg.xml', 
                                                                                                          f'{self.component_dir}/original.nod.xml', 
                                                                                                          connection_root)
-        print(f"old_veh_edges_to_remove: {old_veh_edges_to_remove}\n")
-        print(f"new_veh_edges_to_add: {new_veh_edges_to_add}\n")
+        # print(f"old_veh_edges_to_remove: {old_veh_edges_to_remove}\n")
+        # print(f"new_veh_edges_to_add: {new_veh_edges_to_add}\n")
 
         # Add the new edges (each edge has a single nested lane) to the edge file. The width is the default road width.
         for direction in ['top', 'bottom']:
@@ -1048,7 +1036,6 @@ class DesignEnv(gym.Env):
                     'type': "highway.tertiary",
                     'numLanes': "1",
                     'speed': "8.94",
-                    'shape': edge_data.get('edge_shape'),
                     'disallow': "pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway"
                 }
 
@@ -1060,7 +1047,6 @@ class DesignEnv(gym.Env):
                                              index='0', 
                                              disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway", 
                                              speed="8.94", 
-                                             shape=edge_data.get('lane_shape')
                                              )
                 
                 lane_element.text = "\n\t\t\t"
@@ -1138,6 +1124,7 @@ class DesignEnv(gym.Env):
         extreme_edge_dict = {'leftmost': {'old': "16666012#2", 'new': leftmost_new},
                              'rightmost': {'old': "16666012#17", 'new': rightmost_new}}
         
+
         # Updates to connections and crossings in connections file.
         for direction, direction_data in extreme_edge_dict.items():
             old_edge = direction_data['old']
@@ -1165,37 +1152,40 @@ class DesignEnv(gym.Env):
                         # Then, it can be updated in crossing.
                         crossing.set('edges', f'-{new_edge} {new_edge}')
 
+        
         # Add new connections (between top and bottom edges) and crossings (making use of new_veh_edges_to_add).
         # All tags that refer to the old edges should now refer to the new edges (if the refering edges fall to the left, they will refer to the new left edge and vice versa) 
         # They have the edges attribute (which are edges to the right) and outlineShape attribute (the shape of the crossing): 
         
         # outlineShape seems hard to specify, lets not specify and see what it does. They mention it as optional here: https://github.com/eclipse-sumo/sumo/issues/11668
         # TODO: same node contains right and left components which creates two crossings instead of one. Find a way to avoid this (Only add the right part of the crossing).
-    
         for e1, e1_data in new_veh_edges_to_add['top'].items(): # Just looking at one direction (top) is enough.
-            # Add only the right part: 
-            if 'right' in e1.split('_')[-1]:
-
+            if 'right' in e1.split('_')[-1]: # Add only the right part: 
                 e2 = e1.replace('-', '') # To get the bottom edge id.
+                print(f"e1: {e1}, e2: {e2}")
 
-                # U turn (No need)
-                # # First, a connection between the two edges e1 and e2 should be added.
-                # connection_element = ET.Element('connection', {'from': e1, 'to': e2, 'fromLane': '0', 'toLane': '0'})
-                # connection_element.text = None  # Ensure there's no text content
-                # connection_element.tail = "\n\t\t"
-                # updated_conn_root.append(connection_element)
-
-                # print(f"\n\ne1: {e1}, e2: {e2}\n\n")
+                # # Outline shape just needs 4 coordinates. The difference between x_coordinates is equal to width. 
+                # middle_node = e1_data.get('new_node')
+                # top_node = middle_node.replace('middle', 'top') if iteration== 0 else middle_node.replace('mid', 'top')
+                # bottom_node = middle_node.replace('middle', 'bottom') if iteration== 0 else middle_node.replace('mid', 'bottom')  
+                # print(f"Top node: {top_node}, Middle node: {middle_node}, Bottom node: {bottom_node}")
+                # width = networkx_graph.nodes[middle_node].get('width')
+                # print(f"Top node (x,y): {networkx_graph.nodes[top_node]['pos']}, Middle node (x,y): {networkx_graph.nodes[middle_node]['pos']}, Bottom node (x,y): {networkx_graph.nodes[bottom_node]['pos']}, Width: {width}")
                 
+                # top_node_data = networkx_graph.nodes[top_node]
+                # bottom_node_data = networkx_graph.nodes[bottom_node]
+                
+                # x1, y1 = round(bottom_node_data['pos'][0] - 1.5*width, 2), round(bottom_node_data['pos'][1], 2) # lower left
+                # x2, y2 = round(bottom_node_data['pos'][0], 2), round(bottom_node_data['pos'][1], 2) # lower right
+                # x3, y3 = round(top_node_data['pos'][0], 2), round(top_node_data['pos'][1], 2) # upper right
+                # x4, y4 = round(top_node_data['pos'][0] - 1.5*width, 2), round(top_node_data['pos'][1], 2) # upper left
 
-                # Outline shape just needs 4 coordinates. The difference between x_coordinates is equal to width. 
-                # The difference between y_coordinates is equal to size of road (fixed)
-
+                # outline_shape = f"{x1},{y1} {x2},{y2} {x3},{y3} {x4},{y4}"
 
                 # Then, a crossing element should be added with those edges.
                 middle_node = e1_data.get('new_node')
                 width = networkx_graph.nodes[middle_node].get('width')
-                crossing_attribs = {'node': middle_node, 'edges': e1 + ' ' + e2, 'priority': '1', 'width': str(width)} # Width/ Thickness needs to come from the model.
+                crossing_attribs = {'node': middle_node, 'edges': e1 + ' ' + e2, 'priority': '1', 'width': str(width), 'linkIndex': '2' } # Width/ Thickness needs to come from the model.
                 crossing_element = ET.Element('crossing', crossing_attribs)
                 crossing_element.text = None  # Ensure there's no text content
                 crossing_element.tail = "\n\t\t"
@@ -1226,22 +1216,9 @@ class DesignEnv(gym.Env):
         
         # TL 5. Add all the new connections.
         for conn in tl_connections_to_add:
-            conn.text = None  # Ensure there's no text content
+            conn.text = None  
             conn.tail = "\n\t"
             traffic_light_root.append(conn)
-
-        # for nid in middle_nodes_to_add:
-        #     # For a complete TL definition, the pedestrian edges that connect the "mid node with top node" and "mid node with bottom node" should also be added as a connection.
-        #     # top_edge = f"edge_{'_'.join(nid.split('_')[0:2])}_top_{nid}" # top to mid
-        #     # bottom_edge = f"edge_{nid}_{'_'.join(nid.split('_')[0:2])}_bottom" # mid to bottom
-
-        #     top_edge = f"edge_{'_'.join(nid.split('_')[0:2])}_top_{nid}"
-        #     bottom_edge = f"edge_{'_'.join(nid.split('_')[0:2])}_bottom_{nid}"
-        #     tl_conn_attribs = {'from': top_edge, 'to': bottom_edge, 'fromLane': "0", 'toLane': "0", 'tl': nid, 'linkIndex': str(2)}
-        #     tl_conn_element = ET.Element('connection', tl_conn_attribs)
-        #     tl_conn_element.text = None  # Ensure there's no text content
-        #     tl_conn_element.tail = "\n\t"
-        #     traffic_light_root.append(tl_conn_element)
 
         # TL 6. The default crossings in TL (that were kept above) may still refer to the old edges.
         # In addition, there may also be a connection of the -ve and +ve sides of the old edges.
@@ -1262,22 +1239,17 @@ class DesignEnv(gym.Env):
         # Respective changes to the connections file.
         # All the connections present in the TLL file should also be present in the connections file. But the connection file will have more of them.
         # In iteration base, there will be a bunch of connections to remove from original file (remove connections with the same from and to edges).
-
-        all_conn_file_connections = [(conn.get('from'), conn.get('to')) for conn in connection_root.findall('connection')]
-        print(f"connection Before removal: Total: {len(all_conn_file_connections)},\n {all_conn_file_connections}\n")
+        # all_conn_file_connections = [(conn.get('from'), conn.get('to')) for conn in connection_root.findall('connection')]
+        # print(f"connection Before removal: Total: {len(all_conn_file_connections)},\n {all_conn_file_connections}\n")
         
         # Look at the same from and to edges in the connections file and remove them.
         connections_to_remove_list = [(conn.get('from'), conn.get('to')) for conn in connections_to_remove]
-        #print(f"connections_to_remove_list: Total: {len(connections_to_remove_list)},\n {connections_to_remove_list}\n")
-
         to_remove = []
         for conn in connection_root.findall('connection'):
             from_edge = conn.get('from')
             to_edge = conn.get('to')
             if (from_edge, to_edge) in connections_to_remove_list:
                 to_remove.append(conn)
-
-        # Remove all identified connections from connection file
         for conn in to_remove:
             connection_root.remove(conn)
 
@@ -1292,9 +1264,6 @@ class DesignEnv(gym.Env):
         for conn in connection_root.findall('connection'):
             if conn.get('from') in pedestrian_edges_to_remove_connections or conn.get('to') in pedestrian_edges_to_remove_connections:
                 connection_root.remove(conn)
-
-        all_conn_file_connections = [(conn.get('from'), conn.get('to')) for conn in connection_root.findall('connection')]
-        print(f"connection After removal: Total: {len(all_conn_file_connections)},\n {all_conn_file_connections}\n")
         
         iteration_prefix = f'{self.component_dir}/iteration_{iteration}'
         node_tree.write(f'{iteration_prefix}.nod.xml', encoding='utf-8', xml_declaration=True)
@@ -1315,17 +1284,24 @@ class DesignEnv(gym.Env):
             f"--tllogic-files={iteration_prefix}.tll.xml "
             f"--output-file={output_file} "
             f"--log={netconvert_log_file}"
-            # f"--junctions.join-same"
-            # f"--edges.join"
         )
 
-        try:
-            result = subprocess.run(command, shell=True, check=True, capture_output=True, text=True)
-            if result.stderr:
-                print(f"Warnings/Errors from netconvert: {result.stderr}")
-        except subprocess.CalledProcessError as e:
-            print(f"Error running netconvert: {e}")
-            print("Error output:", e.stderr)
+
+        max_attempts = 3
+        attempt = 0
+        while attempt < max_attempts:
+            try:
+                result = subprocess.run(command, shell=True, check=True, capture_output=True, text=True)
+                if result.stderr:
+                    print(f"Warnings/Errors from netconvert: {result.stderr}")
+                break
+            except subprocess.CalledProcessError as e:
+                print(f"Error running netconvert (attempt {attempt + 1}/{max_attempts}): {e}")
+                print("Error output:", e.stderr)
+                attempt += 1
+                if attempt == max_attempts:
+                    print("Failed all attempts to run netconvert")
+                    raise
 
     def _initialize_normalizers(self, graph):
         """
@@ -1337,3 +1313,31 @@ class DesignEnv(gym.Env):
         y_coords = coords[:, 1]
         self.normalizer_x = {'min': float(np.min(x_coords)), 'max': float(np.max(x_coords))}
         self.normalizer_y = {'min': float(np.min(y_coords)), 'max': float(np.max(y_coords))}
+
+
+
+
+
+            #f"--geometry.remove.min-length=2.0" # Allow merging edges with differing attributes when their length is below min-length; default: 0
+            #f"--geometry.avoid-overlap=false" #Modify edge geometries to avoid overlap at junctions; default: true
+
+            # Does not seem to work.
+            # f"--junctions.join=true" # Joins junctions that are close to each other (recommended for OSM import); default: false
+            # f"--junctions.join-dist=40" # Determines the maximal distance for joining junctions (defaults to 10); default: 10
+
+            # Does not seem to work.
+            # f"--tls.join=true" # Tries to cluster tls-controlled nodes; default: false
+            # f"--tls.join-dist=40" #  Determines the maximal distance for joining traffic lights (defaults to 20); default: 20
+
+     
+            # f"--junctions.join=true" # Joins junctions that are close to each other (recommended for OSM import); default: false
+            # f"--junctions.join-dist=40" # Determines the maximal distance for joining junctions (defaults to 10); default: 10
+
+            # Seems to have an effect.
+            #f"--no-internal-links=true" # Omits internal links; default: false
+
+            # f"--rectangular-lane-cut=true" # Forces rectangular cuts between lanes and intersections; default: false
+            # f"--junctions.endpoint-shape=true" # Build junction shapes based on edge endpoints (ignoring edge overlap); default: false
+            # f"--junctions.minimal-shape=true" # Build junctions with minimal shapes (ignoring edge overlap); default: false
+            #f"--crossings.guess=true" # Guess pedestrian crossings based on the presence of sidewalks; default: false
+        
