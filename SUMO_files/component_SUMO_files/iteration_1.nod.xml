@@ -195,22 +195,7 @@
         <param key="origEdgeIds" value="-16666012#8 16666012#8" />
         <param key="origId" value="9740411700 9740411702" />
     </node>
-<node id="iter1_5_bottom" x="2673.6" y="2636.92" type="dead_end" />
-	<node id="iter1_1_bottom" x="2543.02" y="2637.0" type="dead_end" />
-	<node id="iter1_5_top" x="2673.6" y="2655.19" type="dead_end" />
-	<node id="iter1_2_bottom" x="2522.49" y="2638.18" type="dead_end" />
-	<node id="iter1_4_top" x="2355.26" y="2643.58" type="dead_end" />
-	<node id="iter1_2_mid" x="2522.49" y="2647.16" type="traffic_light" tl="iter1_2_mid" />
-	<node id="iter1_1_top" x="2543.02" y="2655.94" type="dead_end" />
-	<node id="iter1_0_mid" x="2520.83" y="2647.22" type="traffic_light" tl="iter1_0_mid" />
-	<node id="iter1_2_top" x="2522.49" y="2656.14" type="dead_end" />
-	<node id="iter1_3_top" x="2516.75" y="2656.2" type="dead_end" />
-	<node id="iter1_5_mid" x="2673.6" y="2646.05" type="traffic_light" tl="iter1_5_mid" />
-	<node id="iter1_1_mid" x="2543.02" y="2646.47" type="traffic_light" tl="iter1_1_mid" />
-	<node id="iter1_0_bottom" x="2520.83" y="2638.29" type="dead_end" />
-	<node id="iter1_4_bottom" x="2355.26" y="2620.69" type="dead_end" />
-	<node id="iter1_0_top" x="2520.83" y="2656.16" type="dead_end" />
-	<node id="iter1_3_mid" x="2516.75" y="2647.21" type="traffic_light" tl="iter1_3_mid" />
-	<node id="iter1_4_mid" x="2355.26" y="2632.14" type="traffic_light" tl="iter1_4_mid" />
-	<node id="iter1_3_bottom" x="2516.75" y="2638.22" type="dead_end" />
+<node id="iter1_0_bottom" x="2442.52" y="2634.98" type="dead_end" />
+	<node id="iter1_0_mid" x="2442.52" y="2644.94" type="traffic_light" tl="iter1_0_mid" />
+	<node id="iter1_0_top" x="2442.52" y="2654.89" type="dead_end" />
 	</nodes>
