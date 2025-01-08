@@ -1,14 +1,14 @@
 Parsing types from './SUMO_files/component_SUMO_files/iteration_1.typ.xml' ... done.
 Parsing nodes from './SUMO_files/component_SUMO_files/iteration_1.nod.xml' ... done.
 Parsing edges from './SUMO_files/component_SUMO_files/iteration_1.edg.xml' ...
-Duplicate edge id occurred ('1060131413#1'); assuming overwriting is wished.
+Duplicate edge id occurred ('1051865689#2.53'); assuming overwriting is wished.
  done.
 Parsing connections from './SUMO_files/component_SUMO_files/iteration_1.con.xml' ... done.
 Parsing traffic lights from './SUMO_files/component_SUMO_files/iteration_1.tll.xml' ... done.
  Import done:
-   181 nodes loaded.
+   196 nodes loaded.
    4 types loaded.
-   270 edges loaded.
+   307 edges loaded.
 Removing self-loops ... done (0ms).
 Removing empty nodes ... done (0ms).
    0 nodes removed.
@@ -16,14 +16,14 @@ Moving network to origin ... done (0ms).
 Computing turning directions ... done (0ms).
 Assigning nodes to traffic lights ... done (0ms).
 Sorting nodes' edges ... done (0ms).
-Computing node shapes ... done (1ms).
+Computing node shapes ... done (2ms).
 Computing edge shapes ... done (1ms).
 Computing node types ... done (0ms).
 Computing priorities ... done (0ms).
 Computing approached edges ... done (0ms).
 Guessing and setting roundabouts ... done (0ms).
 Computing approaching lanes ... done (0ms).
-Dividing of lanes on approached lanes ... done (0ms).
+Dividing of lanes on approached lanes ... done (1ms).
 Processing turnarounds ... done (0ms).
 Rechecking of lane endings ...
 Warning: Lane '-357518696#6_0' is not connected from any incoming edge at junction '9655154879'.
@@ -32,18 +32,18 @@ Warning: Edge '357518696#6' is not connected to outgoing edges at junction '9655
 Warning: Lane '773672647#17_0' is not connected from any incoming edge at junction '9666242293'.
  done (0ms).
 Computing traffic light control information ... done (0ms).
-Computing node logics ... done (0ms).
+Computing node logics ... done (1ms).
 Computing traffic light logics ... done (0ms).
- 2 traffic light(s) computed.
-Building inner edges ... done (1ms).
+ 7 traffic light(s) computed.
+Building inner edges ... done (0ms).
 -----------------------------------------------------
 Summary:
  Node type statistics:
   Unregulated junctions       : 0
-  Dead-end junctions          : 146
+  Dead-end junctions          : 156
   Priority junctions          : 31
   Right-before-left junctions : 2
-  Traffic light junctions      : 2
+  Traffic light junctions      : 7
  Network boundaries:
   Original boundary  : 2030.74,2510.12,2948.01,2730.71
   Applied offset     : -2030.74,-2510.12

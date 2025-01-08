@@ -1085,6 +1085,7 @@ class DesignEnv(gym.Env):
         for direction in ['top', 'bottom']:
             for tl_id, mapping_data in m_node_mapping.items(): # m_node is the tl_id
                 linkindex = 0 if direction == 'top' else 1 # Top is -ve direction and bottom is +ve direction.
+                
                 # These connections should be present in both the TLL and connections files (using left as from and right as to).
                 # TL 3. Add the new connections.
                 tl_conn_attribs = {'from': mapping_data[direction]['from'], 'to': mapping_data[direction]['to'], 'fromLane': "0", 'toLane': "0", 'tl': tl_id, 'linkIndex': str(linkindex)} # Since inside the corridor, there is only one lane.
@@ -1163,24 +1164,6 @@ class DesignEnv(gym.Env):
             if 'right' in e1.split('_')[-1]: # Add only the right part: 
                 e2 = e1.replace('-', '') # To get the bottom edge id.
                 print(f"e1: {e1}, e2: {e2}")
-
-                # # Outline shape just needs 4 coordinates. The difference between x_coordinates is equal to width. 
-                # middle_node = e1_data.get('new_node')
-                # top_node = middle_node.replace('middle', 'top') if iteration== 0 else middle_node.replace('mid', 'top')
-                # bottom_node = middle_node.replace('middle', 'bottom') if iteration== 0 else middle_node.replace('mid', 'bottom')  
-                # print(f"Top node: {top_node}, Middle node: {middle_node}, Bottom node: {bottom_node}")
-                # width = networkx_graph.nodes[middle_node].get('width')
-                # print(f"Top node (x,y): {networkx_graph.nodes[top_node]['pos']}, Middle node (x,y): {networkx_graph.nodes[middle_node]['pos']}, Bottom node (x,y): {networkx_graph.nodes[bottom_node]['pos']}, Width: {width}")
-                
-                # top_node_data = networkx_graph.nodes[top_node]
-                # bottom_node_data = networkx_graph.nodes[bottom_node]
-                
-                # x1, y1 = round(bottom_node_data['pos'][0] - 1.5*width, 2), round(bottom_node_data['pos'][1], 2) # lower left
-                # x2, y2 = round(bottom_node_data['pos'][0], 2), round(bottom_node_data['pos'][1], 2) # lower right
-                # x3, y3 = round(top_node_data['pos'][0], 2), round(top_node_data['pos'][1], 2) # upper right
-                # x4, y4 = round(top_node_data['pos'][0] - 1.5*width, 2), round(top_node_data['pos'][1], 2) # upper left
-
-                # outline_shape = f"{x1},{y1} {x2},{y2} {x3},{y3} {x4},{y4}"
 
                 # Then, a crossing element should be added with those edges.
                 middle_node = e1_data.get('new_node')

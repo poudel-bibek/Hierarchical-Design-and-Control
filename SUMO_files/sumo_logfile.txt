@@ -1,0 +1,26 @@
+***Starting server on port 51031 ***
+Loading net-file from './SUMO_files/network_iterations/network_iteration_1.net.xml' ... done (21ms).
+Loading route-files incrementally from './SUMO_files/scaled_trips/scaled_vehtrips_0.xml'
+Loading route-files incrementally from './SUMO_files/scaled_trips/scaled_pedtrips_0.xml'
+Loading done.
+Simulation started with time: 0.00.
+Simulation ended at time: 11.00.
+Performance:
+ Duration: 28.04s
+ TraCI-Duration: 0.21s
+ Real time factor: 0.392283
+ UPS: 0.392283
+ UPS-Persons: 0.606255
+Vehicles:
+ Inserted: 2 (Loaded: 28)
+ Running: 2
+ Waiting: 1
+Persons:
+ Inserted: 146
+ Running: 4
+DijkstraRouter answered 1 queries and explored 4.00 edges on average.
+DijkstraRouter spent 0.00s answering queries (0.00ms on average).
+DijkstraRouter answered 4 queries and explored 499.00 edges on average.
+DijkstraRouter spent 0.00s answering queries (0.00ms on average).
+DijkstraRouter answered 3 queries and explored 56.33 edges on average.
+DijkstraRouter spent 0.00s answering queries (0.00ms on average).

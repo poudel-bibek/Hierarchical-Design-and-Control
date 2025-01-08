@@ -12,7 +12,37 @@
         <phase duration="4" state="yyyyrrrryyyyrrrrrrrrrr" />
         <phase duration="1" state="rrrrrrrrrrrrrrrrrrrrrr" />
     </tlLogic>
-    <tlLogic id="iter1_0_mid" type="static" programID="0" offset="0">
+    <tlLogic id="iter1_2_mid" type="static" programID="0" offset="0">
+		<phase duration="77" state="GGr" />
+		<phase duration="3" state="yyr" />
+		<phase duration="5" state="rrG" />
+		<phase duration="5" state="rrr" />
+	</tlLogic>
+	<tlLogic id="iter1_4_mid" type="static" programID="0" offset="0">
+		<phase duration="77" state="GGr" />
+		<phase duration="3" state="yyr" />
+		<phase duration="5" state="rrG" />
+		<phase duration="5" state="rrr" />
+	</tlLogic>
+	<tlLogic id="iter1_0_mid" type="static" programID="0" offset="0">
+		<phase duration="77" state="GGr" />
+		<phase duration="3" state="yyr" />
+		<phase duration="5" state="rrG" />
+		<phase duration="5" state="rrr" />
+	</tlLogic>
+	<tlLogic id="iter1_1_mid" type="static" programID="0" offset="0">
+		<phase duration="77" state="GGr" />
+		<phase duration="3" state="yyr" />
+		<phase duration="5" state="rrG" />
+		<phase duration="5" state="rrr" />
+	</tlLogic>
+	<tlLogic id="iter1_3_mid" type="static" programID="0" offset="0">
+		<phase duration="77" state="GGr" />
+		<phase duration="3" state="yyr" />
+		<phase duration="5" state="rrG" />
+		<phase duration="5" state="rrr" />
+	</tlLogic>
+	<tlLogic id="iter1_5_mid" type="static" programID="0" offset="0">
 		<phase duration="77" state="GGr" />
 		<phase duration="3" state="yyr" />
 		<phase duration="5" state="rrG" />
@@ -34,6 +64,16 @@
 	<connection from="773672648#0" to="773672649#1" fromLane="1" toLane="0" tl="cluster_172228464_482708521_9687148201_9687148202_#5more" linkIndex="13" />
 	<connection from="773672648#0" to="16666012#2" fromLane="2" toLane="0" tl="cluster_172228464_482708521_9687148201_9687148202_#5more" linkIndex="14" />
 	<connection from="773672648#0" to="452522817#1" fromLane="2" toLane="1" tl="cluster_172228464_482708521_9687148201_9687148202_#5more" linkIndex="15" />
-	<connection from="-16666012#4_right0" to="-16666012#4_left0" fromLane="0" toLane="0" tl="iter1_0_mid" linkIndex="0" />
-	<connection from="16666012#4_left0" to="16666012#4_right0" fromLane="0" toLane="0" tl="iter1_0_mid" linkIndex="1" />
+	<connection from="-16666012#9_right0" to="-16666012#9_left0_right2" fromLane="0" toLane="0" tl="iter1_2_mid" linkIndex="0" />
+	<connection from="-16666012#5_right1" to="-16666012#5_left1_right5" fromLane="0" toLane="0" tl="iter1_4_mid" linkIndex="0" />
+	<connection from="-16666012#9_left0_right2" to="-16666012#9_left0_left2" fromLane="0" toLane="0" tl="iter1_0_mid" linkIndex="0" />
+	<connection from="-16666012#3_right3" to="-16666012#3_left3" fromLane="0" toLane="0" tl="iter1_1_mid" linkIndex="0" />
+	<connection from="-16666012#11_right4" to="-16666012#11_left4" fromLane="0" toLane="0" tl="iter1_3_mid" linkIndex="0" />
+	<connection from="-16666012#5_left1_right5" to="-16666012#5_left1_left5" fromLane="0" toLane="0" tl="iter1_5_mid" linkIndex="0" />
+	<connection from="16666012#9_left0_right2" to="16666012#9_right0" fromLane="0" toLane="0" tl="iter1_2_mid" linkIndex="1" />
+	<connection from="16666012#5_left1_right5" to="16666012#5_right1" fromLane="0" toLane="0" tl="iter1_4_mid" linkIndex="1" />
+	<connection from="16666012#9_left0_left2" to="16666012#9_left0_right2" fromLane="0" toLane="0" tl="iter1_0_mid" linkIndex="1" />
+	<connection from="16666012#3_left3" to="16666012#3_right3" fromLane="0" toLane="0" tl="iter1_1_mid" linkIndex="1" />
+	<connection from="16666012#11_left4" to="16666012#11_right4" fromLane="0" toLane="0" tl="iter1_3_mid" linkIndex="1" />
+	<connection from="16666012#5_left1_left5" to="16666012#5_left1_right5" fromLane="0" toLane="0" tl="iter1_5_mid" linkIndex="1" />
 	</tlLogics>
