@@ -171,7 +171,8 @@ class DesignEnv(gym.Env):
         self.base_networkx_graph = self._cleanup_graph(pedestrian_networkx_graph, self.existing_crosswalks)
         self.horizontal_nodes_top_ped = ['9666242268', '9666274719', '9666274722', '9666274721', '9727816851', '9666274744', '9666274574', '9666274798', '9666274635', '9666274616', '9666274886', '9655154530', '9655154527', '9655154520', '10054309033', '9740157195', '9740157210', '10054309051', '9740484524', '9740484531']
         self.horizontal_nodes_bottom_ped = ['9727816638', '9727816862', '9727816846', '9727816629', '9727779405', '9740157080', '9727816625', '9740157142', '9740157169', '9740157145', '9740484033', '9740157174', '9740157171', '9740157154', '9740157158', '9740411703', '9740411701', '9740483978', '9740483934', '9740157180', '9740483946', '9740157204', '9740484420', '9740157211', '9740484523', '9740484522', '9740484512', '9740484528', '9739966899', '9739966895']
-    
+        
+        self.horizontal_edges_veh_original_data = self._get_original_veh_edge_config()
         self._update_xml_files(self.base_networkx_graph, 'base') # Create base XML files from latest networkx graph
 
         if self.design_args['save_graph_images']:
@@ -502,7 +503,15 @@ class DesignEnv(gym.Env):
 
             # Add the mid node and edges 
             mid_node_id = f"iter{iteration}_{i}_mid"
-            mid_node_pos = (denorm_location, (mid_node_details['top']['y_cord'] + mid_node_details['bottom']['y_cord']) / 2)
+            
+            # Obtain the y_coordinate of the middle node. Based on adjacent vehicle edges. Use interpolation to find the y coordinate.
+            # To ensure that the y coordinates of the graph and the net file are the same. This has to be done here. 
+            # previous method, midpoint
+            # mid_node_pos = (denorm_location, (mid_node_details['top']['y_cord'] + mid_node_details['bottom']['y_cord']) / 2)
+
+            # new method, interpolation. Always using the original vehicle edge list (not updated with split of split).
+            mid_node_pos = (denorm_location, interpolate_y_coordinate(denorm_location, self.horizontal_edges_veh_original_data))
+
             self.iterative_networkx_graph.add_node(mid_node_id, pos=mid_node_pos, type='middle', width=thickness) # The width is used later
             self.iterative_networkx_graph.add_edge(mid_node_details['top']['node_id'], mid_node_id, width=thickness) # Thickness is from sampled proposal
             self.iterative_networkx_graph.add_edge(mid_node_id, mid_node_details['bottom']['node_id'], width=thickness) # Thickness is from sampled proposal
@@ -647,7 +656,7 @@ class DesignEnv(gym.Env):
                 bottom_pos, top_pos = crosswalk_data['pos'][0], crosswalk_data['pos'][-1]
                 # create a new middle pos
                 middle_x = (bottom_pos[0] + top_pos[0]) / 2
-                middle_y = (bottom_pos[1] + top_pos[1]) / 2
+                middle_y = (bottom_pos[1] + top_pos[1]) / 2 #TODO: Change to interpolation method
                 middle_pos = (middle_x, middle_y)
 
                 # sanitize the id 
@@ -794,6 +803,61 @@ class DesignEnv(gym.Env):
 
         return torch.stack([normalized_x, normalized_y], dim=1)
     
+    def _get_original_veh_edge_config(self):
+        """
+        Get the original vehicle edge config from the original XML component files.
+        """
+
+        horizontal_edges_veh= {
+        'top': ['-16666012#2', '-16666012#3', '-16666012#4', '-16666012#5', 
+                                '-16666012#6', '-16666012#7', '-16666012#9', '-16666012#11', 
+                                '-16666012#12', '-16666012#13', '-16666012#14', '-16666012#15', 
+                                '-16666012#16', '-16666012#17'],
+        'bottom': ['16666012#2', '16666012#3', '16666012#4', '16666012#5',
+                                    '16666012#6', '16666012#7', '16666012#9', '16666012#11',
+                                    '16666012#12', '16666012#13', '16666012#14', '16666012#15',
+                                    '16666012#16', '16666012#17']
+                                }
+        
+        node_file = f'{self.component_dir}/original.nod.xml'
+        node_tree = ET.parse(node_file)
+        node_root = node_tree.getroot()
+
+        edge_file = f'{self.component_dir}/original.edg.xml'
+        edge_tree = ET.parse(edge_file)
+        edge_root = edge_tree.getroot()
+
+        horizontal_edges_veh_original_data = {
+            'top': {},
+            'bottom': {}
+        }
+
+        for direction in ['top', 'bottom']:
+            for edge in edge_root.findall('edge'):
+                id = edge.get('id')
+                if id in horizontal_edges_veh[direction]:
+                    from_node = edge.get('from')
+                    from_node_data = node_root.find(f'node[@id="{from_node}"]')
+                    # Convert coordinates to float
+                    from_x = float(from_node_data.get('x'))
+                    from_y = float(from_node_data.get('y'))
+
+                    to_node = edge.get('to')
+                    to_node_data = node_root.find(f'node[@id="{to_node}"]')
+                    # Convert coordinates to float
+                    to_x = float(to_node_data.get('x'))
+                    to_y = float(to_node_data.get('y'))
+
+                    horizontal_edges_veh_original_data[direction][id] = {
+                        'from_x': from_x,
+                        'from_y': from_y, 
+                        'to_x': to_x,
+                        'to_y': to_y
+                    }
+
+        return horizontal_edges_veh_original_data
+    
+
     def _update_xml_files(self, networkx_graph, iteration):
         """
         Update the XML component files to reflect the current state of the networkx graph. 
@@ -1297,30 +1361,4 @@ class DesignEnv(gym.Env):
         self.normalizer_x = {'min': float(np.min(x_coords)), 'max': float(np.max(x_coords))}
         self.normalizer_y = {'min': float(np.min(y_coords)), 'max': float(np.max(y_coords))}
 
-
-
-
-
-            #f"--geometry.remove.min-length=2.0" # Allow merging edges with differing attributes when their length is below min-length; default: 0
-            #f"--geometry.avoid-overlap=false" #Modify edge geometries to avoid overlap at junctions; default: true
-
-            # Does not seem to work.
-            # f"--junctions.join=true" # Joins junctions that are close to each other (recommended for OSM import); default: false
-            # f"--junctions.join-dist=40" # Determines the maximal distance for joining junctions (defaults to 10); default: 10
-
-            # Does not seem to work.
-            # f"--tls.join=true" # Tries to cluster tls-controlled nodes; default: false
-            # f"--tls.join-dist=40" #  Determines the maximal distance for joining traffic lights (defaults to 20); default: 20
-
-     
-            # f"--junctions.join=true" # Joins junctions that are close to each other (recommended for OSM import); default: false
-            # f"--junctions.join-dist=40" # Determines the maximal distance for joining junctions (defaults to 10); default: 10
-
-            # Seems to have an effect.
-            #f"--no-internal-links=true" # Omits internal links; default: false
-
-            # f"--rectangular-lane-cut=true" # Forces rectangular cuts between lanes and intersections; default: false
-            # f"--junctions.endpoint-shape=true" # Build junction shapes based on edge endpoints (ignoring edge overlap); default: false
-            # f"--junctions.minimal-shape=true" # Build junctions with minimal shapes (ignoring edge overlap); default: false
-            #f"--crossings.guess=true" # Guess pedestrian crossings based on the presence of sidewalks; default: false
         

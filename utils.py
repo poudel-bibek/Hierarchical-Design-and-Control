@@ -451,7 +451,7 @@ def get_initial_veh_edge_config(edges_dict, node_coords):
     """
     The initial (original) configuration of relevant vehicle edges.
     """
-    horizontal_edges= {
+    horizontal_edges_veh= {
         'top': ['-16666012#2', '-16666012#3', '-16666012#4', '-16666012#5', 
                                 '-16666012#6', '-16666012#7', '-16666012#9', '-16666012#11', 
                                 '-16666012#12', '-16666012#13', '-16666012#14', '-16666012#15', 
@@ -460,10 +460,11 @@ def get_initial_veh_edge_config(edges_dict, node_coords):
                                     '16666012#6', '16666012#7', '16666012#9', '16666012#11',
                                     '16666012#12', '16666012#13', '16666012#14', '16666012#15',
                                     '16666012#16', '16666012#17']
-    }
+                                }
+    
     veh_edges = {'top': {}, 'bottom': {}}
     for direction in ['top', 'bottom']:
-        for edge_id in horizontal_edges[direction]:
+        for edge_id in horizontal_edges_veh[direction]:
             edge_data = edges_dict[edge_id]
             from_node = edge_data.get('from')
             to_node = edge_data.get('to')
@@ -518,7 +519,7 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
         # Handle top edges and top connection
         for edge_id, edge_data in list(iterative_edges['top'].items()): # convert to list first 
             # The directions are reversed in top and bottom. For top, greater than `to` and less than `from`.
-            if (edge_data['to_x'] <= x_coord <= edge_data['from_x']) and edge_id not in edges_to_remove: 
+            if (edge_data['to_x'] < x_coord < edge_data['from_x']) and edge_id not in edges_to_remove: 
 
                 print(f"Top edge {edge_id} intersects mnode {m_node} at x={x_coord:.2f}.")
                 edges_to_remove.append(edge_id)
@@ -585,7 +586,7 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
         # Check bottom edges and bottom connection
         for edge_id, edge_data in list(iterative_edges['bottom'].items()):
             # For bottom, greater than `from` and less than `to`.
-            if (edge_data['from_x'] <= x_coord <= edge_data['to_x']) and edge_id not in edges_to_remove:
+            if (edge_data['from_x'] < x_coord < edge_data['to_x']) and edge_id not in edges_to_remove:
 
                 print(f"Bottom edge {edge_id} intersects mnode {m_node} at x={x_coord:.2f}.")
                 edges_to_remove.append(edge_id) # Need to check both in top and bottom.
@@ -667,3 +668,26 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
     # Remove edges that have `right` or `left` in their id.
     edges_to_remove = [edge_id for edge_id in edges_to_remove if not 'right' in edge_id and not 'left' in edge_id]
     return edges_to_remove, edges_to_add, conn_root, m_node_mapping
+
+# Instead of setting the y-coordinate of the middle node as mid_point in networkx_graph, interpolation is used.
+def interpolate_y_coordinate(denorm_x_coordinate, horizontal_edges_veh_original_data):
+    """
+    Helper function to interpolate y-coordinate. 
+    top and bottom will have two coordinates. 
+
+    For both top and bottom: x-coordinate increases from left to right. y-coordinate increases from bottom to top.
+    """
+    coords = []
+    for direction in ['top', 'bottom']:
+        for _, edge_data in horizontal_edges_veh_original_data[direction].items():
+            print(edge_data)
+            if edge_data['from_x'] <= denorm_x_coordinate <= edge_data['to_x']:
+                sign = +1 if edge_data['to_x'] > edge_data['from_x'] else -1
+                percentage_of_x = (denorm_x_coordinate - edge_data['from_x']) / (edge_data['to_x'] - edge_data['from_x'])
+                
+                y_coord = edge_data['from_y'] + sign * percentage_of_x * (edge_data['to_y'] - edge_data['from_y'])
+                coords.append(y_coord)
+
+    return coords[0] # only top one
+
+
