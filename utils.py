@@ -1,13 +1,21 @@
 import os
-import time
 import xml
-import xml.etree.ElementTree as ET
+import time
+import json
 import logging
-import matplotlib.pyplot as plt
-import seaborn as sns
-import random
-import networkx as nx
 import numpy as np
+import seaborn as sns
+from scipy import stats
+import matplotlib.pyplot as plt
+import matplotlib.lines as mlines
+import matplotlib.patches as mpatches
+from matplotlib.lines import Line2D
+from matplotlib.collections import LineCollection
+from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.ticker import FuncFormatter, LinearLocator
+from matplotlib.ticker import MaxNLocator, MultipleLocator
+import xml.etree.ElementTree as ET
+from matplotlib.gridspec import GridSpec
 
 def convert_demand_to_scale_factor(demand, demand_type, input_file):
     """
@@ -151,543 +159,1002 @@ def scale_demand(input_file, output_file, scale_factor, demand_type):
     
     # Wait for the file writing operations to finish (it could be large)
     time.sleep(2)
-
-
-def find_connecting_edges(net, start_edge_id, end_edge_id):
+    
+def visualize_observation(observation):
     """
-    Use a breadth-first search to find paths between two edges.
-    net = sumo network file.
+    Visualize each timestep observation as image (save as png).
+    Observation shape is (96, action_timesteps) containing normalized values between 0-1 representing:
+    - Intersection vehicle counts (incoming, inside, outgoing) for each direction
+    - Intersection pedestrian counts (incoming, outgoing) for each direction  
+    - Midblock vehicle counts (incoming, inside, outgoing) for each direction
+    - Midblock pedestrian counts (incoming, outgoing) for each direction
     """
-    start_edge = net.getEdge(start_edge_id)
-    end_edge = net.getEdge(end_edge_id)
     
+    fig, ax = plt.subplots(figsize=(12, 8))
+    n_timesteps = observation.shape[0] 
+    n_features = observation.shape[1]
     
-    queue = [(start_edge, [start_edge])]
-    visited = set()
+    im = ax.imshow(observation, cmap='YlOrRd', interpolation='nearest', vmin=0, vmax=1)
+    ax.set_title('Observation')
+    ax.set_xlabel('Features')
+    ax.set_ylabel('Timesteps')
     
-    while queue:
-        current_edge, path = queue.pop(0)
-        
-        if current_edge == end_edge:
-            return path
-        
-        if current_edge in visited:
-            continue
-        
-        visited.add(current_edge)
-        
-        for next_edge in current_edge.getOutgoing():
-            if next_edge not in visited:
-                new_path = path + [next_edge]
-                queue.append((next_edge, new_path))
+    # Add grid lines at feature boundaries
+    ax.set_xticks(np.arange(-.5, n_features, 1), minor=True)
+    ax.set_yticks(np.arange(-.5, n_timesteps , 1), minor=True)
+    ax.grid(which="minor", color="black", linestyle='-', linewidth=0.5)
     
-    return None  # No path found
-
-def create_new_sumocfg(network_iteration):
-    """
-    Need to iteratively load a new net file.
-    """
-    config_content = f"""<?xml version="1.0" encoding="UTF-8"?>
-                        <configuration>
-                            <input>
-                                <net-file value="network_iterations/network_iteration_{network_iteration}.net.xml"/>
-                            </input>
-                            <output>
-                                <log value="sumo_logfile.txt"/>
-                                <error-log value="sumo_errorlog.txt"/>
-                            </output>
-                        </configuration>"""
-    
-    temp_config_path = './SUMO_files/iterative_craver.sumocfg'
-    with open(temp_config_path, 'w') as f:
-        f.write(config_content)
-
-def modify_net_file(crosswalks_to_disable, net_file_path):
-    """
-    Change the appearence of disallowed crosswalks.
-    """
-    tree = ET.parse(net_file_path)
-    root = tree.getroot()
-
-    for crosswalk_id in crosswalks_to_disable:
-        # Find the edge element corresponding to this crosswalk
-        edge = root.find(f".//edge[@id='{crosswalk_id}']")
-        if edge is not None:
-            # Find the lane within the crosswalk
-            lane = edge.find('lane')
-            if lane is not None:
-                lane.set('width', '0.1')
-
-    tree.write(net_file_path) # output
-
-
-def save_graph_visualization(graph, iteration):
-    """
-    """
-
-    plt.figure(figsize=(20, 15))
-
-    pos = nx.get_node_attributes(graph, 'pos')
-    
-    # Draw nodes
-    nx.draw_networkx_nodes(graph, pos, node_size=30, node_color='slateblue', alpha=0.8)
-    # Draw edges
-    nx.draw_networkx_edges(graph, pos, edge_color='orange', width=2, alpha=0.2)
-    # Draw node labels slightly above nodes
-    label_pos = {node: (coords[0], coords[1] + random.uniform(-2.5, 2.5)) for node, coords in pos.items()}
-    nx.draw_networkx_labels(graph, label_pos, font_size=6)
-    
-    plt.title(f"Pedestrian Graph - Iteration {iteration}", fontsize=12)
-    plt.axis('off')
-    plt.tight_layout()
-    
-    os.makedirs('graph_iterations', exist_ok=True)
-    save_path = os.path.join('graph_iterations', f'graph_iteration_{iteration}.png')
-    
-    plt.savefig(save_path, dpi=300, bbox_inches='tight')
-    print(f"Graph visualization saved to {save_path}")
+    plt.colorbar(im, location='right', shrink=0.25, aspect=10)
+    plt.savefig('observation.png', bbox_inches='tight', dpi=200)
     plt.close()
 
-def save_better_graph_visualization(graph, iteration, 
-                                  show_node_ids=False, 
-                                  show_coordinates=False,
-                                  show_edge_width=False, 
-                                  proportional_width=False,
-                                  scale_position='bottom_right',
-                                  node_size=300, 
-                                  font_size=16,
-                                  edge_width=2.0, 
-                                  dpi=300):
+def truncate_colormap(cmap, minval=0.5, maxval=0.8, n=100):
     """
-    Creates an enhanced visualization of the pedestrian graph.
-    
-    Args:
-        graph: NetworkX graph to visualize
-        iteration: Current iteration number for saving the file
-        show_node_ids: If True, displays node IDs
-        show_coordinates: If True, displays node (x,y) coordinates 
-        show_edge_width: If True, displays edge width values in meters
-        proportional_width: If True, draws edges with width proportional to actual width
-        scale_position: Position of scale bar ('bottom_right' or 'bottom_left')
-        node_size: Size of nodes in visualization
-        font_size: Base font size for text
-        edge_width: Base width for edges
-        dpi: DPI for output image
+    Create a truncated colormap from an existing colormap.
     """
-    # Set style and colors
-    sns.set_style("white")
-    colors = {
-        'junction': '#FF6B6B',
-        'special': '#4CAF50',  # Green color for special nodes
-        'edge': '#45B7D1',
-        'special_edge': '#90EE90',  # Light green for edges between special nodes
-        'text': '#2C3E50',
-        'grid': '#E4E7EB'
-    }
+    new_cmap = LinearSegmentedColormap.from_list(
+        f"trunc({cmap.name},{minval:.2f},{maxval:.2f})",
+        cmap(np.linspace(minval, maxval, n)))
+    return new_cmap
 
-    fig, ax = plt.subplots(figsize=(16, 16))
+def plot_gradient_line(ax, x, y, std=None, cmap_name='Blues', label='', lw=2, zorder=2):
+    """
+    Helper function to plot a gradient line with optional standard deviation shading.
+    """
+    x = np.array(x)
+    y = np.array(y)
+    points = np.array([x, y]).T.reshape(-1, 1, 2)
+    segments = np.concatenate([points[:-1], points[1:]], axis=1)
+
+    # Use a truncated colormap over a narrow range for subtle gradient
+    cmap_original = plt.get_cmap(cmap_name)
+    cmap = truncate_colormap(cmap_original, 0.5, 0.8)
+    norm = plt.Normalize(x.min(), x.max())
+
+    # If std is provided, add shaded region for standard deviation
+    if std is not None:
+        # Create gradient colors for the fill region
+        colors = cmap(norm(x))
+        # Add alpha channel to make fill slightly transparent
+        colors = np.array([(*c[:-1], 0.3) for c in colors])
+        
+        # Plot the shaded region
+        ax.fill_between(x, y - std, y + std, 
+                       color=colors,
+                       zorder=zorder)
+
+    # Plot the line with gradient
+    lc = LineCollection(segments, cmap=cmap, norm=norm, linewidth=lw, zorder=zorder+1)
+    lc.set_array(x)
+    ax.add_collection(lc)
+
+    # Add markers
+    ax.scatter(x, y, c=x, cmap=cmap, norm=norm, zorder=zorder+2, edgecolor='k', s=50)
+
+    # Create dummy line for legend
+    mid_val = (x.min() + x.max()) / 2
+    color = cmap(norm(mid_val))
+    handle = Line2D([0], [0], color=color, lw=lw, marker='o', markersize=6,
+                    markerfacecolor=color, markeredgecolor='k', label=label)
+    return handle
+
+def get_averages(result_json_path, total=False):
+    """
+    Helper function that reads a JSON file with results and returns the scales,
+    means and standard deviations for vehicles and pedestrians.
+    """
+    with open(result_json_path, 'r') as f:
+        results = json.load(f)
+
+    scales, veh_mean, ped_mean = [], [], []
+    veh_std, ped_std = [], []
+    
+    for scale_str, runs in results.items():
+        scale = float(scale_str)
+        scales.append(scale)
+        veh_vals = []
+        ped_vals = []
+        
+        for run in runs.values():
+            if total:
+                veh_vals.append(run["total_veh_waiting_time"])
+                ped_vals.append(run["total_ped_waiting_time"])
+            else:
+                veh_vals.append(run["veh_avg_waiting_time"])
+                ped_vals.append(run["ped_avg_waiting_time"])
+                
+        veh_mean.append(np.mean(veh_vals))
+        ped_mean.append(np.mean(ped_vals))
+        veh_std.append(np.std(veh_vals))
+        ped_std.append(np.std(ped_vals))
+
+    # Convert to numpy arrays and sort by scale
+    scales = np.array(scales)
+    sort_idx = np.argsort(scales)
+    
+    return (scales[sort_idx], 
+            np.array(veh_mean)[sort_idx], 
+            np.array(ped_mean)[sort_idx],
+            np.array(veh_std)[sort_idx],
+            np.array(ped_std)[sort_idx])
+
+def count_consecutive_ones_filtered(actions):
+    """
+    Helper function to count consecutive occurrences of 1's in the action list.
+    The first action (corresponding to intersection) is ignored.
+    Returns a list where each element is the length of a consecutive sequence of 1's.
+
+    Example:
+    [0, 1, 1, 0, 1, 0, 0, 1, 1, 1] → [2, 1, 3]
+    """
+    if not actions or len(actions) <= 1:
+        return []
+
+    counts = []
+    count = 0
+
+    # Start from the second action (index 1)
+    for action in actions[1:]:
+        if action == 1:
+            count += 1
+        else:
+            if count > 0:
+                counts.append(count)
+                count = 0
+
+    # Don't forget to add the last sequence if it ends with 1's
+    if count > 0:
+        counts.append(count)
+
+    return counts
+
+def plot_avg_consecutive_ones(file_path, output_path="./results/sampled_actions_retro.pdf"):
+    """
+    Creates a clean, professional plot of the average sum of consecutive occurrences of '1's
+    per training iteration with a vibrant appearance.
+
+    Parameters:
+        file_path (str): Path to the JSON file containing the data.
+        output_path (str): Path to save the output PDF file.
+    """
+
+    # Load data
+    with open(file_path, "r") as file:
+        data = json.load(file)
+
+    # Compute the average sum of consecutive 1's per iteration
+    avg_consecutive_ones_per_iteration = []
+    iterations = []
+
+    for iteration, actions_list in data.items():
+        iteration = int(iteration)  # Convert iteration key to integer
+        consecutive_ones = [count_consecutive_ones_filtered(action_list) for action_list in actions_list]
+
+        # Calculate the sum of consecutive 1's for each sample, then average across samples
+        sums_of_consecutive_ones = [sum(seq) for seq in consecutive_ones if seq]
+        avg_consecutive_ones = np.mean(sums_of_consecutive_ones) if sums_of_consecutive_ones else 0
+
+        iterations.append(iteration)
+        avg_consecutive_ones_per_iteration.append(avg_consecutive_ones)
+
+    # Sort by iteration
+    iterations, avg_consecutive_ones_per_iteration = zip(*sorted(zip(iterations, avg_consecutive_ones_per_iteration)))
+    iterations = np.array(iterations)
+    avg_consecutive_ones_per_iteration = np.array(avg_consecutive_ones_per_iteration)
+
+    # Set base font size
+    fs = 24  # Base font size - adjust this to change all font sizes proportionally
+
+    # Set up the figure with a clean style
+    plt.rcParams['font.family'] = 'sans-serif'
+    plt.rcParams['font.sans-serif'] = ['Arial', 'Helvetica', 'DejaVu Sans']
+    plt.rcParams['axes.edgecolor'] = '#333333'
+    plt.rcParams['axes.linewidth'] = 1.0
+    plt.rcParams['xtick.major.size'] = 0
+    plt.rcParams['ytick.major.size'] = 0
+
+    # Create figure and axis
+    fig, ax = plt.subplots(figsize=(12, 8), facecolor='white')
+
+    # Set background color
     ax.set_facecolor('white')
-    fig.patch.set_facecolor('white')
 
-    pos = nx.get_node_attributes(graph, 'pos')
-    
-    # Calculate plot bounds with extra space at bottom
-    x_coords, y_coords = zip(*pos.values())
-    x_min, x_max = min(x_coords), max(x_coords)
-    y_min, y_max = min(y_coords), max(y_coords)
-    padding = 0.1
-    x_range = x_max - x_min
-    y_range = y_max - y_min
-    
-    ax.set_xlim(x_min - x_range*padding, x_max + x_range*padding)
-    ax.set_ylim(y_min - y_range*padding, y_max + y_range*padding)
+    # Calculate y-axis limits with some padding
+    y_min = min(avg_consecutive_ones_per_iteration) * 0.9
+    y_max = max(avg_consecutive_ones_per_iteration) * 1.1
 
-    ax.grid(True, linestyle='--', color=colors['grid'], alpha=0.5)
+    # Calculate x-axis limits with added margins
+    x_min = min(iterations) - (max(iterations) - min(iterations)) * 0.05  # 5% margin on left
+    x_max = max(iterations) + (max(iterations) - min(iterations)) * 0.05  # 5% margin on right
+
+    # Set axis limits
+    ax.set_ylim(y_min, y_max)
+    ax.set_xlim(x_min, x_max)
+
+    # Format y-axis with one decimal place
+    def format_with_decimals(x, pos):
+        return f'{x:.1f}'
+
+    ax.yaxis.set_major_formatter(FuncFormatter(format_with_decimals))
+
+    # Add light grid lines with slightly more visibility
+    ax.grid(True, linestyle='-', alpha=0.15, color='#333333')
     ax.set_axisbelow(True)
 
-    # Separate special and regular nodes
-    special_nodes = [node for node in graph.nodes() if any(suffix in str(node) for suffix in ['_top', '_bottom', '_mid'])]
-    regular_nodes = [node for node in graph.nodes() if node not in special_nodes]
-
-    # Draw edges with different colors based on endpoint types
-    edge_widths = [data['width'] for (_, _, data) in graph.edges(data=True)]
-    max_width = max(edge_widths) if edge_widths else 1
-    
-    for (u, v, data) in graph.edges(data=True):
-        width = edge_width * (data['width']/max_width) if proportional_width else edge_width
-        # Check if both endpoints are special nodes
-        is_special_edge = u in special_nodes and v in special_nodes
-        edge_color = colors['special_edge'] if is_special_edge else colors['edge']
-        
-        # Draw multiple lines with decreasing alpha for glow effect
-        for w, a in zip([width*1.5, width*1.2, width], [0.1, 0.2, 0.7]):
-            nx.draw_networkx_edges(
-                graph, pos,
-                edgelist=[(u, v)],
-                width=w,
-                edge_color=edge_color,
-                alpha=a,
-                style='solid'
-            )
-
-    # Draw regular nodes
-    if regular_nodes:
-        nx.draw_networkx_nodes(
-            graph, pos,
-            nodelist=regular_nodes,
-            node_color=colors['junction'],
-            node_size=node_size*1.3,
-            alpha=0.3,
-            node_shape='o'
-        )
-        
-        nx.draw_networkx_nodes(
-            graph, pos,
-            nodelist=regular_nodes,
-            node_color=colors['junction'],
-            node_size=node_size,
-            alpha=0.9,
-            node_shape='o',
-            edgecolors='white',
-            linewidths=2
-        )
-
-    # Draw special nodes
-    if special_nodes:
-        nx.draw_networkx_nodes(
-            graph, pos,
-            nodelist=special_nodes,
-            node_color=colors['special'],
-            node_size=node_size*1.3,
-            alpha=0.3,
-            node_shape='o'
-        )
-        
-        nx.draw_networkx_nodes(
-            graph, pos,
-            nodelist=special_nodes,
-            node_color=colors['special'],
-            node_size=node_size,
-            alpha=0.9,
-            node_shape='o',
-            edgecolors='white',
-            linewidths=2
-        )
-
-    # Add labels if requested
-    if show_node_ids or show_coordinates:
-        labels = {}
-        for node, coords in pos.items():
-            parts = []
-            if show_node_ids:
-                parts.append(str(node))
-            if show_coordinates:
-                parts.append(f"({coords[0]:.1f}, {coords[1]:.1f})")
-            labels[node] = '\n'.join(parts)
-            
-        label_pos = {node: (coords[0], coords[1] + y_range*0.02) for node, coords in pos.items()}
-        nx.draw_networkx_labels(graph, label_pos, labels=labels, font_size=font_size-4)
-
-    # Add edge width annotations if requested
-    if show_edge_width and proportional_width:
-        for u, v, data in graph.edges(data=True):
-            edge_center = np.mean([pos[u], pos[v]], axis=0)
-            plt.annotate(f"{data['width']:.1f}m", xy=edge_center, xytext=(5, 5),
-                        textcoords='offset points', fontsize=font_size-4)
-
-    # Update legend elements to include special nodes
-    legend_elements = [
-        plt.Line2D([0], [0], color=colors['edge'], lw=edge_width, label = "Existing Edge"),
-        plt.Line2D([0], [0], color=colors['special_edge'], lw=edge_width, label='New Edge'),
-        plt.scatter([0], [0], c=colors['junction'], marker='o', s=node_size, label='Existing Node'),
-        plt.scatter([0], [0], c=colors['special'], marker='o', s=node_size, label='New Node')
-    ]
-    
-    # Add legend at the bottom
-    ax.legend(handles=legend_elements, loc='lower left', fontsize=font_size)
-
-    # Add network stats
-    junction_count = len(graph.nodes())
-    edge_count = graph.number_of_edges()
-    stats = (f"Network Statistics\n"
-            f"Junctions: {junction_count}\n"
-            f"Total Paths: {edge_count}")
-    ax.text(0.5, -0.1, stats, transform=ax.transAxes, fontsize=font_size,
-            horizontalalignment='center', verticalalignment='top')
-
-    # Add scale bar
-    scale_bar_length = x_range/10
-    scale_x = x_max - scale_bar_length - x_range*0.05
-    scale_y = y_min + y_range*0.05
-    
-    ax.plot([scale_x, scale_x + scale_bar_length], [scale_y, scale_y], 
-            color=colors['text'], linewidth=2)
-    
-    ax.text(scale_x + scale_bar_length/2, scale_y + y_range*0.02, 'Scale',
-             ha='center', fontsize=font_size-2)
-    ax.text(scale_x + scale_bar_length/2, scale_y - y_range*0.02, f'{scale_bar_length:.1f}m',
-             ha='center', fontsize=font_size-2)
-
-    # Remove axes
-    ax.set_xticks([])
-    ax.set_yticks([])
+    # Remove top and right spines
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
-    ax.spines['bottom'].set_visible(False)
-    ax.spines['left'].set_visible(False)
 
+    # Use a more vibrant blue for the data points
+    VIBRANT_BLUE = '#2E5EAA'  # More vibrant blue for data points
+
+    # Create scatter plot with more vibrant, semi-transparent circles
+    scatter = ax.scatter(iterations, avg_consecutive_ones_per_iteration,
+                        s=110, edgecolors=VIBRANT_BLUE, facecolors='none',
+                        linewidth=2.0, alpha=0.75, zorder=3)
+
+    # Fit a trend line
+    z = np.polyfit(iterations, avg_consecutive_ones_per_iteration, 1)
+    p = np.poly1d(z)
+
+    # Create x values for the trend line (only within the data range)
+    x_trend = np.linspace(min(iterations), max(iterations), 100)
+    y_trend = p(x_trend)
+
+    # Use a very dark blue color for the trend line - almost navy blue
+    VERY_DARK_BLUE = '#0A2472'  # Very dark blue/navy color
+
+    # Plot the trend line as a solid, very dark line
+    trend_line = ax.plot(x_trend, y_trend, color=VERY_DARK_BLUE, linewidth=4.0, zorder=4)
+
+    # Set labels with increased font size and more vibrant color
+    LABEL_COLOR = '#1A1A1A'  # Slightly lighter than pure black for better contrast
+    ax.set_xlabel('Training Iteration', fontsize=fs*1.2, labelpad=10, color=LABEL_COLOR)
+    ax.set_ylabel('# of Synchronized Green Signals', fontsize=fs*1.2, labelpad=10, color=LABEL_COLOR)
+
+    # Line for trend line - use the very dark blue color
+    trend_line_handle = mlines.Line2D([], [], color=VERY_DARK_BLUE, linewidth=4.0,
+                                     label='Trend Line')
+
+    # Add the legend with the proper handles
+    ax.legend(handles=[trend_line_handle],
+             loc='upper right', frameon=True, framealpha=0.9,
+             edgecolor='#CCCCCC', fontsize=fs)
+
+    # Add padding between y-axis and tick labels
+    ax.tick_params(axis='y', pad=8)  # Add padding between y-axis and y-tick labels
+
+    # Customize tick parameters with larger font size and more vibrant color
+    ax.tick_params(axis='both', colors=LABEL_COLOR, labelsize=fs)
+
+    # Add a subtle border around the plot with slightly more visible color
+    for spine in ['left', 'bottom']:
+        ax.spines[spine].set_color('#AAAAAA')  # Slightly darker border
+        ax.spines[spine].set_linewidth(1.2)  # Slightly thicker border
+
+    # Add more padding around the entire plot
+    plt.tight_layout(pad=2.0)
+
+    # Save with extra padding
+    plt.savefig(output_path, dpi=300, bbox_inches='tight', pad_inches=0.3)
+    plt.show()
+
+    print(f"Plot saved to {output_path}")
+
+def plot_main_results(*json_paths, in_range_demand_scales, show_scales=True):
+    """
+    Plot consolidated results from multiple JSON files into a single figure with 4 subplots.
+    """
+    # Original demand values
+    original_vehicle_demand = 201.54    # veh/hr
+    original_pedestrian_demand = 2222.80  # ped/hr
+
+    # Custom color map assignment - TL orange, unsignalized blue, RL green
+    custom_cmaps = ['Oranges', 'Blues', 'Greens']
+
+    # Set style
+    sns.set_theme(style="whitegrid", context="talk")
+
+    # Set up the figure with a 2x2 grid
+    fig = plt.figure(figsize=(16, 7))
+    gs = GridSpec(2, 2, figure=fig)
+
+    # Create subplots with shared x-axes
+    ax_ped_avg = fig.add_subplot(gs[0, 0])
+    ax_ped_total = fig.add_subplot(gs[1, 0], sharex=ax_ped_avg)
+    ax_veh_avg = fig.add_subplot(gs[0, 1])
+    ax_veh_total = fig.add_subplot(gs[1, 1], sharex=ax_veh_avg)
+
+    # Store legend handles and labels
+    legend_handles = []
+    legend_labels = []
+
+    # Calculate valid demand ranges
+    valid_min_scale = min(in_range_demand_scales)
+    valid_max_scale = max(in_range_demand_scales)
+    veh_valid_min = valid_min_scale * original_vehicle_demand
+    veh_valid_max = valid_max_scale * original_vehicle_demand
+    ped_valid_min = valid_min_scale * original_pedestrian_demand
+    ped_valid_max = valid_max_scale * original_pedestrian_demand
+
+    # Set labels dictionary for methods and reorder TL to be first
+    if len(json_paths) == 3:
+        # Get the indices of each method
+        tl_idx = [i for i, path in enumerate(json_paths) if 'tl' in path.lower()][0]
+        us_idx = [i for i, path in enumerate(json_paths) if 'unsignalized' in path.lower()][0]
+        rl_idx = [i for i, path in enumerate(json_paths) if 'ppo' in path.lower()][0]
+
+        # Reorder json_paths to have TL first
+        json_paths = list(json_paths)
+        json_paths = [json_paths[tl_idx], json_paths[us_idx], json_paths[rl_idx]]
+        labels = ['Signalized', 'Unsignalized', 'RL (Ours)']
+    else:
+        # Get the indices of each method
+        tl_idx = [i for i, path in enumerate(json_paths) if 'tl' in path.lower()][0]
+        rl_idx = [i for i, path in enumerate(json_paths) if 'ppo' in path.lower()][0]
+
+        # Reorder json_paths to have TL first
+        json_paths = list(json_paths)
+        json_paths = [json_paths[tl_idx], json_paths[rl_idx]]
+        labels = ['Signalized', 'RL (Ours)']
+
+    # First get the data range to set proper limits
+    all_ped_demands = []
+    all_veh_demands = []
+    for json_path in json_paths:
+        scales, _, _, _, _ = get_averages(json_path, total=False)
+        all_ped_demands.extend(scales * original_pedestrian_demand)
+        all_veh_demands.extend(scales * original_vehicle_demand)
+
+    # Calculate the limits with symmetrical margins 
+    ped_min, ped_max = min(all_ped_demands), max(all_ped_demands)
+    veh_min, veh_max = min(all_veh_demands), max(all_veh_demands)
+    ped_margin = 0.05 * (ped_max - ped_min)  # 5% margin on both sides
+    veh_margin = 0.05 * (veh_max - veh_min)  # 5% margin on both sides
+
+    # Set the limits for all plots with symmetrical margins
+    for ax in [ax_ped_avg, ax_ped_total]:
+        ax.set_xlim(ped_min - ped_margin, ped_max + ped_margin)
+    for ax in [ax_veh_avg, ax_veh_total]:
+        ax.set_xlim(veh_min - veh_margin, veh_max + veh_margin)
+
+    # Now add the shading using the full plot limits
+    for ax in [ax_ped_avg, ax_ped_total]:
+        xlim = ax.get_xlim()
+        ax.axvspan(xlim[0], ped_valid_min, facecolor='grey', alpha=0.25, zorder=-1)
+        ax.axvspan(ped_valid_max, xlim[1], facecolor='grey', alpha=0.25, zorder=-1)
+
+    for ax in [ax_veh_avg, ax_veh_total]:
+        xlim = ax.get_xlim()
+        ax.axvspan(xlim[0], veh_valid_min, facecolor='grey', alpha=0.25, zorder=-1)
+        ax.axvspan(veh_valid_max, xlim[1], facecolor='grey', alpha=0.25, zorder=-1)
+
+    for idx, json_path in enumerate(json_paths):
+        # Get data using the helper function
+        scales, veh_mean, ped_mean, veh_std, ped_std = get_averages(json_path, total=False)
+        _, veh_total, ped_total, veh_total_std, ped_total_std = get_averages(json_path, total=True)
+
+        # Use labels instead of raw method name
+        method_name = labels[idx]
+
+        # Convert scales to actual demands
+        veh_demands = scales * original_vehicle_demand
+        ped_demands = scales * original_pedestrian_demand
+
+        # Get color map for this method - use custom color assignment
+        cmap = custom_cmaps[idx] if idx < len(custom_cmaps) else None
+
+        # Plot pedestrian data with gradient lines
+        handle_ped_avg = plot_gradient_line(ax_ped_avg, ped_demands, ped_mean,
+                                          std=ped_std, cmap_name=cmap,
+                                          label=method_name, lw=2, zorder=2)
+
+        handle_ped_total = plot_gradient_line(ax_ped_total, ped_demands, ped_total,
+                                            std=ped_total_std, cmap_name=cmap,
+                                            label=method_name, lw=2, zorder=2)
+
+        # Plot vehicle data with gradient lines
+        handle_veh_avg = plot_gradient_line(ax_veh_avg, veh_demands, veh_mean,
+                                          std=veh_std, cmap_name=cmap,
+                                          label=method_name, lw=2, zorder=2)
+
+        handle_veh_total = plot_gradient_line(ax_veh_total, veh_demands, veh_total,
+                                            std=veh_total_std, cmap_name=cmap,
+                                            label=method_name, lw=2, zorder=2)
+
+        # Add to legend handles and labels (remove the if idx == 0 condition)
+        legend_handles.append(handle_ped_avg)
+        legend_labels.append(method_name)
+
+    # Set grid style with short dashes
+    for ax in [ax_ped_avg, ax_ped_total, ax_veh_avg, ax_veh_total]:
+        ax.grid(True, linestyle=(0, (3, 3)), linewidth=0.85)
+
+    fs = 18  # Base font size
+
+    # Set titles
+    ax_ped_avg.set_title('Pedestrian', fontweight='bold', fontsize=fs)
+    ax_veh_avg.set_title('Vehicle', fontweight='bold', fontsize=fs)
+
+    # Set y-axis labels with consistent alignment
+    fig.text(0.044, 0.74, 'Average Wait Time (s)', va='center', rotation='vertical', fontsize=fs-2)
+    fig.text(0.044, 0.32, 'Total Wait Time (×10³ s)', va='center', rotation='vertical', fontsize=fs-2)
+
+    # Right side (Vehicle)
+    fig.text(0.505, 0.74, 'Average Wait Time (s)', va='center', rotation='vertical', fontsize=fs-2)
+    fig.text(0.505, 0.32, 'Total Wait Time (×10³ s)', va='center', rotation='vertical', fontsize=fs-2)
+
+    # Set x-labels
+    ax_ped_avg.set_xlabel('')  # Remove label from top plots
+    ax_veh_avg.set_xlabel('')
+    if show_scales:
+        ax_ped_total.set_xlabel('Demand Scale', fontsize=fs-2)
+        ax_veh_total.set_xlabel('Demand Scale', fontsize=fs-2)
+    else:
+        ax_ped_total.set_xlabel('Demand (ped/hr)', fontsize=fs-2)
+        ax_veh_total.set_xlabel('Demand (veh/hr)', fontsize=fs-2)
+
+    # Set tick sizes for all axes
+    for ax in [ax_ped_avg, ax_ped_total, ax_veh_avg, ax_veh_total]:
+        ax.tick_params(axis='both', which='major', labelsize=fs-2)
+
+    # Set consistent x-ticks for all subplots
+    all_scales = np.unique(scales)  # Get unique scales
+
+    # MODIFICATION: Remove the last scale (2.75x) from the scales list
+    all_scales = all_scales[:-1]
+
+    veh_ticks = [scale * original_vehicle_demand for scale in all_scales]
+    ped_ticks = [scale * original_pedestrian_demand for scale in all_scales]
+
+    # Use every other tick but include the last one
+    veh_ticks = veh_ticks[::2]
+    ped_ticks = ped_ticks[::2]
+    if veh_ticks[-1] != all_scales[-1] * original_vehicle_demand:
+        veh_ticks = np.append(veh_ticks, all_scales[-1] * original_vehicle_demand)
+    if ped_ticks[-1] != all_scales[-1] * original_pedestrian_demand:
+        ped_ticks = np.append(ped_ticks, all_scales[-1] * original_pedestrian_demand)
+
+    # Get corresponding scales for labels
+    scales_for_labels = list(all_scales[::2])
+    if scales_for_labels[-1] != all_scales[-1]:
+        scales_for_labels.append(all_scales[-1])
+
+    # Set ticks for bottom plots only
+    ax_ped_total.set_xticks(ped_ticks)
+    ax_veh_total.set_xticks(veh_ticks)
+
+    # Completely hide x-ticks for top plots
+    ax_ped_avg.tick_params(axis='x', which='both', bottom=False, top=False, labelbottom=False)
+    ax_veh_avg.tick_params(axis='x', which='both', bottom=False, top=False, labelbottom=False)
+
+    # Create main tick labels (demand values)
+    veh_xtick_labels = [f"{int(round(val))}" for val in veh_ticks]
+    ped_xtick_labels = [f"{int(round(val))}" for val in ped_ticks]
+
+    # Format y-axis values
+    def format_avg_ticks(x, _):
+        return f"{x:.1f}"
+
+    def format_total_ticks(x, _):
+        return f"{(x/1000):.1f}"
+
+    # Apply formatters
+    ax_ped_avg.yaxis.set_major_formatter(FuncFormatter(format_avg_ticks))
+    ax_veh_avg.yaxis.set_major_formatter(FuncFormatter(format_avg_ticks))
+    ax_ped_total.yaxis.set_major_formatter(FuncFormatter(format_total_ticks))
+    ax_veh_total.yaxis.set_major_formatter(FuncFormatter(format_total_ticks))
+
+    # Get data ranges for each plot
+    ped_avg_data_min = min([min(ped_mean - ped_std) for _, _, ped_mean, _, ped_std in
+                          [get_averages(path, total=False) for path in json_paths]])
+    ped_avg_data_max = max([max(ped_mean + ped_std) for _, _, ped_mean, _, ped_std in
+                          [get_averages(path, total=False) for path in json_paths]])
+
+    veh_avg_data_min = min([min(veh_mean - veh_std) for _, veh_mean, _, veh_std, _ in
+                          [get_averages(path, total=False) for path in json_paths]])
+    veh_avg_data_max = max([max(veh_mean + veh_std) for _, veh_mean, _, veh_std, _ in
+                          [get_averages(path, total=False) for path in json_paths]])
+
+    ped_total_data_min = min([min(ped_total - ped_total_std) for _, _, ped_total, _, ped_total_std in
+                            [get_averages(path, total=True) for path in json_paths]])
+    ped_total_data_max = max([max(ped_total + ped_total_std) for _, _, ped_total, _, ped_total_std in
+                            [get_averages(path, total=True) for path in json_paths]])
+
+    veh_total_data_min = min([min(veh_total - veh_total_std) for _, veh_total, _, veh_total_std, _ in
+                            [get_averages(path, total=True) for path in json_paths]])
+    veh_total_data_max = max([max(veh_total + veh_total_std) for _, veh_total, _, veh_total_std, _ in
+                            [get_averages(path, total=True) for path in json_paths]])
+
+    # Ensure minimum values allow for lower data points (fixing crop issue at 0.5x)
+    ped_avg_data_min = max(0.5, ped_avg_data_min)  # Start at 0.5 for top plots
+    veh_avg_data_min = max(5.0, veh_avg_data_min)  # Start at 5.0 for top plots
+    ped_total_data_min = min(0.0, ped_total_data_min)  # Allow negative values for padding
+    veh_total_data_min = min(0.0, veh_total_data_min)  # Allow negative values for padding
+
+    # Set custom y-ticks with more space between plots
+    # For top plots, provide more headroom (fixing the orange line crop issue)
+    ped_avg_yticks = np.linspace(ped_avg_data_min, ped_avg_data_max * 1.05, 5)
+    veh_avg_yticks = np.linspace(veh_avg_data_min, veh_avg_data_max * 1.05, 5)
+
+    # For bottom plots, ensure full visibility
+    ped_total_yticks = np.linspace(ped_total_data_min, ped_total_data_max * 1.05, 5)
+    veh_total_yticks = np.linspace(veh_total_data_min, veh_total_data_max * 1.05, 5)
+
+    # Set the custom ticks
+    ax_ped_avg.set_yticks(ped_avg_yticks)
+    ax_veh_avg.set_yticks(veh_avg_yticks)
+    ax_ped_total.set_yticks(ped_total_yticks)
+    ax_veh_total.set_yticks(veh_total_yticks)
+
+    # Set the y-limits with additional padding
+    ax_ped_avg.set_ylim(ped_avg_yticks[0], ped_avg_yticks[-1] )
+    ax_veh_avg.set_ylim(veh_avg_yticks[0], veh_avg_yticks[-1] )
+    ax_ped_total.set_ylim(ped_total_yticks[0], ped_total_yticks[-1] * 1.1)
+    ax_veh_total.set_ylim(veh_total_yticks[0], veh_total_yticks[-1] * 1.1)
+
+    # Set ticks for bottom plots only
+    if show_scales:
+        scale_labels = [f"{scale:g}x" for scale in scales_for_labels]
+        ax_ped_total.set_xticklabels(scale_labels, fontsize=fs-2)
+        ax_veh_total.set_xticklabels(scale_labels, fontsize=fs-2)
+    else:
+        ax_ped_total.set_xticklabels(ped_xtick_labels, fontsize=fs-2)
+        ax_veh_total.set_xticklabels(veh_xtick_labels, fontsize=fs-2)
+
+    # Legend with consistent font size
+    leg = fig.legend(legend_handles, legend_labels,
+                    loc='center',
+                    bbox_to_anchor=(0.525, 0.04),
+                    ncol=len(legend_handles),
+                    frameon=True,
+                    framealpha=1.0,
+                    edgecolor='gray',
+                    fancybox=True,
+                    shadow=False,
+                    bbox_transform=fig.transFigure,
+                    fontsize=fs-4)
+
+    # Adjust subplot spacing
     plt.tight_layout()
-
-    # Save output
-    os.makedirs('graph_iterations', exist_ok=True)
-    save_path = os.path.join('graph_iterations', f'enhanced_graph_iteration_{iteration}.png')
-    plt.savefig(save_path, dpi=dpi, bbox_inches='tight', facecolor='white')
-    print(f"Enhanced graph visualization saved to {save_path}")
+    plt.subplots_adjust(left=0.1, right=0.95, bottom=0.15, wspace=0.20, hspace=0.14)
+    plt.savefig("./results/consolidated_results.pdf", bbox_inches='tight', dpi=300)
+    plt.show()
     plt.close()
 
 
-#### XML related Utils #####    
-def get_initial_veh_edge_config(edges_dict, node_coords):
+def plot_consolidated_insights(sampled_actions_file_path, conflict_json_file_path, switching_freq_data_path):
     """
-    The initial (original) configuration of relevant vehicle edges.
+    Creates a consolidated figure with three subplots:
+    1. Left: Bar chart of mean conflicts across demand scales with error bars
+    2. Middle: Plot of average consecutive ones over training iterations
+    3. Right: TL as horizontal line and RL as histogram for switching frequency (TL switching frequency is obtained analytically as 54 for 600 timestep horizon)
+
+    Parameters:
+    - sampled_actions_file_path: Path to JSON file containing action data
+    - conflict_json_file_path: Path to JSON file containing conflict data
+    - switching_freq_data: Dictionary containing switching frequency data (optional)
     """
-    horizontal_edges_veh= {
-        'top': ['-16666012#2', '-16666012#3', '-16666012#4', '-16666012#5', 
-                                '-16666012#6', '-16666012#7', '-16666012#9', '-16666012#11', 
-                                '-16666012#12', '-16666012#13', '-16666012#14', '-16666012#15', 
-                                '-16666012#16', '-16666012#17'],
-        'bottom': ['16666012#2', '16666012#3', '16666012#4', '16666012#5',
-                                    '16666012#6', '16666012#7', '16666012#9', '16666012#11',
-                                    '16666012#12', '16666012#13', '16666012#14', '16666012#15',
-                                    '16666012#16', '16666012#17']
-                                }
-    
-    veh_edges = {'top': {}, 'bottom': {}}
-    for direction in ['top', 'bottom']:
-        for edge_id in horizontal_edges_veh[direction]:
-            edge_data = edges_dict[edge_id]
-            from_node = edge_data.get('from')
-            to_node = edge_data.get('to')
-            veh_edges[direction][edge_id] = {
-                'from': from_node,
-                'to': to_node,
-                'from_x': node_coords[from_node],
-                'to_x': node_coords[to_node],
-                }
-    return veh_edges
+    # Function to process data from json
+    def process_json_data(json_data, key):
+        # Extract data by demand scale
+        data = {}
+        for demand_scale, runs in json_data.items():
+            values = [run_data[key] for run_index, run_data in runs.items()]
+            data[float(demand_scale)] = {
+                "mean": np.mean(values),
+                "std": np.std(values)
+            }
+        return data
 
-def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_edg_file, original_nod_file, conn_root):
-    """
-    Find which vehicle edges to remove and which to add (use x-coordinate of middle node to find intersecting edges that are split) .
-    Update the connection root to reflect the new connections.
-    """
+    # Load conflict data
+    with open(conflict_json_file_path, 'r') as f:
+        conflict_json_data = json.load(f)
 
-    # Create a dictionary of node coordinates 
-    node_coords = {}
-    for node in ET.parse(original_nod_file).getroot().findall('node'):
-        node_coords[node.get('id')] = round(float(node.get('x')), 2)
+    # Process conflict data
+    processed_conflict_data = process_json_data(conflict_json_data, "total_conflicts")
 
-    edges_dict = {edge.get('id'): edge for edge in ET.parse(original_edg_file).getroot().findall('edge')}
-    iterative_edges = get_initial_veh_edge_config(edges_dict, node_coords) # Initialize iterative_edges with initial edge config.
+    # Set base font size
+    fs = 23
 
-    all_edges = {} # also contain all the connected vehicle edges outside the corridor.
-    for edge_id in edges_dict.keys():
-        attributes_dict = edges_dict[edge_id].attrib # only from and to will be used
-        # Add from_x and to_x to the attributes_dict
-        attributes_dict['from_x'] = node_coords[attributes_dict['from']]
-        attributes_dict['to_x'] = node_coords[attributes_dict['to']]
-        all_edges[edge_id] = attributes_dict
+    # Set consistent number of y-ticks for all subplots
+    n_ticks = 5  # Define the number of y-ticks to use across all subplots
 
-    edges_to_remove = []
-    edges_to_add = {'top': {}, 'bottom': {}}
-    
-    # For left-right connections with middle nodes. Each middle node will have an edge to the left and right of it.
-    m_node_mapping = {
-        m_node: {
-            'top': {'from': None, 'to': None},
-            'bottom': {'from': None, 'to': None}
-        } for m_node in middle_nodes_to_add
-    }
+    # Set up the figure with a 1x3 grid
+    fig = plt.figure(figsize=(24, 6.2))
+    gs = GridSpec(1, 3, figure=fig, width_ratios=[1, 1.2, 1])
 
-    # As multiple middle nodes can intersect with the same vehicle edge, the splitting of one old edge into multiple new edges has to happen iteratively (splitting one edge at a time).
-    # In the same process, the connections (in the conn file) need to change as we go. i.e., Find intersects for each middle node and then update the conn file.
-    # The old edge in a connection could either be a 'to' or a 'from' edge. 
-    for i in range(len(middle_nodes_to_add)):
-        m_node = middle_nodes_to_add[i]
-        x_coord = round(networkx_graph.nodes[m_node]['pos'][0], 2)
-        
-        # Handle top edges and top connection
-        for edge_id, edge_data in list(iterative_edges['top'].items()): # convert to list first 
-            # The directions are reversed in top and bottom. For top, greater than `to` and less than `from`.
-            if (edge_data['to_x'] < x_coord < edge_data['from_x']) and edge_id not in edges_to_remove: 
+    # Create subplots
+    ax_near_accidents = fig.add_subplot(gs[0, 0])
+    ax_consecutive_ones = fig.add_subplot(gs[0, 1])
+    ax_switching_freq = fig.add_subplot(gs[0, 2])
 
-                print(f"Top edge {edge_id} intersects mnode {m_node} at x={x_coord:.2f}.")
-                edges_to_remove.append(edge_id)
-    
-                # Add new edges to edges_to_add
-                # Right part of split (from original from to middle)
-                right_edge_id_top = f"{edge_id}_right{i}" # The same edge can be split multiple times. Value of i not neceaasrily corresponding to number of times split.
-                right_edge_data = {
-                    'new_node': m_node,
-                    'from': edge_data['from'],
-                    'to': m_node,
-                    'from_x': round(edge_data['from_x'], 2),
-                    'to_x': x_coord,
-                }
-                
-                edges_to_add['top'][right_edge_id_top] = right_edge_data
-                iterative_edges['top'][right_edge_id_top] = right_edge_data # new_node attribute is extra here.
-                all_edges[right_edge_id_top] = right_edge_data # only from_x and to_x are used.
+    # Set style
+    plt.rcParams['font.family'] = 'sans-serif'
+    plt.rcParams['font.sans-serif'] = ['Arial', 'Helvetica', 'DejaVu Sans']
+    plt.rcParams['axes.edgecolor'] = '#333333'
+    plt.rcParams['axes.linewidth'] = 1.0
 
-                # Left part of split (from middle to original to)
-                left_edge_id_top = f"{edge_id}_left{i}" # The same edge can be split multiple times.
-                left_edge_data = {
-                    'new_node': m_node,
-                    'from': m_node,
-                    'to': edge_data['to'],
-                    'from_x': x_coord,
-                    'to_x': round(edge_data['to_x'], 2),
-                }
+    # Define colors - updated middle plot colors
+    BRIGHT_BLUE = '#0078D7'  # New bright blue for middle plot trend line
+    VIBRANT_BLUE = '#2E5EAA'  # Keep for scatter points
+    SALMON = '#E29587'  # Subtle salmon for TL/Unsignalized
+    SEA_GREEN = '#85B79D'  # Subtle sea green for RL
 
-                edges_to_add['top'][left_edge_id_top] = left_edge_data
-                iterative_edges['top'][left_edge_id_top] = left_edge_data # new_node attribute is extra here.
-                all_edges[left_edge_id_top] = left_edge_data # only from_x and to_x are used.
+    # ========== LEFT SUBPLOT: Conflict events across demand scales ==========
+    # Filter demand scales to only include the specified levels
+    selected_demand_scales = [0.5, 1.0, 1.5, 2.0, 2.5]
+    filtered_scales = [scale for scale in selected_demand_scales if scale in processed_conflict_data]
 
-                # Update current node mapping (for connections). On Top, connections go from right to left.
-                m_node_mapping[m_node]['top']['from'] = right_edge_id_top
-                m_node_mapping[m_node]['top']['to'] = left_edge_id_top
-                
-                # Update previous nodes' mappings if they referenced this split edge
-                for prev_node in middle_nodes_to_add[:i]:  # Only look at nodes we've processed before
-                    prev_mapping = m_node_mapping[prev_node]['top']
-                    if prev_mapping['from'] == edge_id:
-                        prev_mapping['from'] = left_edge_id_top # If the previous `from` edge was split, the new left will connect to it.
-                    if prev_mapping['to'] == edge_id:
-                        prev_mapping['to'] = right_edge_id_top # Similar reasoning as above. Previous left will connect to new right.
+    conflict_means = [processed_conflict_data[scale]["mean"] for scale in filtered_scales]
+    conflict_stds = [processed_conflict_data[scale]["std"] for scale in filtered_scales]
 
-                # Now add new connections to conn_root and remove old connections.
-                for connection in conn_root.findall('connection'): # This root is updated later so find all works
-                    from_edge, to_edge = connection.get('from'), connection.get('to') # Existing connection edge ids 
-                    if from_edge == edge_id or to_edge == edge_id:
-                        print(f"mnode {m_node} intersects top edge {edge_id} at x={x_coord:.2f} and is ref in conn: {connection}.")
+    # Even more subtle gradient - using shades of orange/coral with less intensity
+    colors = [
+        '#FDE5D2',  # Very pale orange for 0.5x
+        '#FDCBAD',  # Lighter orange for 1.0x
+        '#FCB08A',  # Light salmon for 1.5x
+        '#FC9774',  # Salmon for 2.0x
+        '#FB7D5B'   # Darker salmon for 2.5x
+    ]
 
-                        if edge_id == from_edge: 
-                            attributes = {'from': left_edge_id_top  , 'to': to_edge, 'fromLane': str(0), 'toLane': connection.get('toLane')}
-                        else:
-                            attributes = {'from': from_edge, 'to': right_edge_id_top, 'fromLane': connection.get('fromLane'), 'toLane': str(0)}
+    # Make sure we have enough colors
+    if len(colors) < len(filtered_scales):
+        colors = colors * (len(filtered_scales) // len(colors) + 1)
+    colors = colors[:len(filtered_scales)]
 
-                        #print(f"Adding new connection: {attributes}")
-                        new_connection = ET.Element('connection', attributes)
-                        new_connection.text = None  # Ensure there's no text content
-                        new_connection.tail = "\n\t\t"
-                        conn_root.append(new_connection)
-                        conn_root.remove(connection) # remove old connection
+    # Create bar positions
+    x_positions = np.arange(len(filtered_scales))
+    width = 0.5
 
-        # Check bottom edges and bottom connection
-        for edge_id, edge_data in list(iterative_edges['bottom'].items()):
-            # For bottom, greater than `from` and less than `to`.
-            if (edge_data['from_x'] < x_coord < edge_data['to_x']) and edge_id not in edges_to_remove:
+    # Create bar chart with MORE PROMINENT error bars
+    bars = ax_near_accidents.bar(x_positions, conflict_means, width, color=colors,
+                               edgecolor='#333333', linewidth=1.0,
+                               yerr=conflict_stds, capsize=8, error_kw={'elinewidth': 2.5, 'ecolor': '#333333', 'capthick': 2.5})
 
-                print(f"Bottom edge {edge_id} intersects mnode {m_node} at x={x_coord:.2f}.")
-                edges_to_remove.append(edge_id) # Need to check both in top and bottom.
-                
-                # Add new edges to edges_to_add
-                # Right part of split (In bottom, 'to' nodes are in the right, 'from' nodes are in the left)
-                right_edge_id_bottom = f"{edge_id}_right{i}" # The same edge can be split multiple times.
-                right_edge_data = {
-                    'new_node': m_node,
-                    'to': edge_data['to'],
-                    'from': m_node,
-                    'from_x': x_coord,
-                    'to_x': round(edge_data['to_x'], 2),
-                }
-                edges_to_add['bottom'][right_edge_id_bottom] = right_edge_data
-                iterative_edges['bottom'][right_edge_id_bottom] = right_edge_data # new_node attribute is extra here.
-                all_edges[right_edge_id_bottom] = right_edge_data # only from_x and to_x are used.
+    # Add data labels to the left of the top of each bar
+    # for i, bar in enumerate(bars):
+    #     height = bar.get_height() + 9
+    #     # Position text to the left of the bar top
+    #     ax_near_accidents.text(bar.get_x() + 0.25*width, height,
+    #                          f'{int(conflict_means[i])}', ha='right', va='center',
+    #                          fontsize=fs-4)
 
-                # Left part of split
-                left_edge_id_bottom = f"{edge_id}_left{i}" # The same edge can be split multiple times.
-                left_edge_data = {
-                    'new_node': m_node,
-                    'to': m_node,
-                    'from': edge_data['from'],
-                    'from_x': round(edge_data['from_x'], 2),
-                    'to_x': x_coord,
-                }
-                edges_to_add['bottom'][left_edge_id_bottom] = left_edge_data
-                iterative_edges['bottom'][left_edge_id_bottom] = left_edge_data # new_node attribute is extra here.
-                all_edges[left_edge_id_bottom] = left_edge_data # only from_x and to_x are used.
+    labelsize = fs-4
+    # Set x-ticks at the bar positions with the appropriate labels
+    ax_near_accidents.set_xticks(x_positions)
+    ax_near_accidents.set_xticklabels([f'{scale}x' for scale in filtered_scales], fontsize=labelsize)
 
-                # Update current node mapping (for connections). On Bottom, connections go from left to right.
-                m_node_mapping[m_node]['bottom']['from'] = left_edge_id_bottom
-                m_node_mapping[m_node]['bottom']['to'] = right_edge_id_bottom
-                
-                # Update previous nodes' mappings if they referenced this split edge
-                for prev_node in middle_nodes_to_add[:i]:  # Only look at nodes we've processed before
-                    prev_mapping = m_node_mapping[prev_node]['bottom']
-                    if prev_mapping['from'] == edge_id:
-                        prev_mapping['from'] = right_edge_id_bottom # If the previous `from` edge was split, the new right will connect to it. 
-                    if prev_mapping['to'] == edge_id:
-                        prev_mapping['to'] = left_edge_id_bottom # If the previous `to` edge was split, the new left will connect to it.
+    # Styling
+    ax_near_accidents.set_ylabel('# of Conflicts in Unsignalized', fontsize=fs)  # Updated label
+    ax_near_accidents.set_xlabel('Demand Scale', fontsize=fs)
+    ax_near_accidents.tick_params(axis='both', labelsize=labelsize)
 
-                # Now add new connections to conn_root and remove old connections.
-                for connection in conn_root.findall('connection'): # This root is updated later so find all works.
-                    from_edge, to_edge = connection.get('from'), connection.get('to') # Existing connection edge ids 
-                    if from_edge == edge_id or to_edge == edge_id:
-                        print(f"mnode {m_node} intersects bottom edge {edge_id} at x={x_coord:.2f} and is ref in conn: {connection}.")
+    # Set y-limit with headroom for labels and error bars
+    ax_near_accidents.set_ylim(0, max(conflict_means + np.array(conflict_stds)) * 1.1)  # More headroom for labels
 
-                        if edge_id == from_edge: 
-                            attributes = {'from': right_edge_id_bottom, 'to': to_edge, 'fromLane': str(0), 'toLane': connection.get('toLane')}
-                        else:
-                            attributes = {'from': from_edge, 'to': left_edge_id_bottom, 'fromLane': connection.get('fromLane'), 'toLane': str(0)}
-                        
-                        #print(f"Adding new connection: {attributes}")
-                        new_connection = ET.Element('connection', attributes)
-                        new_connection.text = None  # Ensure there's no text content
-                        new_connection.tail  = "\n\t\t"
-                        conn_root.append(new_connection)
-                        conn_root.remove(connection)
-    
-    # corrections.
-    # We may have added a connection, but one of those edges may have gotten split later.
-    # If a `from` or a `to` edge in a connection contains an edge in edges_to_remove, then we need to remove that connection.
-    for connection in conn_root.findall('connection'):
-        from_edge, to_edge = connection.get('from'), connection.get('to')
-        if from_edge in edges_to_remove or to_edge in edges_to_remove:
-            conn_root.remove(connection)
+    # Make grid match middle plot (light lines behind data)
+    ax_near_accidents.grid(True, linestyle='-', alpha=0.15, color='#333333')
+    ax_near_accidents.set_axisbelow(True)
 
-    # If the edges are present in edges_to_remove, then they should not be present in edges_to_add (they may be because of a split of a split).
-    for edge_id in edges_to_remove:
-        if edge_id in edges_to_add['top']:
-            del edges_to_add['top'][edge_id]
-        if edge_id in edges_to_add['bottom']:
-            del edges_to_add['bottom'][edge_id]
+    # Remove top and right spines to match middle plot
+    ax_near_accidents.spines['top'].set_visible(False)
+    ax_near_accidents.spines['right'].set_visible(False)
 
-    # This edges_to_remove edge list will be used to remove edges from the edg file.
-    # Hence Filter edges to remove that are not part of the original edges (edges that are split of a split will not be there).
-    # Remove edges that have `right` or `left` in their id.
-    edges_to_remove = [edge_id for edge_id in edges_to_remove if not 'right' in edge_id and not 'left' in edge_id]
-    return edges_to_remove, edges_to_add, conn_root, m_node_mapping
+    # Set consistent y-ticks
+    ax_near_accidents.yaxis.set_major_locator(MaxNLocator(n_ticks))
 
-# Instead of setting the y-coordinate of the middle node as mid_point in networkx_graph, interpolation is used.
-def interpolate_y_coordinate(denorm_x_coordinate, horizontal_edges_veh_original_data):
-    """
-    Helper function to interpolate y-coordinate. 
-    top and bottom will have two coordinates. 
+    # ========== MIDDLE SUBPLOT: Average consecutive ones plot ==========
+    # Load data
+    with open(sampled_actions_file_path, "r") as file:
+        data = json.load(file)
 
-    For both top and bottom: x-coordinate increases from left to right. y-coordinate increases from bottom to top.
-    """
-    coords = []
-    for direction in ['top', 'bottom']:
-        for _, edge_data in horizontal_edges_veh_original_data[direction].items():
-            print(edge_data)
-            if edge_data['from_x'] <= denorm_x_coordinate <= edge_data['to_x']:
-                sign = +1 if edge_data['to_x'] > edge_data['from_x'] else -1
-                percentage_of_x = (denorm_x_coordinate - edge_data['from_x']) / (edge_data['to_x'] - edge_data['from_x'])
-                
-                y_coord = edge_data['from_y'] + sign * percentage_of_x * (edge_data['to_y'] - edge_data['from_y'])
-                coords.append(y_coord)
+    # Compute the average sum of consecutive 1's per iteration
+    avg_consecutive_ones_per_iteration = []
+    iterations = []
 
-    return coords[0] # only top one
+    for iteration, actions_list in data.items():
+        iteration = int(iteration)
+        consecutive_ones = [count_consecutive_ones_filtered(action_list) for action_list in actions_list]
+        sums_of_consecutive_ones = [sum(seq) for seq in consecutive_ones if seq]
+        avg_consecutive_ones = np.mean(sums_of_consecutive_ones) if sums_of_consecutive_ones else 0
+        iterations.append(iteration)
+        avg_consecutive_ones_per_iteration.append(avg_consecutive_ones)
+
+    # Sort by iteration
+    iterations, avg_consecutive_ones_per_iteration = zip(*sorted(zip(iterations, avg_consecutive_ones_per_iteration)))
+    iterations = np.array(iterations)
+    avg_consecutive_ones_per_iteration = np.array(avg_consecutive_ones_per_iteration)
+
+    # Set background color
+    ax_consecutive_ones.set_facecolor('white')
+
+    # Calculate y-axis limits with padding
+    y_min = 3.3  # Set explicitly to 3.2 to match the lowest data point
+    y_max = 4.1  # Set explicitly to 4.1 to provide headroom for highest points
+
+    # Calculate x-axis limits with margins
+    x_min = min(iterations) - (max(iterations) - min(iterations)) * 0.05
+    x_max = max(iterations) + (max(iterations) - min(iterations)) * 0.05
+
+    # Set axis limits
+    ax_consecutive_ones.set_ylim(y_min, y_max)
+    ax_consecutive_ones.set_xlim(x_min, x_max)
+
+    # Format y-axis with one decimal place
+    ax_consecutive_ones.yaxis.set_major_formatter(FuncFormatter(lambda x, pos: f'{x:.1f}'))
+
+    # Add light grid lines
+    ax_consecutive_ones.grid(True, linestyle='-', alpha=0.15, color='#333333')
+    ax_consecutive_ones.set_axisbelow(True)
+
+    # Remove top and right spines
+    ax_consecutive_ones.spines['top'].set_visible(False)
+    ax_consecutive_ones.spines['right'].set_visible(False)
+
+    # Create scatter plot - KEEPING ORIGINAL COLORS
+    scatter = ax_consecutive_ones.scatter(iterations, avg_consecutive_ones_per_iteration,
+                                        s=110, edgecolors=VIBRANT_BLUE, facecolors='none',
+                                        linewidth=2.0, alpha=0.75, zorder=3)
+
+    # Fit a trend line
+    z = np.polyfit(iterations, avg_consecutive_ones_per_iteration, 1)
+    p = np.poly1d(z)
+    x_trend = np.linspace(min(iterations), max(iterations), 100)
+    y_trend = p(x_trend)
+
+    # Calculate 95% confidence interval
+    n = len(iterations)
+    x_mean = np.mean(iterations)
+    y_mean = np.mean(avg_consecutive_ones_per_iteration)
+
+    # Sum of squares
+    ss_xx = np.sum((iterations - x_mean)**2)
+    ss_xy = np.sum((iterations - x_mean) * (avg_consecutive_ones_per_iteration - y_mean))
+    ss_yy = np.sum((avg_consecutive_ones_per_iteration - y_mean)**2)
+
+    # Regression slope and intercept
+    slope = ss_xy / ss_xx
+    intercept = y_mean - slope * x_mean
+
+    # Standard error of estimate
+    y_hat = slope * iterations + intercept
+    se = np.sqrt(np.sum((avg_consecutive_ones_per_iteration - y_hat)**2) / (n - 2))
+
+    # Confidence interval
+    alpha = 0.05  # 95% confidence interval
+    t_val = stats.t.ppf(1 - alpha/2, n - 2)
+
+    # Calculate confidence bands
+    x_eval = x_trend
+    ci = t_val * se * np.sqrt(1/n + (x_eval - x_mean)**2 / ss_xx)
+    y_upper = y_trend + ci
+    y_lower = y_trend - ci
+
+    # Plot the trend line with new bright blue color
+    trend_line = ax_consecutive_ones.plot(x_trend, y_trend, color=BRIGHT_BLUE, linewidth=4.0, zorder=4, label='Trend Line')
+
+    # Add confidence interval with shading
+    confidence_interval = ax_consecutive_ones.fill_between(x_trend, y_lower, y_upper,
+                                                         color=BRIGHT_BLUE, alpha=0.2,
+                                                         zorder=2, label='95% Confidence Interval')
+
+    # Set labels
+    ax_consecutive_ones.set_xlabel('Training Episode', fontsize=fs)
+    ax_consecutive_ones.set_ylabel('Synchronized Green Signals', fontsize=fs)
+
+    # Create legend with both trend line and confidence interval
+    trend_line_handle = mlines.Line2D([], [], color=BRIGHT_BLUE, linewidth=4.0,
+                                    label='Trend Line')
+    ci_handle = mpatches.Patch(facecolor=BRIGHT_BLUE, alpha=0.2,
+                              label='95% Confidence Interval')
+
+    ax_consecutive_ones.legend(handles=[trend_line_handle, ci_handle],
+                            loc='upper right', frameon=True, framealpha=0.9,
+                            edgecolor='#CCCCCC', fontsize=fs-4)
+
+    # Tick parameters
+    ax_consecutive_ones.tick_params(axis='both', labelsize=labelsize)
+
+    # Set consistent y-ticks with fixed 0.1 interval to ensure we have 3.6 tick
+    ax_consecutive_ones.yaxis.set_major_locator(MultipleLocator(0.2))
+
+    # ========== RIGHT SUBPLOT: Switching frequency with TL as horizontal line ==========
+
+    # Load frequency data
+    with open(switching_freq_data_path, 'r') as f:
+        frequency_json_data = json.load(f)
+
+    # Process frequency data
+    processed_frequency_data = process_json_data(frequency_json_data, "total_switches")
+
+    frequency_demands = [0.5, 1.0, 1.5, 2.0, 2.5]
+    filtered_demands = [demand for demand in frequency_demands if demand in processed_frequency_data]
+
+    frequency_means = [processed_frequency_data[demand]["mean"] for demand in filtered_demands]
+    frequency_stds = [processed_frequency_data[demand]["std"] for demand in filtered_demands]
+
+    # Create placeholder data with TL having same value across demand scales
+    tl_value = 54  # Same value for all demand scales
+
+    # Get x positions for grouped bars
+    x = np.arange(len(filtered_demands))
+    width = 0.5  # Width of bars - keep the same
+
+    # Create subtle gradient for RL bars
+    rl_colors = [
+        '#CFEAD6',  # Lower level lighter green
+        '#A8D5BA',  # Lightest sea green
+        '#8CCB9B',  # Light sea green
+        '#73C17E',  # Medium sea green
+        '#5AB663'   # Deeper sea green
+    ]
+
+    # Ensure we have enough colors
+    if len(rl_colors) < len(filtered_demands):
+        rl_colors = rl_colors * (len(filtered_demands) // len(rl_colors) + 1)
+    rl_colors = rl_colors[:len(filtered_demands)]
+
+    # Set up the plot with a discontinuous y-axis
+    ax_switching_freq.set_facecolor('white')
+
+    # Function to transform values to the broken y-axis scale
+    def transform_y(y):
+        # Map values to a discontinuous scale:
+        # 0-54 maps to 0-0.2 (bottom 20% of plot)
+        # 260-320 maps to 0.3-1.0 (top 70% of plot)
+        if y <= 54:
+            return y / 54 * 0.2
+        else:
+            return 0.3 + (y - 260) / (320 - 260) * 0.7
+
+    # Plot the bars with standard deviations
+    for i, (mean, std) in enumerate(zip(frequency_means, frequency_stds)):
+        # Calculate bar height in the transformed space
+        bar_height = transform_y(mean) - transform_y(0)
+
+        # Draw the bar
+        bar = ax_switching_freq.bar(x[i], bar_height, width=width,
+                                   bottom=transform_y(0),
+                                   color=rl_colors[i],
+                                   edgecolor='#333333',
+                                   linewidth=1.0)
+
+        # Add error bars
+        # Calculate the std dev in the transformed space
+        yerr = transform_y(mean + std) - transform_y(mean)
+
+        # Draw error bar
+        ax_switching_freq.errorbar(x[i], transform_y(mean), yerr=yerr,
+                                  fmt='none', ecolor='#333333', capsize=8,
+                                  elinewidth=2.5, capthick=2.5)
+
+    # Add the TL horizontal line
+    tl_line = ax_switching_freq.axhline(y=transform_y(tl_value), color=SALMON, linewidth=3, linestyle='-', zorder=5)
+
+    # Get the y-axis line width to match the break marks to it
+    axis_line_width = ax_switching_freq.spines['left'].get_linewidth()
+
+    # Create break marks for the y-axis
+    # Position of the break in the transformed scale
+    break_pos = 0.31  # middle of the gap between 0.2 and 0.3
+
+    # Draw break marks on the left y-axis only
+    # Increased spacing between diagonal lines
+    gap = 0.020  # Increased gap between the diagonal lines
+    d = 0.03    # Size of the diagonal lines
+
+    # First create a white rectangle to "erase" part of the axis
+    # This ensures the break appears as a true gap in the axis
+    rect_height = gap * 1.5  # Height of white rectangle
+    rect_width = d * 2.0     # Width of white rectangle
+
+    # Draw white background rectangle to create a clean break
+    white_patch = plt.Rectangle((-rect_width/2, break_pos-rect_height/2), rect_width, rect_height,
+                              facecolor='white', edgecolor='none', transform=ax_switching_freq.transAxes,
+                              clip_on=False, zorder=10)
+    ax_switching_freq.add_patch(white_patch)
+
+    # Then draw the diagonal lines centered on the axis
+    # Make sure line width matches the axis line width
+    kwargs = dict(transform=ax_switching_freq.transAxes, color='black',
+                 clip_on=False, linewidth=axis_line_width, zorder=11)
+
+    # Upper diagonal line
+    ax_switching_freq.plot([-d/2, d/2], [break_pos+gap/2, break_pos+gap/2 + d], **kwargs)
+
+    # Lower diagonal line
+    ax_switching_freq.plot([-d/2, d/2], [break_pos-gap/2, break_pos-gap/2 + d], **kwargs)
+
+    # Set the y-ticks at the actual data values
+    yticks = [0, tl_value, 275, 300]
+    yticklabels = [str(int(y)) for y in yticks]
+
+    ax_switching_freq.set_yticks([transform_y(y) for y in yticks])
+    ax_switching_freq.set_yticklabels(yticklabels, fontsize=labelsize)
+
+    # Create legend handles
+    tl_handle = mlines.Line2D([], [], color=SALMON, linewidth=3, linestyle='-', label='Signalized')
+    rl_handle = mpatches.Patch(facecolor=rl_colors[1], edgecolor='#333333', linewidth=1.0, label='RL (Ours)')
+
+    # Styling
+    ax_switching_freq.set_ylabel('Switching Frequency', fontsize=fs)
+    ax_switching_freq.set_xlabel('Demand Scale', fontsize=fs)
+    ax_switching_freq.set_xticks(x)
+
+    # Format x-ticks to show demand scale
+    demand_labels = [f"{d}x" for d in filtered_demands]
+    ax_switching_freq.set_xticklabels(demand_labels, fontsize=labelsize)
+
+    ax_switching_freq.tick_params(axis='both', labelsize=labelsize)
+
+    # Make grid match middle plot (light lines behind data)
+    ax_switching_freq.grid(True, linestyle='-', alpha=0.15, color='#333333')
+    ax_switching_freq.set_axisbelow(True)
+
+    # Remove top and right spines to match middle plot
+    ax_switching_freq.spines['top'].set_visible(False)
+    ax_switching_freq.spines['right'].set_visible(False)
+
+    # Set uniform margins in right subplot
+    # Calculate the margin to add on each side (half the width of a bar)
+    margin = 0.7
+    # Set the x-limits to create uniform margins
+    ax_switching_freq.set_xlim(-margin, len(filtered_demands) - 1 + margin)
+
+    # Set y-limits for the plot
+    ax_switching_freq.set_ylim(0, 1.05)  # Provide headroom for the legend
+
+    # Add legend in the top right corner
+    ax_switching_freq.legend(handles=[tl_handle, rl_handle], fontsize=fs-4, loc='upper right',
+                           bbox_to_anchor=(1.0, 1.01))
+
+    # ========== Add (a), (b), (c) labels centered below each subplot ==========
+    # Get the exact position of each subplot after tight_layout
+    bbox1 = ax_near_accidents.get_position()
+    bbox2 = ax_consecutive_ones.get_position()
+    bbox3 = ax_switching_freq.get_position()
+
+    # Calculate the center x-coordinate for each subplot
+    x1 = bbox1.x0 + bbox1.width/2
+    x2 = bbox2.x0 + bbox2.width/2
+    x3 = bbox3.x0 + bbox3.width/2
+
+    # Define y position - a tiny bit lower than before
+    label_y = -0.08  # Moved down slightly from -0.01 to -0.03
+
+    # Add the labels at the exact centers
+    fig.text(x1, label_y, '(a)', ha='center', va='center', fontsize=fs, fontweight='bold')
+    fig.text(x2, label_y, '(b)', ha='center', va='center', fontsize=fs, fontweight='bold')
+    fig.text(x3, label_y, '(c)', ha='center', va='center', fontsize=fs, fontweight='bold')
+
+    # ========== Figure-level adjustments ==========
+    plt.subplots_adjust(wspace=0.23, bottom=0.1)  # Adjusted bottom margin to make room for labels
+
+    # Save figure
+    plt.savefig("./results/consolidated_insights.pdf", dpi=300, bbox_inches='tight', pad_inches=0.1)
+
+    plt.show()
+    return fig
+
+# Usage
+####### CONSOLIDATED 3 SUBPLOTS ######
+# sampled_actions_file_path = "./results/sampled_actions.json"
+# unsignalized_conflicts_file_path = "./results/eval_unsignalized_conflicts.json"
+# switching_freq_data_path = "./results/switching_freq_data.json"
+# plot_consolidated_insights(sampled_actions_file_path, unsignalized_conflicts_file_path, switching_freq_data_path) # Other values are manually input inside the function.
 
 
+# ###### MAIN RESULTS PLOT ######
+# unsignalized_results_path = "./results/eval_unsignalized.json"
+# tl_results_path = "./results/eval_tl.json"
+# ppo_results_path = "./results/eval_ppo.json"
+
+# plot_main_results(unsignalized_results_path, 
+#                          tl_results_path, 
+#                          ppo_results_path,
+#                          in_range_demand_scales=[1.0, 1.25, 1.5, 1.75, 2.0, 2.25])
+
+######  Just plot sampled 1's ###### 
+# sampled_actions_file_path = "./saved_models/Feb24_13-54-26/sampled_actions.json"
+# plot_avg_consecutive_ones(sampled_actions_file_path)

@@ -1,0 +1,112 @@
+{
+    "1.0": {
+        "0": {
+            "SEED": 691453,
+            "total_veh_waiting_time": 1320.0,
+            "total_ped_waiting_time": 697.0,
+            "veh_avg_waiting_time": 29.333333333333332,
+            "ped_avg_waiting_time": 1.6285046728971964,
+            "total_conflicts": 0,
+            "total_switches": 304
+        }
+    },
+    "1.25": {
+        "0": {
+            "SEED": 459606,
+            "total_veh_waiting_time": 1851.0,
+            "total_ped_waiting_time": 727.0,
+            "veh_avg_waiting_time": 30.85,
+            "ped_avg_waiting_time": 1.2821869488536155,
+            "total_conflicts": 0,
+            "total_switches": 295
+        }
+    },
+    "1.5": {
+        "0": {
+            "SEED": 758814,
+            "total_veh_waiting_time": 1371.0,
+            "total_ped_waiting_time": 1094.0,
+            "veh_avg_waiting_time": 19.869565217391305,
+            "ped_avg_waiting_time": 1.5279329608938548,
+            "total_conflicts": 0,
+            "total_switches": 282
+        }
+    },
+    "1.75": {
+        "0": {
+            "SEED": 785500,
+            "total_veh_waiting_time": 2449.0,
+            "total_ped_waiting_time": 1313.0,
+            "veh_avg_waiting_time": 29.154761904761905,
+            "ped_avg_waiting_time": 1.5934466019417475,
+            "total_conflicts": 0,
+            "total_switches": 287
+        }
+    },
+    "2.0": {
+        "0": {
+            "SEED": 493125,
+            "total_veh_waiting_time": 2712.0,
+            "total_ped_waiting_time": 1429.0,
+            "veh_avg_waiting_time": 29.802197802197803,
+            "ped_avg_waiting_time": 1.543196544276458,
+            "total_conflicts": 0,
+            "total_switches": 280
+        }
+    },
+    "2.25": {
+        "0": {
+            "SEED": 8199,
+            "total_veh_waiting_time": 3053.0,
+            "total_ped_waiting_time": 1894.0,
+            "veh_avg_waiting_time": 31.47422680412371,
+            "ped_avg_waiting_time": 1.8921078921078922,
+            "total_conflicts": 0,
+            "total_switches": 282
+        }
+    },
+    "0.5": {
+        "0": {
+            "SEED": 573427,
+            "total_veh_waiting_time": 689.0,
+            "total_ped_waiting_time": 382.0,
+            "veh_avg_waiting_time": 28.708333333333332,
+            "ped_avg_waiting_time": 1.819047619047619,
+            "total_conflicts": 0,
+            "total_switches": 294
+        }
+    },
+    "0.75": {
+        "0": {
+            "SEED": 337749,
+            "total_veh_waiting_time": 821.0,
+            "total_ped_waiting_time": 515.0,
+            "veh_avg_waiting_time": 22.18918918918919,
+            "ped_avg_waiting_time": 1.519174041297935,
+            "total_conflicts": 0,
+            "total_switches": 293
+        }
+    },
+    "2.5": {
+        "0": {
+            "SEED": 302834,
+            "total_veh_waiting_time": 3403.0,
+            "total_ped_waiting_time": 1598.0,
+            "veh_avg_waiting_time": 32.10377358490566,
+            "ped_avg_waiting_time": 1.4741697416974169,
+            "total_conflicts": 0,
+            "total_switches": 301
+        }
+    },
+    "2.75": {
+        "0": {
+            "SEED": 841440,
+            "total_veh_waiting_time": 4274.0,
+            "total_ped_waiting_time": 2254.0,
+            "veh_avg_waiting_time": 35.032786885245905,
+            "ped_avg_waiting_time": 1.7527216174183515,
+            "total_conflicts": 0,
+            "total_switches": 294
+        }
+    }
+}
