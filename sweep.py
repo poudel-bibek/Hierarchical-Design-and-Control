@@ -54,7 +54,6 @@ class HyperParameterTuner:
                 'vf_coef': {'values': [0.25, 0.5, 0.75, 1.0]},
                 'batch_size': {'values': [15, 32, 64, 128]},
                 # policy specific
-                'model_type': {'values': ['cnn', 'mlp']},
                 'size': {'values': ['small', 'medium']},
                 'kernel_size': {'values': [3, 5]},
                 'dropout_rate': {'values': [0.1, 0.2, 0.3]},
@@ -100,9 +99,6 @@ class HyperParameterTuner:
                     'values': [64, 128]
                 },
                 # policy:
-                'model_type': {
-                    'values': ['mlp']
-                },
                 'size': {
                     'values': ['medium']
                 },

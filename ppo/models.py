@@ -1,9 +1,14 @@
 import torch
-import torch.nn as nn
 import numpy as np
+import torch.nn as nn
+from matplotlib import cm
+import matplotlib.pyplot as plt
 import torch.nn.functional as F
-from torch.distributions import Categorical, Bernoulli
-from torch.distributions import  Categorical
+from torch_geometric.nn import GATv2Conv
+from torch_geometric.data import Data, Batch
+from torch_geometric.nn import global_mean_pool
+from entropy_calc import gmm_entropy_monte_carlo, gmm_entropy_legendre
+from torch.distributions import MixtureSameFamily, MultivariateNormal, Categorical, Bernoulli
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     """
@@ -14,482 +19,14 @@ def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     nn.init.constant_(layer.bias, bias_const)
     return layer
 
-class CNNActorCritic(nn.Module):
+class MLP_ActorCritic(nn.Module):
     def __init__(self, in_channels, action_dim, **kwargs):
         """
-        This CNN-based Actor-Critic architecture uses two separate convolutional
-        backbones for the actor and the critic respectively while keeping the head's
-        structure (MLP layers, normalization, and activation) the same.
-
-        The choices:
-          - Small: 3 Conv layers, 3 Linear layers with hidden_dim=128.
-          - Medium: 5 Conv layers, 3 Linear layers with hidden_dim=256.
-
-        Some kwargs:
-            action_duration: height of the 2D input.
-            per_timestep_state_dim: width of the 2D input.
-            model_size: 'small' or 'medium'
-            kernel_size: kernel size for the conv layers.
-            activation: one of ['tanh', 'relu', 'leakyrelu']
-        """
-        super(CNNActorCritic, self).__init__()
-        self.in_channels = in_channels
-        self.action_dim = action_dim 
-        self.action_duration = kwargs.get('action_duration')
-        self.per_timestep_state_dim = kwargs.get('per_timestep_state_dim')
-
-        model_size = kwargs.get('model_size')
-        kernel_size = kwargs.get('kernel_size')
-        padding = kernel_size // 2
-        activation_str = kwargs.get('activation')
-
-        if activation_str == "tanh":
-            activation = nn.Tanh
-        elif activation_str == "relu":
-            activation = nn.ReLU
-        elif activation_str == "leakyrelu":
-            activation = nn.LeakyReLU
-        else:
-            raise ValueError("Unknown activation chosen.")
-
-        # Build separate CNN backbones for actor and critic.
-        if model_size == 'small':
-            self.actor_cnn = nn.Sequential(
-                nn.Conv2d(self.in_channels, 16, kernel_size=kernel_size, stride=1, padding=padding),
-                nn.BatchNorm2d(16),
-                activation(),
-                nn.Conv2d(16, 32, kernel_size=kernel_size, stride=2, padding=padding),
-                nn.BatchNorm2d(32),
-                activation(),
-                nn.Conv2d(32, 64, kernel_size=kernel_size, stride=1, padding=padding),
-                nn.BatchNorm2d(64),
-                activation(),
-                nn.Flatten(),
-            )
-            self.critic_cnn = nn.Sequential(
-                nn.Conv2d(self.in_channels, 16, kernel_size=kernel_size, stride=1, padding=padding),
-                nn.BatchNorm2d(16),
-                activation(),
-                nn.Conv2d(16, 32, kernel_size=kernel_size, stride=2, padding=padding),
-                nn.BatchNorm2d(32),
-                activation(),
-                nn.Conv2d(32, 64, kernel_size=kernel_size, stride=1, padding=padding),
-                nn.BatchNorm2d(64),
-                activation(),
-                nn.Flatten(),
-            )
-            hidden_dim = 128
-
-        else:  # medium
-            self.actor_cnn = nn.Sequential(
-                nn.Conv2d(self.in_channels, 16, kernel_size=kernel_size, stride=1, padding=padding),
-                nn.BatchNorm2d(16),
-                activation(),
-                nn.Conv2d(16, 32, kernel_size=kernel_size, stride=2, padding=padding),
-                nn.BatchNorm2d(32),
-                activation(),
-                nn.Conv2d(32, 64, kernel_size=kernel_size, stride=1, padding=padding),
-                nn.BatchNorm2d(64),
-                activation(),
-                nn.Conv2d(64, 128, kernel_size=kernel_size, stride=2, padding=padding),
-                nn.BatchNorm2d(128),
-                activation(),
-                nn.Conv2d(128, 128, kernel_size=kernel_size, stride=1, padding=padding),
-                nn.BatchNorm2d(128),
-                activation(),
-                nn.Flatten(),
-            )
-            self.critic_cnn = nn.Sequential(
-                nn.Conv2d(self.in_channels, 16, kernel_size=kernel_size, stride=1, padding=padding),
-                nn.BatchNorm2d(16),
-                activation(),
-                nn.Conv2d(16, 32, kernel_size=kernel_size, stride=2, padding=padding),
-                nn.BatchNorm2d(32),
-                activation(),
-                nn.Conv2d(32, 64, kernel_size=kernel_size, stride=1, padding=padding),
-                nn.BatchNorm2d(64),
-                activation(),
-                nn.Conv2d(64, 128, kernel_size=kernel_size, stride=2, padding=padding),
-                nn.BatchNorm2d(128),
-                activation(),
-                nn.Conv2d(128, 128, kernel_size=kernel_size, stride=1, padding=padding),
-                nn.BatchNorm2d(128),
-                activation(),
-                nn.Flatten(),
-            )
-            hidden_dim = 256
-
-        # Calculate CNN output dimensions separately for actor and critic.
-        with torch.no_grad():
-            sample_input = torch.zeros(1, self.in_channels, self.action_duration, self.per_timestep_state_dim)
-            actor_cnn_output_size = self.actor_cnn(sample_input).shape[1]
-            critic_cnn_output_size = self.critic_cnn(sample_input).shape[1]
-
-        # Build the actor head.
-        self.actor_layers = nn.Sequential(
-            layer_init(nn.Linear(actor_cnn_output_size, hidden_dim)),
-            nn.LayerNorm(hidden_dim),
-            activation(),
-            layer_init(nn.Linear(hidden_dim, hidden_dim // 2)),
-            nn.LayerNorm(hidden_dim // 2),
-            activation(),
-            layer_init(nn.Linear(hidden_dim // 2, self.action_dim))
-        )
-        
-        # Build the critic head.
-        self.critic_layers = nn.Sequential(
-            layer_init(nn.Linear(critic_cnn_output_size, hidden_dim)),
-            nn.LayerNorm(hidden_dim),
-            activation(),
-            layer_init(nn.Linear(hidden_dim, hidden_dim // 2)),
-            nn.LayerNorm(hidden_dim // 2),
-            activation(),
-            layer_init(nn.Linear(hidden_dim // 2, 1))
-        )
-
-    def actor(self, state):
-        """
-        Processes the input state through the actor's CNN backbone and MLP head
-        to produce the raw action logits.
-        """
-        features = self.actor_cnn(state)
-        logits = self.actor_layers(features)
-        return logits
-    
-    def critic(self, state):
-        """
-        Processes the input state through the critic's CNN backbone and MLP head
-        to produce the state-value estimate.
-        """
-        if state.ndim == 3:
-            state = state.unsqueeze(0)
-        features = self.critic_cnn(state)
-        return self.critic_layers(features)
-    
-    def act(self, state):
-        """
-        Select an action based on the current state:
-          - The first 4 logits correspond to an intersection (Categorical distribution).
-          - The next 7 logits correspond to midblock signals (Bernoulli distribution).
-        Adjusts the input shape if necessary and returns the combined action and the joint log probability.
-        """
-        # Adjust the state shape if needed.
-        if state.ndim == 2:  # shape: [action_duration, per_timestep_state_dim]
-            state = state.unsqueeze(0).unsqueeze(0)
-        elif state.ndim == 3:  # shape: [batch, action_duration, per_timestep_state_dim]
-            state = state.unsqueeze(1)
-
-        action_logits = self.actor(state)
-        intersection_logits = action_logits[:, :4]  # first 4 logits for intersection choices
-        midblock_logits = action_logits[:, 4:]        # last 7 logits for midblock binary choices
-
-        intersection_dist = Categorical(logits=intersection_logits)
-        intersection_action = intersection_dist.sample()
-
-        midblock_dist = Bernoulli(logits=midblock_logits)
-        midblock_actions = midblock_dist.sample()
-
-        # Combine the outputs; note that squeeze is used to remove any extra dimension.
-        combined_action = torch.cat([intersection_action, midblock_actions.squeeze(0)], dim=0)
-        log_prob = intersection_dist.log_prob(intersection_action) + midblock_dist.log_prob(midblock_actions).sum()
-        return combined_action.int(), log_prob
-
-    def evaluate(self, states, actions):
-        """
-        For a batch of states and already-sampled actions, compute:
-          1. The joint log probability of taking each action.
-          2. The entropy of the actions' distributions (used for exploration regularization).
-          3. The critic's state value estimates.
-        """
-        # Reshape states to [batch, channel, action_duration, per_timestep_state_dim]
-        states = states.unsqueeze(0)
-        states = states.permute(1, 0, 2, 3)
-        action_logits = self.actor(states)
-
-        # Split the logits
-        intersection_logits = action_logits[:, :4]
-        midblock_logits = action_logits[:, 4:]
-
-        intersection_dist = Categorical(logits=intersection_logits)
-        midblock_dist = Bernoulli(logits=midblock_logits)
-
-        # Actions: intersection is the first column, midblock the rest.
-        intersection_action = actions[:, :1].squeeze(1).long()  # Categorical expects long
-        midblock_actions = actions[:, 1:].float()
-
-        intersection_log_probs = intersection_dist.log_prob(intersection_action)
-        midblock_log_probs = midblock_dist.log_prob(midblock_actions)
-        action_log_probs = intersection_log_probs + midblock_log_probs.sum(dim=1)
-
-        total_entropy = intersection_dist.entropy() + midblock_dist.entropy().sum(dim=1)
-
-        state_values = self.critic(states)
-        return action_log_probs, state_values, total_entropy
-
-    def param_count(self):
-        """
-        Returns a dictionary with parameter counts of the actor and critic networks separately.
-        """
-        actor_params = sum(p.numel() for p in self.actor_layers.parameters()) + \
-                       sum(p.numel() for p in self.actor_cnn.parameters())
-        critic_params = sum(p.numel() for p in self.critic_layers.parameters()) + \
-                        sum(p.numel() for p in self.critic_cnn.parameters())
-        
-        return {
-            "actor_total": actor_params,
-            "critic_total": critic_params,
-            "total": actor_params + critic_params
-        }
-    
-class CNNActorCriticShared(nn.Module):
-    def __init__(self, in_channels, action_dim, **kwargs):
-        """
-        Model choices: 
-            Small: 3 Conv layers, 3 Linear layers
-            Medium: 5 Conv layers, 3 Linear layers
-
-        - Applying conv2d, the state should be 2d with a bunch of channels (1)
-        - Regularization: Dropout and Batch Norm
-        - Using strided convolutions instead of pooling layers
-        - Shared CNN backbone useful because "feature extraction" is useful for both actor and critic.
-        """
-        super(CNNActorCriticShared, self).__init__()
-        self.in_channels = in_channels
-        self.action_dim = action_dim 
-        self.action_duration = kwargs.get('action_duration')
-        self.per_timestep_state_dim = kwargs.get('per_timestep_state_dim')
-
-        model_size = kwargs.get('model_size')
-        kernel_size = kwargs.get('kernel_size')
-        padding = kernel_size // 2
-        # dropout_rate = kwargs.get('dropout_rate')
-        activation = kwargs.get('activation')
-
-        if activation == "tanh":
-            activation = nn.Tanh
-        elif activation == "relu":
-            activation = nn.ReLU
-        elif activation == "leakyrelu":
-            activation = nn.LeakyReLU
-
-        if model_size == 'small':
-            self.shared_cnn = nn.Sequential(
-                nn.Conv2d(self.in_channels, 16, kernel_size=kernel_size, stride=1, padding=padding),
-                nn.BatchNorm2d(16),
-                activation(),
-                nn.Conv2d(16, 32, kernel_size=kernel_size, stride=2, padding=padding),  # Strided Conv 
-                nn.BatchNorm2d(32),
-                activation(),
-                nn.Conv2d(32, 64, kernel_size=kernel_size, stride=1, padding=padding),
-                nn.BatchNorm2d(64),
-                activation(),
-                nn.Flatten(),
-                #nn.Dropout(dropout_rate)
-                )
-            hidden_dim = 128
-
-        else:  # medium
-            self.shared_cnn = nn.Sequential(
-                nn.Conv2d(self.in_channels, 16, kernel_size=kernel_size, stride=1, padding=padding),
-                nn.BatchNorm2d(16),
-                activation(),
-                nn.Conv2d(16, 32, kernel_size=kernel_size, stride=2, padding=padding),  # Strided Conv 
-                nn.BatchNorm2d(32),
-                activation(),
-                nn.Conv2d(32, 64, kernel_size=kernel_size, stride=1, padding=padding),
-                nn.BatchNorm2d(64),
-                activation(),
-                nn.Conv2d(64, 128, kernel_size=kernel_size, stride=2, padding=padding), # Strided Conv 
-                nn.BatchNorm2d(128),
-                activation(),
-                nn.Conv2d(128, 128, kernel_size=kernel_size, stride=1, padding=padding),
-                nn.BatchNorm2d(128),
-                activation(),
-                nn.Flatten(),
-                #nn.Dropout(dropout_rate)
-                )
-            hidden_dim = 256
-
-        # Calculate the size of the flattened CNN output
-        with torch.no_grad():
-            sample_input = torch.zeros(1, self.in_channels, self.action_duration, self.per_timestep_state_dim)
-            cnn_output_size = self.shared_cnn(sample_input).shape[1]
-            #print(f"\n\nCNN output size: {cnn_output_size}\n\n")
-
-        self.actor_layers = nn.Sequential(
-            layer_init(nn.Linear(cnn_output_size, hidden_dim)),
-            nn.LayerNorm(hidden_dim),
-            activation(),
-            # nn.Dropout(dropout_rate),
-            layer_init(nn.Linear(hidden_dim, hidden_dim // 2)),
-            nn.LayerNorm(hidden_dim // 2),
-            activation(),
-
-            # nn.Dropout(dropout_rate),
-            layer_init(nn.Linear(hidden_dim // 2, self.action_dim))
-        )
-        
-        self.critic_layers = nn.Sequential(
-            layer_init(nn.Linear(cnn_output_size, hidden_dim)),
-            nn.LayerNorm(hidden_dim),
-            activation(),
-            # nn.Dropout(dropout_rate),
-            layer_init(nn.Linear(hidden_dim, hidden_dim // 2)),
-            nn.LayerNorm(hidden_dim // 2),
-            activation(),
-
-            # nn.Dropout(dropout_rate),
-            layer_init(nn.Linear(hidden_dim // 2, 1))
-        )
-
-
-    def actor(self, state):
-        shared_features = self.shared_cnn(state)
-        action_logits = self.actor_layers(shared_features)
-        return action_logits
-    
-    def critic(self, state):
-        if state.ndim == 3:
-            state = state.unsqueeze(0)
-        shared_features = self.shared_cnn(state)
-        return self.critic_layers(shared_features)
-    
-    def act(self, state):
-        """
-        Select an action based on the current state:
-        * Simple Action: 
-        - First two bits:
-            - Intersection control on 4 mutually exclusive choices
-            - Logits passed through softmax: 
-                - Converts a vector of logits to a vector of probabilities that sum to 1
-            - Feed the probabilities to a Categorical distribution
-                - Then we sample to get one of the 4 choices
-
-        - Next seven bits:
-            - Midblock TL/ crosswalk signals
-            - Bernoulli distribution (single probability parameter p)
-            - Logits passed through sigmoid: 
-                - Converts a single logit to a single probability value between 0 and 1
-                - The probability is of getting 1
-            - Feed each of the 7 probabilities to independent Bernoulli distribution
-                - Then we sample to get either 0 or 1 for each of the 7 choices.
-        
-        - Modeling: 
-            - We are modeling these choices independently. 
-            - The assumption is that optimal action in one of them does not affect the others i.e., there is no possibility of coordination. 
-            - Log probabilities can be summed for independent events. To get the joint log probability:
-                - Sum the log probabilities of the individual midblock choices.
-                - Add the log probability of the intersection choice.
-        """
-        # Check the number of dimensions of state.
-        if state.ndim == 2: # coming from act
-            # State is of shape [action_duration, per_timestep_state_dim].
-            # Add batch and channel dimensions: becomes [1, 1, action_duration, per_timestep_state_dim].
-            state = state.unsqueeze(0).unsqueeze(0)
-        elif state.ndim == 3: # coming from evaluate
-            # State is of shape [batch, action_duration, per_timestep_state_dim].
-            # Add the channel dimension: becomes [batch, 1, action_duration, per_timestep_state_dim].
-            state = state.unsqueeze(1)
-
-        action_logits = self.actor(state)
-        #print(f"\nAction logits: {action_logits}")
-
-        # Simple action
-        intersection_logits = action_logits[:, :4]  # First 4 logits for traffic light (4 choices)
-        midblock_logits = action_logits[:, 4:]  # Last 7 logits for crosswalks (binary choices)
-        # print(f"\nIntersection logits: {intersection_logits}")
-        # print(f"Midblock logits: {midblock_logits}")
-        
-        intersection_dist = Categorical(logits=intersection_logits)
-        intersection_action = intersection_dist.sample() # This predicts 0, 1, 2, or 3
-        # print(f"Intersection action: {intersection_action}, shape: {intersection_action.shape}")
-
-        midblock_dist = Bernoulli(logits=midblock_logits)
-        midblock_actions = midblock_dist.sample() # This predicts 0 or 1
-        # print(f"Midblock actions: {midblock_actions}, shape: {midblock_actions.shape}")
-        
-        combined_action = torch.cat([intersection_action, midblock_actions.squeeze(0)], dim=0)
-        log_prob = intersection_dist.log_prob(intersection_action) + midblock_dist.log_prob(midblock_actions).sum()
-        # print(f"\nCombined action: {combined_action}, shape: {combined_action.shape}")
-        return combined_action.int(), log_prob
-
-    def evaluate(self, states, actions):
-        """
-        Evaluate a batch of states and actions.
-        * Simple action: 
-
-        - 1. Use the state input to get the current distributions (dont get new actions).
-        - 2. Use the distribution and input actions provided (actions that were already-sampled; convert binary intersection actions to decimal) to get the log probs (how likely is the distribution to get the action).
-        - 3. Combine to get the joint log probs (sum across the 7 Bernoullis and sum the intersection log prob).
-            - sum operation is valid because the actions are independent. 
-        - 4. Get the individual entropy (used as a regularization term to encourage exploration) and sum them to get the total entropy.
-        - 5. Get the state values from critic.
-        """
-        # print(f"\nStates shape: {states.shape}")
-        states = states.unsqueeze(0)
-        # reshape to have [C, B, H, W] instead of [B, C, H, W]
-        states = states.permute(1, 0, 2, 3)
-        # print(f"\nStates shape after unsqueeze: {states.shape}")
-        
-        action_logits = self.actor(states)
-        # print(f"\nAction logits: {action_logits}")
-
-        # Simple action
-        # 1. Get distributions 
-        intersection_logits = action_logits[:, :4]
-        midblock_logits = action_logits[:, 4:]
-        # print(f"\nIntersection logits: {intersection_logits}")
-        # print(f"Midblock logits: {midblock_logits}")
-
-        intersection_dist = Categorical(logits=intersection_logits)
-        midblock_dist = Bernoulli(logits=midblock_logits)
-
-        # 2. Get log probs
-        intersection_action = actions[:, :1].squeeze(1).long()  # (batch_size, 1) # Categorical expects long
-        midblock_actions = actions[:, 1:].float() # (batch_size, 7)
-        # print(f"\nIntersection action: {intersection_action}, shape: {intersection_action.shape}")
-        # print(f"\nMidblock actions: {midblock_actions}, shape: {midblock_actions.shape}")
-        intersection_log_probs = intersection_dist.log_prob(intersection_action)
-        midblock_log_probs = midblock_dist.log_prob(midblock_actions)
-        # print(f"\nIntersection log probs: {intersection_log_probs}, shape: {intersection_log_probs.shape}")
-        # print(f"\nMidblock log probs: {midblock_log_probs}, shape: {midblock_log_probs.shape}")
-
-        # 3. Combine to get the joint log probs 
-        action_log_probs = intersection_log_probs + midblock_log_probs.sum(dim=1)
-        # print(f"\nAction log probs: {action_log_probs}, shape: {action_log_probs.shape}")
-
-        # 4. Get the total entropy of the distributions.
-        total_entropy = intersection_dist.entropy() + midblock_dist.entropy().sum(dim=1)
-        # print(f"\nTotal entropy: {total_entropy}, shape: {total_entropy.shape}")       
-
-        # 5. Get the state values
-        state_values = self.critic(states)
-        # print(f"\nState values: {state_values}, shape: {state_values.shape}")
-        return action_log_probs, state_values, total_entropy
-
-    def param_count(self, ):
-        """
-        Return a dict
-        """
-        actor_params = sum(p.numel() for p in self.actor_layers.parameters())
-        critic_params = sum(p.numel() for p in self.critic_layers.parameters())
-        shared_params = sum(p.numel() for p in self.shared_cnn.parameters())
-        
-        return {
-            "actor_total": actor_params + shared_params,
-            "critic_total": critic_params + shared_params,
-            "total": actor_params + critic_params + shared_params,
-            "shared": shared_params
-        }
-
-class MLPActorCritic(nn.Module):
-    def __init__(self, in_channels, action_dim, **kwargs):
-        """
-        - MLP Actor-Critic network in two sizes: small, medium. 
+        MLP Actor-Critic network in two sizes: small, medium. 
+        - Two separate networks for actor and critic (No shared backbone as there is no feature extraction).
         - Expects inputs of shape (B, in_channels, action_duration, per_timestep_state_dim) then flattens to (B, -1).
-        - No shared backbone as there is no feature extraction.
         """
-        super(MLPActorCritic, self).__init__()
+        super(MLP_ActorCritic, self).__init__()
         in_channels = in_channels
         action_duration = kwargs.get('action_duration')
         per_timestep_state_dim = kwargs.get('per_timestep_state_dim')
@@ -513,7 +50,7 @@ class MLPActorCritic(nn.Module):
         elif model_size == 'medium':
             actor_hidden_sizes = [512, 256, 128, 64, 32]
             critic_hidden_sizes = [512, 256, 128, 64, 32]
-        # Build networks
+        
         # actor
         actor_layers = []
         input_size_actor = self.input_dim
@@ -637,3 +174,445 @@ class MLPActorCritic(nn.Module):
             "Critic": critic_params,
             "Total": actor_params + critic_params,
         }
+
+class GAT_v2_ActorCritic(nn.Module):
+    """
+    GATv2 with edge features.
+
+    Learnings from Exploration paper:
+    * To use either log-std or full covariance matrix:
+
+      - Full Covariance:
+      - Requires d(d+1)/2 parameters for d components.
+      - Allows for correlation between variables (does not have to be diagonal).
+
+      - log-std:  
+      - Implicitly uses diagonal covariance matrix.
+      - Requires d parameters for d components.
+      - Anisotropic (assumption of independence/ variables are uncorrelated).
+      - This option chosen for its simplicity.
+
+    * Estimation of Entropy:
+      - Discard monte carlo for its non-differentiability.
+      - Use Legendre Quadrature for entropy estimation and use monte carlo to validate.
+
+    * Sampling:
+      - Make use of implicit stochasticity in sampling from GMM during training (instead of explicit greedy vs random sampling).
+      - Greedy sampling from the GMM at evaluation (Maximum propability point corresponding to mean/ center of each component).
+    """
+
+    def __init__(self, in_channels, 
+                 action_dim,
+                 hidden_channels = None, 
+                 out_channels = None, 
+                 initial_heads = None, 
+                 second_heads = None, 
+                 edge_dim = None, 
+                 action_hidden_channels = None, 
+                 gmm_hidden_dim = None, 
+                 num_mixtures = 3, 
+                 actions_per_node=2, 
+                 dropout_rate=0.2, 
+                 min_thickness=0.1, 
+                 max_thickness=10.0):
+        
+        """
+        in_channels: Number of input features per node (e.g., x and y coordinates)
+        hidden_channels: Number of hidden features.
+        out_channels: Number of output features.
+        initial_heads: Number of attention heads for the first GAT layer.
+        second_heads: Number of attention heads for the second GAT layer.
+        edge_dim: Number of features per edge
+        min_thickness: Minimum thickness of a crosswalk.
+        max_thickness: Maximum thickness of a crosswalk.
+        action_dim is the max number of proposals. 
+        actions_per_node: number of things to propose per node. Each proposal has 2 features: [location, thickness]
+
+        TODO: 
+        # At every timestep, the actions is a whole bunch of things of max size. Critic has to evaluate all that (insted of just the relevant parts).
+        # Thickness and location values that are not in the proposal are set to -1 (which is close to minimum of 0.1)
+        # model could potentially interpret these as meaningful values. 
+
+        """
+        super(GAT_v2_ActorCritic, self).__init__()
+        self.max_proposals = action_dim
+        self.min_thickness = min_thickness
+        self.max_thickness = max_thickness
+        self.num_mixtures = num_mixtures
+        self.dropout_rate = dropout_rate
+        self.elu = nn.ELU()
+
+        # First Graph Attention Layer. # conv1 should output [num_nodes, hidden_channels * initial_heads]
+        self.conv1 = GATv2Conv(in_channels, hidden_channels, edge_dim=edge_dim, heads=initial_heads, concat=True, dropout=dropout_rate)# concat=True by default
+
+        # Second Graph Attention Layer Why ever set concat=False?  
+        # When True, the outputs from different attention heads are concatenated resulting in an output of size hidden_channels * initial_heads.
+        # When concat=False, the outputs from different heads are averaged, resulting in an output of size hidden_channels. This reduces the dimensionality of the output
+
+        # Why heads=1? Often, multi-head attention is used in earlier layers to capture different aspects of the graph, but the final layer consolidates this information.
+        # conv2 should output [num_nodes, out_channels * second_heads] (when concat = True)
+        # conv2 should output [num_nodes, out_channels] (when concat = False) This loses too much information.
+        self.conv2 = GATv2Conv(hidden_channels * initial_heads, out_channels, edge_dim=edge_dim, heads=second_heads, concat=True, dropout=dropout_rate)
+
+        # These layers are passed through the readout layer. 
+        #(without the readout layer, the expected input shape here is num_nodes * out_channels * second_heads and num_nodes can be different for each graph and cannot be pre-determined)
+        
+        # Temperature parameter (of the softmax function) for controlling exploration in action selection
+        # A lower temperature (0.1) makes the distribution more peaked (more deterministic), while a higher temperature (2.0) makes it more uniform (more random).
+        #self.temperature = nn.Parameter(torch.ones(1)) # this is a learnable parameter. No need for this to be a learnable. Other mechanisms to control exploration.
+        self.temperature = 1.0 # fixed temperature
+
+        # Finally. After the readout layer (upto that, things are shared), the output is passed to either an actor or a critic.
+        # Sequential layers for actor. Actor predicts GMM parameters and the number of times to sample from the GMM.
+        # Stacked linear layers for GMM parameters for joint prediction of all GMM parameters (instead of separate layers for each)
+        # Output: num_mixtures * 5 values
+        #   - num_mixtures for mix logits (weights of each Gaussian), determines the weight of this Gaussian in the mixture
+        #   - num_mixtures * 2 for means (location and thickness), determines the center of the Gaussian 
+        #   - num_mixtures * 2 for covariances (diagonal, for simplicity), determines the spread of the Gaussian
+
+        self.actor_gmm_layers = nn.Sequential(
+            nn.Linear(out_channels * second_heads, gmm_hidden_dim),
+            nn.ReLU(),
+            nn.Linear(gmm_hidden_dim, num_mixtures * 5)  # 5 = 1 (mix_logit) + 2 (means) + 2 (covs)
+        )
+
+        # Linear layer for predicting the number of proposals
+        self.actor_num_proposals_layer = torch.nn.Linear(out_channels * second_heads, action_dim)
+
+        # Sequential layers for critic
+        # This layer gets input the graph embedding and the action embedding. 
+        self.critic_layers = nn.Sequential(
+            # graph/ node embedding output is shaped (out_channels * second_heads) (1D output of the readout layer)
+            nn.Linear(out_channels * second_heads, 64),
+            nn.ReLU(),
+            nn.Linear(64, 1) # output a single value
+        )
+
+    def readout_layer(self, x, batch):
+        """
+        As a number of approaches are possible, this is a separate function.
+        """
+        # global_mean_pool to average across the nodes for each graph in a batch.
+        return global_mean_pool(x, batch)
+
+    def actor(self, states_batch):
+        """
+        Forward pass: consists of two parts (all in one head)
+        - GMM parameters prediction 
+        - Number of proposals prediction (# of times to sample from GMM)
+
+        State = Data or Batch object with 4 tensors:
+        - node features (x) = (num_nodes, in_channels)
+        - edge index (edge_index) = (2, num_edges) connections between nodes. # e.g., edge_index = torch.tensor([[0, 1, 2, 3], [1, 0, 1, 1]])
+        - edge attributes (edge_attr) = Edge features (num_edges, edge_dim)
+        - batch (batch) = 
+        """
+        y = self.elu(self.conv1(states_batch.x, states_batch.edge_index, states_batch.edge_attr))
+        y = F.dropout(y, p=self.dropout_rate, training=self.training)
+
+        # The same edge_attr is used for both the first and second GAT layers. 
+        # Apply second GAT layer with edge features (no activation here as it's the final layer)
+        # Why are edge features passed again?
+        # Preserving edge information: By passing the edge attributes to each layer, the model can maintain information about the edge features throughout the network depth. 
+        # Different learned attention: Each GAT layer learns its own attention mechanism. By providing the edge features to each layer, you allow each layer to learn how to use these features differently
+        # Residual-like connections for edges: In a sense, passing edge features to each layer creates a form of residual connection for edge information.         
+        y = self.conv2(y, states_batch.edge_index, states_batch.edge_attr)
+        y = self.readout_layer(y, states_batch.batch)
+
+        gmm_params = self.actor_gmm_layers(y)
+        num_proposals_logits = self.actor_num_proposals_layer(y)
+
+        return gmm_params, num_proposals_logits
+
+    def critic(self, states_batch):
+        """
+        Critic forward pass.
+        """
+
+        y = self.elu(self.conv1(states_batch.x, states_batch.edge_index, states_batch.edge_attr))
+        y = F.dropout(y, p=self.dropout_rate, training=self.training)
+        y = self.conv2(y, states_batch.edge_index, states_batch.edge_attr)
+        y = self.readout_layer(y, states_batch.batch)
+
+        return self.critic_layers(y).squeeze(-1)  # Ensure output is of shape (batch_size,)
+
+    def get_gmm_distribution(self, states_batch):
+        """
+        For a GMM with M components, we need: 
+        - M mixture weights (logits -> convert to probabilities that sum to 1)
+        - M mean vectors (2D: location and thickness)
+        - M log-std vectors (2D: log-std in location and thickness)
+
+        Returns:
+        - GMM distribution (MixtureSameFamily)
+        - num_proposals_probs (Tensor): Probabilities for the number of proposals.
+        """
+        
+        # From given batch_size, make GAT batch.
+        # A GAT batch with batch_size = 1 looks like [0, 0, 0, 0, ... num_nodes times]
+        # A GAT batch with batch_size = 4 looks like [0, 0, 1, 1, 2, 2, 3, 3, ... num_nodes times]
+        # GAT batch (required when graph passes through GAT policy) is different from gradient mini-batch.
+        batch_size = states_batch.num_graphs  # Get number of graphs in the batch
+        print(f"\n\nHERE: Batch size: {batch_size}\n\n")
+
+        # actor returns stuff for entire batch. (batchsize, num_mixtures * 5) and (batchsize, max_proposals)
+        gmm_params, num_proposals_logits = self.actor(states_batch)
+        
+        # Apply temperature to control exploration-exploitation
+        num_proposals_probs_batch = F.softmax(num_proposals_logits / self.temperature, dim=-1)  # Convert to probabilities for each index (total sum to 1) with temperature
+
+        print(f"\n\nGMM params: {gmm_params}\n\n")
+        # Split parameters for each batch element
+        mix_logits, means, covs = gmm_params.split([self.num_mixtures, self.num_mixtures * 2, self.num_mixtures * 2], dim=-1)
+        means = means.view(batch_size, self.num_mixtures, 2)
+
+        # The dimensions of means and covariances are (batch_size, num_mixtures, 2)
+        print(f"\n\nBefore transformation: Means: {means}\n Covariances: {covs}\n")
+        # Transform to correct ranges here (instead of applying transformations after getting the gmm distribution or after sampling)
+        # First component (location) -> [0, 1]. Second component (thickness) -> [min_thickness, max_thickness]
+        # Using sigmoid in both cases. TODO: Is a sigmoid normalization what we want?
+        means = means.clone() # Create a new tensor instead of modifying in-place
+        means[:, :, 0] = torch.sigmoid(means[:, :, 0].clone()) # ... means match all leading dimensions and select 0 from last dimension
+        means[:, :, 1] = self.min_thickness + torch.sigmoid(means[:, :, 1].clone()) * (self.max_thickness - self.min_thickness)
+
+        covs = F.softplus(covs).view(batch_size, self.num_mixtures, 2) # Ensure positive covariance
+        # similarly for covariances. Covariance scaling affects how spread out or peaked the distribution is.
+        scaling_factor = 1 / 32
+        # Scale location covariance to be proportional to [0, 1] range
+        covs = covs.clone() # Create a new tensor instead of modifying in-place
+        covs[:, :, 0] = covs[:, :, 0] * scaling_factor # location range not squared because its implicitly handeled (1-0)² = 1
+
+        # Scale thickness covariance to be proportional to thickness range. Covariance matrices deal with squared deviations from the mean
+        covs[:, :, 1] = covs[:, :, 1] * (self.max_thickness - self.min_thickness) ** 2 * scaling_factor
+        print(f"\n\nAfter transformation: Means: {means}\n Covariances: {covs}\n")
+
+        # Create GMM distribution for each batch element
+        gmm_batch = []
+        for b in range(batch_size):
+            mix = Categorical(logits=mix_logits[b]) # Categorical distribution for the mixture probabilities
+            covariance_matrices = torch.diag_embed(covs[b]) # Create diagonal covariance matrices
+            comp = MultivariateNormal(means[b], covariance_matrices) # Multivariate normal distributions for each component
+            gmm = MixtureSameFamily(mix, comp) # Mixture of Gaussians distribution
+            gmm_batch.append(gmm)
+
+        return gmm_batch, num_proposals_probs_batch
+    
+    def act(self, states_batch, iteration=None, visualize=False):
+        """
+        Sample actions from the policy given the state (propose upto max_proposals number of crosswalks).
+        For use in policy gradient methods, the log probabilities of the actions are needed.
+
+        Using reparameterization trick (assumes that actions follow a certain continuous and differentiable distribution)
+        Why not the default normal distribution: it assumes a single mode i.e., when sampling, likelihood of getting a sample far away from the mean is low (depends on std).
+        Instead, we use a mixture of Gaussians. 
+            - Can model more complex distributions
+            - Can capture multiple modes in the distribution
+            - Flexibility: Can be parameterized to have different means and variances for each component
+
+        Should thickness and location be independent? No. Particular thickness for a specific location is what is needed. 
+        Hence, the distribution jointly models the two (location and thickness). 
+
+        multinomial distribution is used to model the outcome of selecting one option from a set of mutually exclusive options, where each option has a specific probability of being chosen.
+        """
+
+        # If a single instance is passed (happens only in act), wrap it around a list and make a batch.
+        if isinstance(states_batch, Data):
+            states_batch = Batch.from_data_list([states_batch])
+
+        batch_size = states_batch.num_graphs 
+        device = next(self.parameters()).device
+        print(f"\n\nState batch size: {states_batch.size()}\n\n")
+        # Get GMM parameters and number of proposals distributions
+        gmm_batch, num_proposals_probs_batch = self.get_gmm_distribution(states_batch.to(device))
+        # MixtureSameFamily combines Categorical distribution with torch.Size([3]) for the mixture weights
+        # Categorical Distribution: Determines the probability of selecting each component (mixing weights). In this case, we have 3 weights that sum to 1.
+        # MultivariateNormal distribution with: loc (means) of size torch.Size([3, 2]) and covariance_matrix of size torch.Size([3, 2, 2])
+        print("\n\nGMM Distribution Details:")
+        for i, gmm in enumerate(gmm_batch):
+            print(f"\nBatch element {i}:")
+            print(f"Mixture weights: {torch.exp(gmm.mixture_distribution.logits)}")  # Convert logits to probabilities
+            print(f"Component means: {gmm.component_distribution.loc}")
+            print(f"Component covariances:\n{gmm.component_distribution.covariance_matrix}\n")
+
+        # Sample number of proposals for each batch element (add 1 to ensure at least 1 proposal)
+        num_actual_proposals = torch.multinomial(num_proposals_probs_batch, 1).squeeze(-1) + 1
+        print(f"\n\nnum_actual_proposals: {num_actual_proposals.shape, num_actual_proposals}\n\n")
+
+        # Initialize output tensors (2 because location and thickness)
+        proposals = torch.full((batch_size, self.max_proposals, 2), -1.0, dtype=torch.float32, device=device) # Initialize with -1 so that its easier to infer the actual proposals in critic without passing them around.
+        log_probs = torch.zeros(batch_size, device=device)
+        
+        for b in range(batch_size):
+
+            # Sample proposals for this batch element
+            samples = gmm_batch[b].sample((num_actual_proposals[b].item(),))
+            locations, thicknesses = samples.split(1, dim=-1)
+            
+            # Clamp the locations to [0,1]
+            locations = torch.clamp(locations, 0.0, 1.0)
+            thicknesses = torch.clamp(thicknesses, self.min_thickness, self.max_thickness)
+            
+            # Recombine the samples
+            samples = torch.cat([locations, thicknesses], dim=-1)
+            
+            # Visualization is only meaningful during act (i.e., not during evaluation)
+            if visualize and iteration is not None:
+                markers = (locations.squeeze().detach().cpu().numpy(), thicknesses.squeeze().detach().cpu().numpy())
+                self.visualize_gmm(gmm_batch[b], markers=markers, batch_index=b, thickness_range=(self.min_thickness, self.max_thickness), location_range=(0, 1), iteration=iteration)
+
+            # Store in output tensor
+            proposals[b, :num_actual_proposals[b], 0] = locations.squeeze()
+            proposals[b, :num_actual_proposals[b], 1] = thicknesses.squeeze()
+            
+            # Compute log probabilities for this batch element
+            log_probs[b] = gmm_batch[b].log_prob(samples).sum()
+
+        return proposals, num_actual_proposals, log_probs
+    
+    def evaluate(self, states_batch, actions_batch):
+        """
+        Args:
+            states_batch (Batch): Batch of states, each state a Data object.
+            actions_batch (Tensor): Batch of actions [batch_size, max_proposals, 2]. 
+                - Not all the actions contain actual proposals. Each element in the batch can have a different number of proposals.
+
+        Returns:
+            action_log_probs (Tensor): Log probabilities of the actions.
+            state_values (Tensor): Values of the states.
+            entropy (Tensor): Entropy of the policy.
+        """
+        
+        batch_size = states_batch.num_graphs 
+        device = next(self.parameters()).device
+
+        state_values_batch = self.critic(states_batch.to(device))
+        print(f"\n\nStates batch size: {states_batch.size()}\n\n")
+        # Get distribution (we dont need the samples in critic, which may be changing a lot every time we sample.)
+        gmm_batch, _ = self.get_gmm_distribution(states_batch.to(device))
+        
+        # Initialize return tensors
+        action_log_probs = torch.zeros(batch_size, device=device)
+        entropy = torch.zeros(batch_size, device=device)
+        
+        print(f"\n\nActions batch: {actions_batch}\n\n")
+        # Compute num_proposals_batch by checking for -1 in actions
+        num_proposals_batch = (actions_batch[:, :, 0] != -1).sum(dim=1)
+        print(f"\n\nNum proposals batch: {num_proposals_batch}\n\n")
+
+        # Process each batch element
+        for b in range(batch_size):
+
+            # Get actual proposals for this batch element
+            n_proposals = num_proposals_batch[b].item()
+            actual_actions = actions_batch[b, :n_proposals]
+            
+            # Compute log probabilities and entropy for this batch element
+            action_log_probs[b] = gmm_batch[b].log_prob(actual_actions).sum() # TODO: Is the sum operation correct?
+            _, entropy[b] = self.gmm_entropy(gmm_batch[b])
+        
+        return action_log_probs, state_values_batch, entropy
+    
+    def gmm_entropy(self, gmm_single):
+        """
+        """
+        entropy_mc = gmm_entropy_monte_carlo(gmm_single)
+        entropy_legendre = gmm_entropy_legendre(gmm_single)
+        return entropy_mc, entropy_legendre
+
+    def param_count(self):
+        """
+        Count the total number of parameters in the model.
+        """
+        # Shared params (GATv2Conv layers)
+        shared_params = sum(p.numel() for p in self.conv1.parameters()) + \
+                        sum(p.numel() for p in self.conv2.parameters())
+
+        # Actor-specific 
+        actor_params = sum(p.numel() for p in self.actor_gmm_layers.parameters()) + \
+                        sum(p.numel() for p in self.actor_num_proposals_layer.parameters())
+
+        # Critic-specific 
+        critic_params = sum(p.numel() for p in self.critic_layers.parameters())
+
+        total_params = shared_params + actor_params + critic_params 
+        return {
+            "shared": shared_params,
+            "actor_total": shared_params + actor_params,
+            "critic_total": shared_params + critic_params,
+            "total": total_params}
+    
+    def visualize_gmm(self, gmm_single, num_samples=50000, markers=None, batch_index=None, thickness_range=None, location_range=None, iteration=None):
+        """
+        Visualize the GMM distribution in 3D.
+        If locations are provided, they are marked as red crosses in a separate top-down view.
+
+        Args:
+            gmm_single (MixtureSameFamily): The GMM distribution for a single batch element.
+            num_samples (int): Number of samples to generate for visualization.
+            markers (tuple of ndarrays): Markers to plot, shape (N, 2).
+        """
+        fs = 16
+        base_save_path = f"gmm_iterations/gmm_distribution_iter_{iteration}_batch_{batch_index}"
+        
+        # Sample from the GMM
+        samples = gmm_single.sample((num_samples,))  # Shape: (num_samples, 2)
+        samples = samples.detach().cpu().numpy()
+
+        xmin, xmax = location_range
+        ymin, ymax = thickness_range
+        X = np.linspace(xmin, xmax, 100)
+        Y = np.linspace(ymin, ymax, 100)
+        X, Y = np.meshgrid(X, Y)
+
+        # Create positions array for GMM evaluation
+        positions = torch.tensor(np.column_stack([X.ravel(), Y.ravel()]), 
+                               dtype=torch.float32,
+                               device=gmm_single.component_distribution.loc.device)  # Get device from component distribution
+
+        # Evaluate the GMM on the grid and move to CPU for numpy conversion
+        Z = gmm_single.log_prob(positions).detach().cpu()
+        Z = np.exp(Z.numpy()).reshape(X.shape)
+
+        # Main 3D plot without markers
+        fig = plt.figure(figsize=(10, 8), dpi=100)   
+        ax = fig.add_subplot(111, projection='3d')
+        surf = ax.plot_surface(X, Y, Z, cmap=cm.viridis, linewidth=0, antialiased=False, alpha=0.7)
+        ax.set_xlabel('Location', fontweight='bold', fontsize=fs, labelpad=15)
+        ax.set_ylabel('Thickness', fontweight='bold', fontsize=fs, labelpad=15)
+        ax.set_zlabel('Density', fontweight='bold', fontsize=fs, labelpad=15)
+        ax.set_title('GMM Distribution', fontweight='bold', fontsize=fs)
+        ax.tick_params(axis='both', which='major', labelsize=fs-2)
+        
+        # Set fixed z-axis limits
+        ax.set_zlim(0, 0.6)
+        ax.set_zticks(np.linspace(0, 0.6, 5))
+        
+        plt.tight_layout()
+        # plt.show()
+        plt.savefig(f"{base_save_path}.png")
+        plt.close()
+
+        # Create second plot with markers if provided
+        if markers is not None:
+            fig = plt.figure(figsize=(10, 8), dpi=100)
+            ax = plt.gca()
+            
+            ax.grid(True, linestyle=(0, (5, 8)), alpha=0.9, zorder=11)
+
+            contour = ax.contourf(X, Y, Z, levels=20, cmap=cm.viridis, alpha=0.8, zorder=7)
+            cbar = plt.colorbar(contour)
+            cbar.set_label('Density', fontweight='bold', fontsize=fs)
+            cbar.ax.tick_params(labelsize=fs-2)
+
+            locations, thicknesses = markers
+            ax.scatter(locations, thicknesses, c='r', marker='x', s=100, label='Samples Drawn', zorder=10)
+            legend = ax.legend(loc='upper right', frameon=True, framealpha=1.0)
+            legend.set_zorder(11)  
+            
+            ax.set_xlabel('Location', fontweight='bold', fontsize=fs)
+            ax.set_ylabel('Thickness', fontweight='bold', fontsize=fs)
+            ax.set_title('GMM with Samples', fontweight='bold', fontsize=fs)
+            ax.tick_params(axis='both', which='major', labelsize=fs-2)
+            plt.tight_layout()
+            plt.savefig(f"{base_save_path}_markers.png")
+            plt.close()

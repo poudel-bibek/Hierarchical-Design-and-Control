@@ -1,96 +1,11 @@
 import torch
 import torch.optim as optim
-import torch.multiprocessing as mp
 from torch.utils.data import TensorDataset, DataLoader
 from .models import CNNActorCritic, MLPActorCritic
 
-class Memory:
-    """
-    Storage class for saving experience from interactions with the environment.
-    These memories will be made in CPU but loaded in GPU for the policy update.
-    """
-    def __init__(self,):
-        self.states = []
-        self.actions = []
-        self.values = []
-        self.logprobs = []
-        self.rewards = []
-        self.is_terminals = []
-        
-    def append(self, state, action, value, logprob, reward, done):
-        self.states.append(state)
-        self.actions.append(action) 
-        self.values.append(value) 
-        self.logprobs.append(logprob)
-        self.rewards.append(reward) # these are scalars
-        self.is_terminals.append(done) # these are scalars
-
-class WelfordNormalizer:
-    def __init__(self, shape, eps=1e-8):
-        """
-        Normalization using Welford's algorithm.
-        Can be used for both state and reward normalization.
-        In parallelized PPO actors, each worker uses its own copy of the old policy.
-        However, in this case a single (global) instance of the normalizer (shared resource) will be updated by all workers.
-        This may result in race conditions, hence lock is used. 
-        """
-        self.mean = torch.zeros(shape, dtype=torch.float32).share_memory_() # remains in CPU
-        self.M2 = torch.zeros(shape, dtype=torch.float32).share_memory_() # remains in CPU
-        self.count = mp.Value('i', 0) # A variable i that is shared between processes and is init to 0.
-        self.eps = eps
-        self.lock = mp.Lock()
-        self.training = True # Only update the normalizer when training is True.
-
-    def eval(self,):
-        self.training = False
-
-    def manual_load(self, mean, M2, count):
-        self.mean.copy_(mean)
-        self.M2.copy_(M2)
-        self.count.value = count
-
-    def update(self, x):
-        """
-        Update running statistics with a new sample x using Welford's algorithm.
-        """
-        with self.lock:
-            if self.count.value == 0:
-                # First sample: initialize mean and zero-out M2.
-                self.mean.copy_(x)
-                self.M2.zero_()
-                self.count.value = 1
-            else:
-                self.count.value += 1
-                delta = x - self.mean
-                self.mean.add_(delta / self.count.value)
-                delta2 = x - self.mean
-                self.M2.add_(delta * delta2)
-
-    def variance(self):
-        with self.lock:
-            if self.count.value < 2:
-                # Not enough samples: return a tensor of ones with the same shape as mean
-                return torch.ones_like(self.mean)
-            else:
-                return self.M2 / (self.count.value - 1)
-
-    def std(self):
-        return torch.sqrt(self.variance()) + self.eps
-
-    def normalize(self, x):
-        """
-        Normalizes the sample x using the running mean and standard deviation.
-        - x (torch.Tensor or array-like): The sample to normalize.
-        - update (bool): If True, update the running statistics with x.
-        - Returns the normalized sample.
-        """
-        if self.training:
-            self.update(x)
-        return (x - self.mean) / self.std()
-    
 class PPO:
     """
-    Centralized policy update.
+    PPO for both higher and lower level agents.
     """
     def __init__(self, 
                  model_dim, # could be state_dim for mlp, in_channels for cnn, in_channels for gatv2
@@ -106,7 +21,7 @@ class PPO:
                  gae_lambda,
                  max_grad_norm,
                  vf_clip_param,
-                 model_type,
+                 agent_type,
                  model_kwargs):
         
         self.model_dim = model_dim
@@ -121,14 +36,17 @@ class PPO:
         self.gae_lambda = gae_lambda
         self.max_grad_norm = max_grad_norm
         self.vf_clip_param = vf_clip_param
-        if model_type == "cnn":
-            self.policy = CNNActorCritic(self.model_dim, self.action_dim, **model_kwargs).to(self.device)
-            self.policy_old = CNNActorCritic(self.model_dim, self.action_dim, **model_kwargs).to(self.device) # old policy network (used for importance sampling)
-        elif model_type == "mlp":
-            self.policy = MLPActorCritic(self.model_dim, self.action_dim, **model_kwargs).to(self.device)
-            self.policy_old = MLPActorCritic(self.model_dim, self.action_dim, **model_kwargs).to(self.device) # old policy network (used for importance sampling)
+
+        if agent_type == 'lower':
+            self.policy = MLP_ActorCritic(self.model_dim, self.action_dim, **model_kwargs).to(self.device)
+            self.policy_old = MLP_ActorCritic(self.model_dim, self.action_dim, **model_kwargs).to(self.device) 
+
+        elif agent_type == "higher":
+            self.policy = GAT_v2_ActorCritic(self.model_dim, self.action_dim, **model_kwargs).to(self.device)
+            self.policy_old = GAT_v2_ActorCritic(self.model_dim, self.action_dim, **model_kwargs).to(self.device)
+
         else:
-            raise ValueError(f"Invalid model type: {self.model_type}. Must be 'cnn' or 'mlp'.")
+            raise ValueError(f"Invalid agent type: {agent_type}. Must be 'lower' or 'higher'.")
         
         param_counts = self.policy.param_count()
         print(f"\nModel parameters:")
