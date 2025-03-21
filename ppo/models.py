@@ -129,7 +129,7 @@ class MLP_ActorCritic(nn.Module):
 
     def evaluate(self, states, actions):
         """
-        Evaluate a batch of states and pre-sampled actions. Same logic as the CNN version.
+        Evaluate a batch of states and pre-sampled actions. 
         """
         # print("Evaluating...")
         action_logits = self.actor(states)
@@ -177,7 +177,8 @@ class MLP_ActorCritic(nn.Module):
 
 class GAT_v2_ActorCritic(nn.Module):
     """
-    GATv2 with edge features.
+    GATv2 (with edge features).
+    Graph attention layers are shared between actor and critic.
 
     Learnings from Exploration paper:
     * To use either log-std or full covariance matrix:
@@ -201,21 +202,7 @@ class GAT_v2_ActorCritic(nn.Module):
       - Greedy sampling from the GMM at evaluation (Maximum propability point corresponding to mean/ center of each component).
     """
 
-    def __init__(self, in_channels, 
-                 action_dim,
-                 hidden_channels = None, 
-                 out_channels = None, 
-                 initial_heads = None, 
-                 second_heads = None, 
-                 edge_dim = None, 
-                 action_hidden_channels = None, 
-                 gmm_hidden_dim = None, 
-                 num_mixtures = 3, 
-                 actions_per_node=2, 
-                 dropout_rate=0.2, 
-                 min_thickness=0.1, 
-                 max_thickness=10.0):
-        
+    def __init__(self, in_channels, action_dim, **kwargs):
         """
         in_channels: Number of input features per node (e.g., x and y coordinates)
         hidden_channels: Number of hidden features.
@@ -235,69 +222,167 @@ class GAT_v2_ActorCritic(nn.Module):
 
         """
         super(GAT_v2_ActorCritic, self).__init__()
+        self.in_channels = in_channels
         self.max_proposals = action_dim
-        self.min_thickness = min_thickness
-        self.max_thickness = max_thickness
-        self.num_mixtures = num_mixtures
-        self.dropout_rate = dropout_rate
-        self.elu = nn.ELU()
+        self.min_thickness = kwargs.get('min_thickness', 0.1)
+        self.max_thickness = kwargs.get('max_thickness', 10.0)
+        self.num_mixtures = kwargs.get('num_mixtures', 3)
+        self.actions_per_node = kwargs.get('actions_per_node', 2)
 
-        # First Graph Attention Layer. # conv1 should output [num_nodes, hidden_channels * initial_heads]
-        self.conv1 = GATv2Conv(in_channels, hidden_channels, edge_dim=edge_dim, heads=initial_heads, concat=True, dropout=dropout_rate)# concat=True by default
+        self.hidden_channels = kwargs.get('hidden_channels')
+        self.out_channels = kwargs.get('out_channels')
+        self.initial_heads = kwargs.get('initial_heads')
+        self.second_heads = kwargs.get('second_heads')
+        self.edge_dim = kwargs.get('edge_dim')
+        self.action_hidden_channels = kwargs.get('action_hidden_channels')
+    
+        self.dropout_rate = 0.0 # kwargs.get('dropout_rate', 0.2)
+    
+        if kwargs.get('activation') == "elu":
+            self.activation = nn.ELU()
+        elif kwargs.get('activation') == "relu":
+            self.activation = nn.ReLU()
+        elif kwargs.get('activation') == "tanh":
+            self.activation = nn.Tanh()
+        elif kwargs.get('activation') == "leakyrelu":
+            self.activation = nn.LeakyReLU()
 
-        # Second Graph Attention Layer Why ever set concat=False?  
-        # When True, the outputs from different attention heads are concatenated resulting in an output of size hidden_channels * initial_heads.
-        # When concat=False, the outputs from different heads are averaged, resulting in an output of size hidden_channels. This reduces the dimensionality of the output
+        model_size = kwargs.get('model_size')
+        # Actor has some shared MLP layers
+        # Followed by four heads: 
+        #     1. Predict GMM means (2 values: location and thickness)
+        #     2. Predict log-std (2 values: log-std in location and thickness)
+        #     3. Predict mix logits (1 value: weight of each Gaussian component)
+        #     4. Predict the number of times to sample from the GMM.
+        if model_size == "small":
+            actor_shared_hidden_sizes = [256, 128] 
+            actor_gmm_hidden_sizes = [128, 64] # For actor heads 1, 2, 3
+            actor_sample_hidden_sizes = [128, 64] # For actor head 4
+            critic_hidden_sizes = [128, 64]
+        elif model_size == "medium":
+            actor_shared_hidden_sizes = [512, 256]
+            actor_gmm_hidden_sizes = [256, 128, 64]
+            actor_sample_hidden_sizes = [256, 128, 64]
+            critic_hidden_sizes = [256, 128, 64]
 
-        # Why heads=1? Often, multi-head attention is used in earlier layers to capture different aspects of the graph, but the final layer consolidates this information.
+        # First Graph Attention Layer. 
+        # conv1 should output [num_nodes, hidden_channels * initial_heads]
+        # concat=True by default: the outputs from different attn heads are concatenated to output of size hidden_channels * initial_heads.
+        # When concat=False, the outputs from different heads are averaged to output of size: hidden_channels. Reduces the dimensionality of the output
+        self.conv1 = GATv2Conv(self.in_channels, 
+                               self.hidden_channels, 
+                               edge_dim = self.edge_dim, 
+                               heads = self.initial_heads, 
+                               concat = True, 
+                               dropout = self.dropout_rate) 
+
+        # Second Graph Attention Layer 
+        # Why heads=1? Often, multi-head attention is used in earlier layers to capture different aspects of the graph and the final layer consolidates this info.
         # conv2 should output [num_nodes, out_channels * second_heads] (when concat = True)
-        # conv2 should output [num_nodes, out_channels] (when concat = False) This loses too much information.
-        self.conv2 = GATv2Conv(hidden_channels * initial_heads, out_channels, edge_dim=edge_dim, heads=second_heads, concat=True, dropout=dropout_rate)
+        # conv2 should output [num_nodes, out_channels] (when concat = False). This loses too much information.
+        self.conv2 = GATv2Conv(self.hidden_channels * self.initial_heads, 
+                               self.out_channels, 
+                               edge_dim = self.edge_dim, 
+                               heads = self.second_heads, 
+                               concat = True, 
+                               dropout = self.dropout_rate)
 
-        # These layers are passed through the readout layer. 
-        #(without the readout layer, the expected input shape here is num_nodes * out_channels * second_heads and num_nodes can be different for each graph and cannot be pre-determined)
-        
-        # Temperature parameter (of the softmax function) for controlling exploration in action selection
-        # A lower temperature (0.1) makes the distribution more peaked (more deterministic), while a higher temperature (2.0) makes it more uniform (more random).
-        #self.temperature = nn.Parameter(torch.ones(1)) # this is a learnable parameter. No need for this to be a learnable. Other mechanisms to control exploration.
-        self.temperature = 1.0 # fixed temperature
+        # actor
+        # shared
+        actor_shared_layers = []
+        input_size_actor_shared = self.out_channels * self.second_heads
+        for h in actor_shared_hidden_sizes:
+            actor_shared_layers.append(layer_init(nn.Linear(input_size_actor_shared, h)))
+            # Add layer norm, batch norm, dropout, etc.
+            actor_shared_layers.append(nn.LayerNorm(h))
+            actor_shared_layers.append(self.activation)
+            # actor_shared_layers.append(nn.Dropout(self.dropout_rate))
+            input_size_actor_shared = h
 
-        # Finally. After the readout layer (upto that, things are shared), the output is passed to either an actor or a critic.
-        # Sequential layers for actor. Actor predicts GMM parameters and the number of times to sample from the GMM.
-        # Stacked linear layers for GMM parameters for joint prediction of all GMM parameters (instead of separate layers for each)
-        # Output: num_mixtures * 5 values
-        #   - num_mixtures for mix logits (weights of each Gaussian), determines the weight of this Gaussian in the mixture
-        #   - num_mixtures * 2 for means (location and thickness), determines the center of the Gaussian 
-        #   - num_mixtures * 2 for covariances (diagonal, for simplicity), determines the spread of the Gaussian
+        self.actor_shared_layers = nn.Sequential(*actor_shared_layers)
 
-        self.actor_gmm_layers = nn.Sequential(
-            nn.Linear(out_channels * second_heads, gmm_hidden_dim),
-            nn.ReLU(),
-            nn.Linear(gmm_hidden_dim, num_mixtures * 5)  # 5 = 1 (mix_logit) + 2 (means) + 2 (covs)
-        )
+        # means
+        actor_means_layers = []
+        input_size_actor_means = input_size_actor_shared
+        for h in actor_gmm_hidden_sizes:
+            actor_means_layers.append(layer_init(nn.Linear(input_size_actor_means, h)))
+            # Add layer norm, batch norm, dropout, etc.
+            actor_means_layers.append(nn.LayerNorm(h))
+            actor_means_layers.append(self.activation)
+            # actor_means_layers.append(nn.Dropout(self.dropout_rate))
+            input_size_actor_means = h
 
-        # Linear layer for predicting the number of proposals
-        self.actor_num_proposals_layer = torch.nn.Linear(out_channels * second_heads, action_dim)
+        self.actor_means_layers = nn.Sequential(*actor_means_layers)
+        self.actor_means = layer_init(nn.Linear(input_size_actor_means, self.num_mixtures * 2))
 
-        # Sequential layers for critic
-        # This layer gets input the graph embedding and the action embedding. 
-        self.critic_layers = nn.Sequential(
-            # graph/ node embedding output is shaped (out_channels * second_heads) (1D output of the readout layer)
-            nn.Linear(out_channels * second_heads, 64),
-            nn.ReLU(),
-            nn.Linear(64, 1) # output a single value
-        )
+        # log-std
+        actor_log_std_layers = []
+        input_size_actor_log_std = input_size_actor_shared
+        for h in actor_gmm_hidden_sizes:
+            actor_log_std_layers.append(layer_init(nn.Linear(input_size_actor_log_std, h)))
+            # Add layer norm, batch norm, dropout, etc.
+            actor_log_std_layers.append(nn.LayerNorm(h))
+            actor_log_std_layers.append(self.activation)
+            # actor_log_std_layers.append(nn.Dropout(self.dropout_rate))
+            input_size_actor_log_std = h
+
+        self.actor_log_std_layers = nn.Sequential(*actor_log_std_layers)
+        self.actor_log_std = layer_init(nn.Linear(input_size_actor_log_std, self.num_mixtures * 2))
+
+        # mix logits
+        actor_mix_logits_layers = []
+        input_size_actor_mix_logits = input_size_actor_shared
+        for h in actor_gmm_hidden_sizes:
+            actor_mix_logits_layers.append(layer_init(nn.Linear(input_size_actor_mix_logits, h)))
+            # Add layer norm, batch norm, dropout, etc.
+            actor_mix_logits_layers.append(nn.LayerNorm(h))
+            actor_mix_logits_layers.append(self.activation)
+            # actor_mix_logits_layers.append(nn.Dropout(self.dropout_rate))
+            input_size_actor_mix_logits = h
+
+        self.actor_mix_logits_layers = nn.Sequential(*actor_mix_logits_layers)
+        self.actor_mix_logits = layer_init(nn.Linear(input_size_actor_mix_logits, self.num_mixtures))
+
+        # number of proposals (Does not share i.e., attached directly to readout layer output)
+        actor_sample_layers = []
+        input_size_actor_sample = self.out_channels * self.second_heads
+        for h in actor_sample_hidden_sizes:
+            actor_sample_layers.append(layer_init(nn.Linear(input_size_actor_sample, h)))
+            # Add layer norm, batch norm, dropout, etc.
+            actor_sample_layers.append(nn.LayerNorm(h))
+            actor_sample_layers.append(self.activation)
+            # actor_gmm_layers.append(nn.Dropout(self.dropout_rate))
+            input_size_actor_sample = h
+
+        self.actor_sample_layers = nn.Sequential(*actor_sample_layers)
+        self.actor_num_proposals = layer_init(nn.Linear(input_size_actor_sample, self.max_proposals)) # No activation in last layer.
+
+        # critic
+        critic_layers = []
+        input_size_critic = self.out_channels * self.second_heads
+        for h in critic_hidden_sizes:
+            critic_layers.append(layer_init(nn.Linear(input_size_critic, h)))
+            # Add layer norm, batch norm, dropout, etc.
+            critic_layers.append(nn.LayerNorm(h))
+            critic_layers.append(self.activation)
+            # critic_layers.append(nn.Dropout(self.dropout_rate))
+            input_size_critic = h
+
+        self.critic_layers = nn.Sequential(*critic_layers)
+        self.critic_value = layer_init(nn.Linear(input_size_critic, 1))
 
     def readout_layer(self, x, batch):
         """
-        As a number of approaches are possible, this is a separate function.
+        Applied at the transition of GAT to MLP layers.
+        Without it, the expected shape is (num_nodes * out_channels * second_heads): num_nodes can be different for each graph.
+        A number of approaches are possible.
+        - global_mean_pool: average across the nodes for each graph in a batch.
+
         """
-        # global_mean_pool to average across the nodes for each graph in a batch.
         return global_mean_pool(x, batch)
 
     def actor(self, states_batch):
         """
-        Forward pass: consists of two parts (all in one head)
         - GMM parameters prediction 
         - Number of proposals prediction (# of times to sample from GMM)
 
@@ -305,35 +390,45 @@ class GAT_v2_ActorCritic(nn.Module):
         - node features (x) = (num_nodes, in_channels)
         - edge index (edge_index) = (2, num_edges) connections between nodes. # e.g., edge_index = torch.tensor([[0, 1, 2, 3], [1, 0, 1, 1]])
         - edge attributes (edge_attr) = Edge features (num_edges, edge_dim)
-        - batch (batch) = 
+        - batch (batch)
         """
-        y = self.elu(self.conv1(states_batch.x, states_batch.edge_index, states_batch.edge_attr))
-        y = F.dropout(y, p=self.dropout_rate, training=self.training)
+
+        y = self.conv1(states_batch.x, states_batch.edge_index, states_batch.edge_attr)
+        y = self.activation(y)
 
         # The same edge_attr is used for both the first and second GAT layers. 
-        # Apply second GAT layer with edge features (no activation here as it's the final layer)
-        # Why are edge features passed again?
         # Preserving edge information: By passing the edge attributes to each layer, the model can maintain information about the edge features throughout the network depth. 
         # Different learned attention: Each GAT layer learns its own attention mechanism. By providing the edge features to each layer, you allow each layer to learn how to use these features differently
         # Residual-like connections for edges: In a sense, passing edge features to each layer creates a form of residual connection for edge information.         
         y = self.conv2(y, states_batch.edge_index, states_batch.edge_attr)
+        y = self.activation(y)
+
         y = self.readout_layer(y, states_batch.batch)
 
-        gmm_params = self.actor_gmm_layers(y)
-        num_proposals_logits = self.actor_num_proposals_layer(y)
+        # Shared MLP layers
+        shared_y = self.actor_shared_layers(y)
 
-        return gmm_params, num_proposals_logits
+        # GMM parameters
+        means = self.actor_means(self.actor_means_layers(shared_y))
+        log_stds = self.actor_log_std(self.actor_log_std_layers(shared_y))
+
+        # TODO: clamp log_stds to make the GMM within boundary.
+        # log_stds = torch.clamp(log_stds, min=-4.0, max=0.0) # e^(-4) = 0.0183, e^(0) = 1.
+
+        mix_logits = self.actor_mix_logits(self.actor_mix_logits_layers(shared_y))
+        num_proposal_logits = self.actor_num_proposals(self.actor_sample_layers(y)) # probabilites obtained later.
+
+        return means, log_stds, mix_logits, num_proposal_logits
 
     def critic(self, states_batch):
         """
-        Critic forward pass.
         """
-
-        y = self.elu(self.conv1(states_batch.x, states_batch.edge_index, states_batch.edge_attr))
-        y = F.dropout(y, p=self.dropout_rate, training=self.training)
+        y = self.conv1(states_batch.x, states_batch.edge_index, states_batch.edge_attr)
+        y = self.activation(y)
         y = self.conv2(y, states_batch.edge_index, states_batch.edge_attr)
-        y = self.readout_layer(y, states_batch.batch)
+        y = self.activation(y)
 
+        y = self.readout_layer(y, states_batch.batch)   
         return self.critic_layers(y).squeeze(-1)  # Ensure output is of shape (batch_size,)
 
     def get_gmm_distribution(self, states_batch):
@@ -348,107 +443,82 @@ class GAT_v2_ActorCritic(nn.Module):
         - num_proposals_probs (Tensor): Probabilities for the number of proposals.
         """
         
-        # From given batch_size, make GAT batch.
-        # A GAT batch with batch_size = 1 looks like [0, 0, 0, 0, ... num_nodes times]
-        # A GAT batch with batch_size = 4 looks like [0, 0, 1, 1, 2, 2, 3, 3, ... num_nodes times]
-        # GAT batch (required when graph passes through GAT policy) is different from gradient mini-batch.
-        batch_size = states_batch.num_graphs  # Get number of graphs in the batch
-        print(f"\n\nHERE: Batch size: {batch_size}\n\n")
+        # In torch geometric, a batch of graphs is a single large graph. Different from gradient mini-batch.
+        # batch_size = 1 looks like [0, 0, 0, 0, ... num_nodes times]
+        # batch_size = 4 looks like [0, 0, 1, 1, 2, 2, 3, 3, ... num_nodes times]
+        batch_size = states_batch.num_graphs 
+        print(f"\nInside get_gmm_distribution:\nBatch size: {batch_size}")
 
-        # actor returns stuff for entire batch. (batchsize, num_mixtures * 5) and (batchsize, max_proposals)
-        gmm_params, num_proposals_logits = self.actor(states_batch)
-        
-        # Apply temperature to control exploration-exploitation
-        num_proposals_probs_batch = F.softmax(num_proposals_logits / self.temperature, dim=-1)  # Convert to probabilities for each index (total sum to 1) with temperature
+        # Returns (batch_size, num_mixtures * 5) and (batch_size, max_proposals)
+        means, log_stds, mix_logits, num_proposals_logits = self.actor(states_batch)
+        print(f"\nMeans: {means}, Log-stds: {log_stds}, Mix logits: {mix_logits}, Num proposal logits: {num_proposals_logits}")
 
-        print(f"\n\nGMM params: {gmm_params}\n\n")
-        # Split parameters for each batch element
-        mix_logits, means, covs = gmm_params.split([self.num_mixtures, self.num_mixtures * 2, self.num_mixtures * 2], dim=-1)
-        means = means.view(batch_size, self.num_mixtures, 2)
+        num_proposals_probs_batch = F.softmax(num_proposals_logits, dim=-1) # TODO: verify the use of dim=-1.
+        print(f"\nProposal probabilities: {num_proposals_probs_batch}")
 
-        # The dimensions of means and covariances are (batch_size, num_mixtures, 2)
-        print(f"\n\nBefore transformation: Means: {means}\n Covariances: {covs}\n")
-        # Transform to correct ranges here (instead of applying transformations after getting the gmm distribution or after sampling)
-        # First component (location) -> [0, 1]. Second component (thickness) -> [min_thickness, max_thickness]
-        # Using sigmoid in both cases. TODO: Is a sigmoid normalization what we want?
-        means = means.clone() # Create a new tensor instead of modifying in-place
-        means[:, :, 0] = torch.sigmoid(means[:, :, 0].clone()) # ... means match all leading dimensions and select 0 from last dimension
-        means[:, :, 1] = self.min_thickness + torch.sigmoid(means[:, :, 1].clone()) * (self.max_thickness - self.min_thickness)
+        # TODO: Denormalize the means and log_stds.
+        # Thickness should be between min_thickness and max_thickness.
+        # Location should be between 0 and 1.
 
-        covs = F.softplus(covs).view(batch_size, self.num_mixtures, 2) # Ensure positive covariance
-        # similarly for covariances. Covariance scaling affects how spread out or peaked the distribution is.
-        scaling_factor = 1 / 32
-        # Scale location covariance to be proportional to [0, 1] range
-        covs = covs.clone() # Create a new tensor instead of modifying in-place
-        covs[:, :, 0] = covs[:, :, 0] * scaling_factor # location range not squared because its implicitly handeled (1-0)² = 1
-
-        # Scale thickness covariance to be proportional to thickness range. Covariance matrices deal with squared deviations from the mean
-        covs[:, :, 1] = covs[:, :, 1] * (self.max_thickness - self.min_thickness) ** 2 * scaling_factor
-        print(f"\n\nAfter transformation: Means: {means}\n Covariances: {covs}\n")
-
-        # Create GMM distribution for each batch element
-        gmm_batch = []
+        gmms_batch = []
         for b in range(batch_size):
-            mix = Categorical(logits=mix_logits[b]) # Categorical distribution for the mixture probabilities
-            covariance_matrices = torch.diag_embed(covs[b]) # Create diagonal covariance matrices
-            comp = MultivariateNormal(means[b], covariance_matrices) # Multivariate normal distributions for each component
-            gmm = MixtureSameFamily(mix, comp) # Mixture of Gaussians distribution
-            gmm_batch.append(gmm)
+            # reshape to (num_mixtures, 2)
+            means_b = means[b].reshape(self.num_mixtures, 2)
+            log_stds_b = log_stds[b].reshape(self.num_mixtures, 2)
+            print(f"\nMeans item {b}: {means_b} \nLog-stds item {b}: {log_stds_b}")
+            
+            # diagonal covariance matrix
+            scale_diag = torch.exp(log_stds_b) # exponentiate the logstdss
+            mixture_dist = Categorical(logits = mix_logits[b])
 
-        return gmm_batch, num_proposals_probs_batch
+            component_dist = MultivariateNormal(
+                loc = means_b, 
+                scale_tril = torch.diag_embed(scale_diag) 
+            )
+            gmm = MixtureSameFamily(mixture_distribution = mixture_dist,
+                                    component_distribution = component_dist)
+            gmms_batch.append(gmm)
+        return gmms_batch, num_proposals_probs_batch
     
-    def act(self, states_batch, iteration=None, visualize=False):
+    def act(self, states_batch, device = None, training = True, iteration=None, visualize=False):
         """
-        Sample actions from the policy given the state (propose upto max_proposals number of crosswalks).
-        For use in policy gradient methods, the log probabilities of the actions are needed.
-
-        Using reparameterization trick (assumes that actions follow a certain continuous and differentiable distribution)
-        Why not the default normal distribution: it assumes a single mode i.e., when sampling, likelihood of getting a sample far away from the mean is low (depends on std).
-        Instead, we use a mixture of Gaussians. 
-            - Can model more complex distributions
-            - Can capture multiple modes in the distribution
-            - Flexibility: Can be parameterized to have different means and variances for each component
-
-        Should thickness and location be independent? No. Particular thickness for a specific location is what is needed. 
-        Hence, the distribution jointly models the two (location and thickness). 
-
-        multinomial distribution is used to model the outcome of selecting one option from a set of mutually exclusive options, where each option has a specific probability of being chosen.
+        Sample actions from the GMM (propose upto max_proposals number of crosswalks).
+        Policy gradient methods require the log probabilities of the actions to be returned as well.
+        Should thickness and location be independent? 
+        - No. 
+        - Modeling thickness and location jointly 
+        Utilizing the implicit stochasticity in sampling during training.
+        However, at test, sample greedily at each mode.
         """
 
-        # If a single instance is passed (happens only in act), wrap it around a list and make a batch.
-        if isinstance(states_batch, Data):
-            states_batch = Batch.from_data_list([states_batch])
+        # properly batch the data using Batch.from_data_list() before sending here. 
+        gmm_batch, num_proposals_probs_batch = self.get_gmm_distribution(states_batch.to(device))
+        print(f"\n\nGMMs: {gmm_batch}\n\n")
+
+        # Sample one proposal for each batch element (add 1 to ensure at least 1 proposal; default starts from index 0)
+        # Using torch multinomial to sample from discrete distribution.
+        num_actual_proposals = torch.multinomial(num_proposals_probs_batch, 1).squeeze(-1) + 1
+        print(f"\nnum_actual_proposals: {num_actual_proposals.shape, num_actual_proposals}\n")
 
         batch_size = states_batch.num_graphs 
-        device = next(self.parameters()).device
-        print(f"\n\nState batch size: {states_batch.size()}\n\n")
-        # Get GMM parameters and number of proposals distributions
-        gmm_batch, num_proposals_probs_batch = self.get_gmm_distribution(states_batch.to(device))
-        # MixtureSameFamily combines Categorical distribution with torch.Size([3]) for the mixture weights
-        # Categorical Distribution: Determines the probability of selecting each component (mixing weights). In this case, we have 3 weights that sum to 1.
-        # MultivariateNormal distribution with: loc (means) of size torch.Size([3, 2]) and covariance_matrix of size torch.Size([3, 2, 2])
-        print("\n\nGMM Distribution Details:")
-        for i, gmm in enumerate(gmm_batch):
-            print(f"\nBatch element {i}:")
-            print(f"Mixture weights: {torch.exp(gmm.mixture_distribution.logits)}")  # Convert logits to probabilities
-            print(f"Component means: {gmm.component_distribution.loc}")
-            print(f"Component covariances:\n{gmm.component_distribution.covariance_matrix}\n")
-
-        # Sample number of proposals for each batch element (add 1 to ensure at least 1 proposal)
-        num_actual_proposals = torch.multinomial(num_proposals_probs_batch, 1).squeeze(-1) + 1
-        print(f"\n\nnum_actual_proposals: {num_actual_proposals.shape, num_actual_proposals}\n\n")
-
-        # Initialize output tensors (2 because location and thickness)
-        proposals = torch.full((batch_size, self.max_proposals, 2), -1.0, dtype=torch.float32, device=device) # Initialize with -1 so that its easier to infer the actual proposals in critic without passing them around.
+        # Initialize output tensors with -1 so that its easier to infer actual proposals in critic.
+        proposals = torch.full((batch_size, self.max_proposals, 2), -1.0, dtype=torch.float32, device=device) 
         log_probs = torch.zeros(batch_size, device=device)
         
         for b in range(batch_size):
 
             # Sample proposals for this batch element
-            samples = gmm_batch[b].sample((num_actual_proposals[b].item(),))
+            if training: 
+                samples = gmm_batch[b].sample((num_actual_proposals[b].item(),))
+            else: 
+                # TODO: At test, sample greedily at each mode.
+                # Is the number of mixture components = number of modes?
+                samples = gmm_batch[b].sample((1,))
+
             locations, thicknesses = samples.split(1, dim=-1)
             
-            # Clamp the locations to [0,1]
+            # Clamp
+            # We should be less dependent on clamping here and make sure the GMM itself lies in the desired range.
             locations = torch.clamp(locations, 0.0, 1.0)
             thicknesses = torch.clamp(thicknesses, self.min_thickness, self.max_thickness)
             
@@ -465,41 +535,37 @@ class GAT_v2_ActorCritic(nn.Module):
             proposals[b, :num_actual_proposals[b], 1] = thicknesses.squeeze()
             
             # Compute log probabilities for this batch element
-            log_probs[b] = gmm_batch[b].log_prob(samples).sum()
+            # SUM operation is correct for joint log prob of thickness and location.
+            log_probs[b] = gmm_batch[b].log_prob(samples).sum() 
 
         return proposals, num_actual_proposals, log_probs
     
-    def evaluate(self, states_batch, actions_batch):
+    def evaluate(self, states_batch, actions_batch, device = None):
         """
-        Args:
-            states_batch (Batch): Batch of states, each state a Data object.
-            actions_batch (Tensor): Batch of actions [batch_size, max_proposals, 2]. 
-                - Not all the actions contain actual proposals. Each element in the batch can have a different number of proposals.
+        states_batch (Batch): Batch of states, each state a Data object.
+        actions_batch (Tensor): Batch of actions [batch_size, max_proposals, 2]. 
+            - Not all the actions contain actual proposals. Each element in the batch can have a different number of proposals.
 
         Returns:
             action_log_probs (Tensor): Log probabilities of the actions.
             state_values (Tensor): Values of the states.
-            entropy (Tensor): Entropy of the policy.
+            entropy (Tensor)
         """
-        
-        batch_size = states_batch.num_graphs 
-        device = next(self.parameters()).device
-
-        state_values_batch = self.critic(states_batch.to(device))
-        print(f"\n\nStates batch size: {states_batch.size()}\n\n")
-        # Get distribution (we dont need the samples in critic, which may be changing a lot every time we sample.)
+    
+        state_values = self.critic(states_batch.to(device))
+        # Get distribution (internally passes through actor)
         gmm_batch, _ = self.get_gmm_distribution(states_batch.to(device))
         
         # Initialize return tensors
+        batch_size = states_batch.num_graphs 
         action_log_probs = torch.zeros(batch_size, device=device)
         entropy = torch.zeros(batch_size, device=device)
         
-        print(f"\n\nActions batch: {actions_batch}\n\n")
+        print(f"\nActions batch: {actions_batch}\n")
         # Compute num_proposals_batch by checking for -1 in actions
         num_proposals_batch = (actions_batch[:, :, 0] != -1).sum(dim=1)
-        print(f"\n\nNum proposals batch: {num_proposals_batch}\n\n")
+        print(f"\nNum proposals batch: {num_proposals_batch}\n")
 
-        # Process each batch element
         for b in range(batch_size):
 
             # Get actual proposals for this batch element
@@ -508,43 +574,55 @@ class GAT_v2_ActorCritic(nn.Module):
             
             # Compute log probabilities and entropy for this batch element
             action_log_probs[b] = gmm_batch[b].log_prob(actual_actions).sum() # TODO: Is the sum operation correct?
-            _, entropy[b] = self.gmm_entropy(gmm_batch[b])
+            _, entropy[b] = self.get_entropy(gmm_batch[b])
         
-        return action_log_probs, state_values_batch, entropy
+        return action_log_probs, state_values, entropy
     
-    def gmm_entropy(self, gmm_single):
+    def get_entropy(self, gmm_single):
         """
         """
         entropy_mc = gmm_entropy_monte_carlo(gmm_single)
-        entropy_legendre = gmm_entropy_legendre(gmm_single)
-        return entropy_mc, entropy_legendre
+        # entropy_legendre = gmm_entropy_legendre(gmm_single)
+        return None, entropy_mc
 
     def param_count(self):
         """
         Count the total number of parameters in the model.
         """
-        # Shared params (GATv2Conv layers)
-        shared_params = sum(p.numel() for p in self.conv1.parameters()) + \
+        # Shared GATv2 layers
+        shared_gat_params = sum(p.numel() for p in self.conv1.parameters()) + \
                         sum(p.numel() for p in self.conv2.parameters())
 
+        # Shared MLP layers in actor
+        shared_mlp_params = sum(p.numel() for p in self.actor_shared_layers.parameters())
+
         # Actor-specific 
-        actor_params = sum(p.numel() for p in self.actor_gmm_layers.parameters()) + \
-                        sum(p.numel() for p in self.actor_num_proposals_layer.parameters())
+        actor_means_params = sum(p.numel() for p in self.actor_means_layers.parameters())
+        actor_log_std_params = sum(p.numel() for p in self.actor_log_std_layers.parameters())
+        actor_mix_logits_params = sum(p.numel() for p in self.actor_mix_logits_layers.parameters())
+        actor_sample_params = sum(p.numel() for p in self.actor_sample_layers.parameters())
+
+        actor_params = actor_means_params + actor_log_std_params + actor_mix_logits_params + actor_sample_params
 
         # Critic-specific 
         critic_params = sum(p.numel() for p in self.critic_layers.parameters())
 
-        total_params = shared_params + actor_params + critic_params 
+        total_params = shared_gat_params + shared_mlp_params + actor_params + critic_params 
         return {
-            "shared": shared_params,
-            "actor_total": shared_params + actor_params,
-            "critic_total": shared_params + critic_params,
-            "total": total_params}
+            "shared_gat": shared_gat_params,
+            "actor_shared_mlp": shared_mlp_params,
+            "actor_means": actor_means_params,
+            "actor_log_std": actor_log_std_params,
+            "actor_mix_logits": actor_mix_logits_params,
+            "actor_sample": actor_sample_params,
+            "actor_total": actor_params,
+            "critic": critic_params,
+            "Grand total": total_params}
     
     def visualize_gmm(self, gmm_single, num_samples=50000, markers=None, batch_index=None, thickness_range=None, location_range=None, iteration=None):
         """
         Visualize the GMM distribution in 3D.
-        If locations are provided, they are marked as red crosses in a separate top-down view.
+        If sampling locations provided, they are marked as red crosses in a separate top-down view.
 
         Args:
             gmm_single (MixtureSameFamily): The GMM distribution for a single batch element.
