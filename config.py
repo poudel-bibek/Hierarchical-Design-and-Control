@@ -44,18 +44,12 @@ def get_config():
         "higher_model_size": "medium",  # Model size for GATv2: 'small' or 'medium'
         "higher_ent_coef": 0.01,  # Entropy coefficient for higher-level agent
         "higher_vf_coef": 0.5,  # Value function coefficient for higher-level agent
-        "higher_hidden_channels": 64,  # Number of hidden channels in GATv2 layers
-        "higher_out_channels": 32,  # Number of output channels in GATv2 layers
-        "higher_initial_heads": 8,  # Number of attention heads in first GATv2 layer
-        "higher_second_heads": 1,  # Number of attention heads in second GATv2 layer
-        "higher_action_hidden_channels": 32,  # Number of hidden channels in action layers
-        "higher_gmm_hidden_dim": 64,  # Hidden dimension for GMM layers
-        "higher_num_mixtures": 3,  # Number of mixtures in GMM
-        "higher_edge_dim": 2,  # Number of features per edge (location, width)
         "higher_in_channels": 2,  # Number of input features per node (x and y coordinates)
+        'higher_out_channels': 32, # Number of channels at the ouput of last GATv2 layer
+        'higher_hidden_channels': 64, # Number of hidden channels in between two GATv2 layers
         "higher_activation": "tanh",  # Policy activation function
 
-        # Design environment parameters
+        # Design specific parameters
         "min_thickness": 0.5,  # Minimum thickness for crosswalks
         "max_thickness": 10.0,  # Maximum thickness for crosswalks
         "min_coordinate": 0.0,  # Minimum coordinate value
@@ -63,6 +57,10 @@ def get_config():
         "max_proposals": 10,  # Maximum number of proposals to consider for higher-level agent
         "save_graph_images": True, # Save graph image every iteration.
         "save_gmm_plots": True, # Save GMM visualization every iteration.
+        "num_mixtures": 3,  # Number of mixture components in GMM
+        'initial_heads': 8, # Number of attention heads in first GATv2 layer
+        'second_heads': 1, # Number of attention heads in second GATv2 layer
+        'edge_dim': 2, # Number of features per edge 
 
         # PPO Lower level agent params
         "lower_anneal_lr": True,  # Anneal learning rate
@@ -147,9 +145,15 @@ def classify_and_return_args(train_config, device):
     }
 
     higher_model_kwargs = { 
+        'num_mixtures': train_config['num_mixtures'],
+        'hidden_channels': train_config['higher_hidden_channels'],
+        'out_channels': train_config['higher_out_channels'],
+        'initial_heads': train_config['initial_heads'],
+        'second_heads': train_config['second_heads'],
+        'edge_dim': train_config['edge_dim'],
+        'activation': train_config['higher_activation'],
         'model_size': train_config['higher_model_size'],
         'dropout_rate': train_config['higher_dropout_rate'],
-        'activation': train_config['higher_activation'],
     }
 
     lower_model_kwargs = { 

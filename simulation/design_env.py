@@ -93,8 +93,8 @@ class DesignEnv(gym.Env):
 
         # Bugfix: Removing unpicklable object (writer) from control_args
         self.control_args_worker = {k: v for k, v in self.control_args.items() if k != 'writer'}
-        self.model_init_params_worker = {'model_dim': self.lower_ppo.policy.in_channels,
-                                     'action_dim': self.lower_ppo.action_dim,
+        self.model_init_params_worker = {'model_dim': self.lower_ppo_args['model_dim'],
+                                     'action_dim': self.lower_ppo_args['action_dim'],
                                      'kwargs': self.lower_ppo_args['model_kwargs']}
 
     @property

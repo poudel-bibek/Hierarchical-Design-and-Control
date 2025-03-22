@@ -26,7 +26,6 @@ class MLP_ActorCritic(nn.Module):
         - Expects inputs of shape (B, in_channels, action_duration, per_timestep_state_dim) then flattens to (B, -1).
         """
         super(MLP_ActorCritic, self).__init__()
-        in_channels = in_channels
         action_duration = kwargs.get('action_duration')
         per_timestep_state_dim = kwargs.get('per_timestep_state_dim')
 
@@ -210,7 +209,6 @@ class GAT_v2_ActorCritic(nn.Module):
         second_heads: Number of attention heads for the second GAT layer.
         edge_dim: Number of features per edge
         action_dim is the max number of proposals. 
-        actions_per_node: number of things to propose per node. Each proposal has 2 features: [location, thickness]
 
         TODO: 
         # At every timestep, the actions is a whole bunch of things of max size. Critic has to evaluate all that (insted of just the relevant parts).
@@ -221,16 +219,14 @@ class GAT_v2_ActorCritic(nn.Module):
         super(GAT_v2_ActorCritic, self).__init__()
         self.in_channels = in_channels
         self.max_proposals = action_dim
-        self.num_mixtures = kwargs.get('num_mixtures', 3)
-        self.actions_per_node = kwargs.get('actions_per_node', 2)
-
+        
+        self.num_mixtures = kwargs.get('num_mixtures')
         self.hidden_channels = kwargs.get('hidden_channels')
         self.out_channels = kwargs.get('out_channels')
         self.initial_heads = kwargs.get('initial_heads')
         self.second_heads = kwargs.get('second_heads')
         self.edge_dim = kwargs.get('edge_dim')
-        self.action_hidden_channels = kwargs.get('action_hidden_channels')
-    
+
         self.dropout_rate = 0.0 # kwargs.get('dropout_rate', 0.2)
     
         if kwargs.get('activation') == "elu":
@@ -437,7 +433,7 @@ class GAT_v2_ActorCritic(nn.Module):
         - GMM distribution (MixtureSameFamily)
         - num_proposals_probs (Tensor): Probabilities for the number of proposals.
         """
-        
+
         # In torch geometric, a batch of graphs is a single large graph. Different from gradient mini-batch.
         # batch_size = 1 looks like [0, 0, 0, 0, ... num_nodes times]
         # batch_size = 4 looks like [0, 0, 1, 1, 2, 2, 3, 3, ... num_nodes times]

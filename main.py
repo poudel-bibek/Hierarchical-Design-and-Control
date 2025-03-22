@@ -10,7 +10,7 @@ from ppo.ppo import PPO
 from ppo.ppo_utils import Memory, WelfordNormalizer
 from config import get_config, classify_and_return_args
 import torch.multiprocessing as mp
-
+from torch_geometric.data import Batch
 from sweep import HyperParameterTuner
 from torch.utils.tensorboard import SummaryWriter
 
@@ -93,12 +93,11 @@ def train(train_config, is_sweep=False, sweep_config=None):
         print(f"\n{env_type}-level:")
         print(f"\tObservation space: {env.observation_space}")
         print(f"\tObservation space shape: {env.observation_space.shape}")
-        print(f"\tAction space: {env.action_space}")
+        print(f"\tAction space: {str(env.action_space).replace('\n', '\n\t')}")
         if env_type == 'lower':
-            print(f"\tOptions per action dimension: {env.action_space.nvec}")
+            print(f"\tAction dimension: {train_config['lower_action_dim']}")
         else: 
-            print(f"\tNumber of proposals: {env.action_space['num_proposals'].n}")
-            print(f"\tProposal space: {env.action_space['proposals']}")
+            print(f"\tIn channels: {train_config['higher_in_channels']}, Action dimension: {train_config['max_proposals']}\n")
 
     # use the dummy env shapes to init normalizers
     lower_obs_shape = dummy_envs['lower'].observation_space.shape
@@ -110,10 +109,6 @@ def train(train_config, is_sweep=False, sweep_config=None):
     dummy_envs['lower'].close() 
     dummy_envs['higher'].close()
 
-    # Actual agents
-    print(f"\nHigher level agent: \n\tIn channels: {train_config['higher_in_channels']}, Action dimension: {train_config['max_proposals']}\n")
-    print(f"\nLower level agent: \n\tState dimension: {dummy_envs['lower'].observation_space.shape}, Action dimension: {train_config['lower_action_dim']}")
-    
     # Model saving and tensorboard 
     writer = SummaryWriter(log_dir=log_dir)
     save_dir = os.path.join('saved_models', current_time)
@@ -127,20 +122,20 @@ def train(train_config, is_sweep=False, sweep_config=None):
     control_args.update({'global_seed': SEED})
     control_args.update({'total_action_timesteps_per_episode': train_config['lower_max_timesteps'] // train_config['lower_action_duration']})
 
-    higher_ppo = PPO(**higher_ppo_args)
-    higher_env = DesignEnv(design_args, control_args, lower_ppo_args, is_sweep=is_sweep, is_eval=False)
-    higher_env.lower_ppo.total_iterations = total_iterations
-    higher_state = higher_env.reset()
-    higher_memory = Memory()
-
-        # Instead of using total_episodes, we will use total_iterations. 
+    # Instead of using total_episodes, we will use total_iterations. 
     # Every iteration, num_process control agents interact with the environment for total_action_timesteps_per_episode steps (which further internally contains action_duration steps)
     total_iterations = train_config['total_timesteps'] // (train_config['lower_max_timesteps'] * train_config['lower_num_processes'])
     total_updates_higher = train_config['total_timesteps'] // train_config['higher_update_freq']
     total_updates_lower = train_config['total_timesteps'] // train_config['lower_update_freq']
 
+    higher_ppo = PPO(**higher_ppo_args)
+    higher_env = DesignEnv(design_args, control_args, lower_ppo_args, is_sweep=is_sweep, is_eval=False)
+    higher_env.lower_ppo.total_iterations = total_iterations
+    higher_state = Batch.from_data_list([higher_env.reset()]) # Batch the data before sending to the model.
+    print(f"\nHigher state at reset: {higher_state}")
+    higher_memory = Memory()
+
     global_step = 0
-    
     for iteration in range(0, total_iterations):
         print(f"\nStarting iteration: {iteration + 1}/{total_iterations} with {global_step} total steps so far\n")
 
