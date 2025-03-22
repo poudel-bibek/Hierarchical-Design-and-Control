@@ -58,7 +58,6 @@ class PPO:
         # Set up the optimizer for the current policy network
         self.initial_lr = lr
         self.optimizer = optim.Adam(self.policy.parameters(), lr=self.initial_lr, eps=1e-5)
-        self.total_iterations = None  # For lr_annealing, will be set externally. 
 
     def update_learning_rate(self, update, total_updates):
         """

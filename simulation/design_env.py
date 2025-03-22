@@ -90,6 +90,7 @@ class DesignEnv(gym.Env):
         self.action_timesteps = 0 # keep track of how many times action has been taken by all lower level workers
         self.writer = self.control_args['writer']
         self.best_reward_lower = float('-inf')
+        self.total_updates_lower = None
 
         # Bugfix: Removing unpicklable object (writer) from control_args
         self.control_args_worker = {k: v for k, v in self.control_args.items() if k != 'writer'}
@@ -221,14 +222,11 @@ class DesignEnv(gym.Env):
         - A number of parallel workers (that utilize the new network file) to each carry out one episode in the control environment.
         """
 
-        # First complete the higher level agent's step.
-        #print(f"Action received: {action}")
-
+        print(f"\nHigher level action received: {action}\n")
         # Convert tensor action to proposals
         action = action.cpu().numpy()  # Convert to numpy array if it's not already
         proposals = action.squeeze(0)[:num_actual_proposals]  # Only consider the actual proposals
-
-        #print(f"\n\nProposals: {proposals}\n\n")
+        print(f"\nProposals: {proposals}")
 
         # Apply the action to output the latest SUMO network file as well as modify the iterative_torch_graph.
         self._apply_action(proposals, iteration)
@@ -265,7 +263,7 @@ class DesignEnv(gym.Env):
             processes.append(p)
 
         if self.control_args['lower_anneal_lr']:
-            current_lr = self.lower_ppo.update_learning_rate(iteration)
+            current_lr_lower = self.lower_ppo.update_learning_rate(iteration, self.total_updates_lower)
 
         all_memories = []
         active_workers = set(range(self.control_args['lower_num_processes']))
@@ -306,7 +304,7 @@ class DesignEnv(gym.Env):
                                                 "lower_value_loss": loss['value_loss'], 
                                                 "lower_entropy_loss": loss['entropy_loss'],
                                                 "lower_total_loss": loss['total_loss'],
-                                                "lower_current_lr": current_lr if self.control_args['lower_anneal_lr'] else self.control_args['lr'],
+                                                "lower_current_lr": current_lr_lower if self.control_args['lower_anneal_lr'] else self.control_args['lr'],
                                                 "global_step": global_step          })
                                 
                             else: # Tensorboard for regular training
@@ -317,7 +315,7 @@ class DesignEnv(gym.Env):
                                 self.writer.add_scalar('Lower/Value_Loss', loss['value_loss'], global_step)
                                 self.writer.add_scalar('Lower/Entropy_Loss', loss['entropy_loss'], global_step)
                                 self.writer.add_scalar('Lower/Total_Loss', loss['total_loss'], global_step)
-                                self.writer.add_scalar('Lower/Current_LR', current_lr, global_step)
+                                self.writer.add_scalar('Lower/Current_LR', current_lr_lower, global_step)
                                 print(f"Logged lower agent data at step {global_step}")
 
                                 # Save model every n times it has been updated (may not every iteration)
@@ -940,6 +938,11 @@ class DesignEnv(gym.Env):
             edge_data = networkx_graph.get_edge_data(f, t)
             edge_id = edge_data.get('id', f'edge_{f}_{t}') # Get it from the networkx graph.
             width = edge_data.get('width', None) # There should be a width for all edges.
+            
+            # Ensure width is positive (greater than 0) to avoid netconvert errors
+            if width is None or float(width) <= 0:
+                width = 0.1  # Set a small positive default width
+                
             edge_attribs = {
                 'id': edge_id,
                 'from': f,
@@ -1135,6 +1138,11 @@ class DesignEnv(gym.Env):
                 # Then, a crossing element should be added with those edges.
                 middle_node = e1_data.get('new_node')
                 width = networkx_graph.nodes[middle_node].get('width')
+                
+                # Ensure width is positive (greater than 0) to avoid netconvert errors
+                if width is None or float(width) <= 0:
+                    width = 0.1  # Set a small positive default width
+                    
                 crossing_attribs = {'node': middle_node, 'edges': e1 + ' ' + e2, 'priority': '1', 'width': str(width), 'linkIndex': '2' } # Width/ Thickness needs to come from the model.
                 crossing_element = ET.Element('crossing', crossing_attribs)
                 crossing_element.text = None  # Ensure there's no text content

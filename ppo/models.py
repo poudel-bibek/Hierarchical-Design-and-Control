@@ -399,12 +399,12 @@ class GAT_v2_ActorCritic(nn.Module):
         # Shared MLP layers
         shared_y = self.actor_shared_layers(y)
 
-        # GMM parameters
-        means = self.actor_means(self.actor_means_layers(shared_y))
-        log_stds = self.actor_log_std(self.actor_log_std_layers(shared_y))
-
-        # TODO: clamp log_stds to make the GMM within boundary.
-        # log_stds = torch.clamp(log_stds, min=-4.0, max=0.0) # e^(-4) = 0.0183, e^(0) = 1.
+        # GMM parameters. Constrain so that the GMM is within the boundary.
+        means = torch.sigmoid(self.actor_means(self.actor_means_layers(shared_y)))  # Constrain means to [0,1]
+        
+        # Scale and shift tanh to get log_stds in [-2.30, 0] range
+        # tanh outputs [-1, 1], so we scale by 1.15 and shift by -1.15 to get [-2.30, 0], exp(-2.30) ≈ 0.1, exp(0) = 1.
+        log_stds = torch.tanh(self.actor_log_std(self.actor_log_std_layers(shared_y))) * 1.15 - 1.15  # Results in std range [0.1, 1.0]
 
         mix_logits = self.actor_mix_logits(self.actor_mix_logits_layers(shared_y))
         num_proposal_logits = self.actor_num_proposals(self.actor_sample_layers(y)) # probabilites obtained later.
@@ -444,7 +444,7 @@ class GAT_v2_ActorCritic(nn.Module):
         means, log_stds, mix_logits, num_proposals_logits = self.actor(states_batch)
         print(f"\nMeans: {means}, Log-stds: {log_stds}, Mix logits: {mix_logits}, Num proposal logits: {num_proposals_logits}")
 
-        num_proposals_probs_batch = F.softmax(num_proposals_logits, dim=-1) # TODO: verify the use of dim=-1.
+        num_proposals_probs_batch = F.softmax(num_proposals_logits, dim=-1)
         print(f"\nProposal probabilities: {num_proposals_probs_batch}")
 
         gmms_batch = []
@@ -476,6 +476,8 @@ class GAT_v2_ActorCritic(nn.Module):
         - Modeling thickness and location jointly 
         Utilizing the implicit stochasticity in sampling during training.
         However, at test, sample greedily at each mode.
+
+        TODO: Whether to make the policy deterministic at test time?
         """
 
         # properly batch the data using Batch.from_data_list() before sending here. 
@@ -493,7 +495,6 @@ class GAT_v2_ActorCritic(nn.Module):
         log_probs = torch.zeros(batch_size, device=device)
         
         for b in range(batch_size):
-
             # Sample proposals for this batch element
             if training: 
                 samples = gmm_batch[b].sample((num_actual_proposals[b].item(),))
@@ -505,9 +506,10 @@ class GAT_v2_ActorCritic(nn.Module):
             locations, thicknesses = samples.split(1, dim=-1)
             
             # Clamp
+            # Although means are constrained to [0,1], log_stds are not.
             # We should be less dependent on clamping here and make sure the GMM itself lies in the desired range.
-            locations = torch.clamp(locations, 0.0, 1.0)
-            thicknesses = torch.clamp(thicknesses, 0.0, 1.0)
+            locations = torch.clamp(locations, 0.01, 0.99)  # Add small buffer to avoid exact 0.0 or 1.0
+            thicknesses = torch.clamp(thicknesses, 0.01, 0.99)  # Add small buffer to avoid exact 0.0 or 1.0
             
             # Recombine the samples
             samples = torch.cat([locations, thicknesses], dim=-1)
@@ -554,13 +556,13 @@ class GAT_v2_ActorCritic(nn.Module):
         print(f"\nNum proposals batch: {num_proposals_batch}\n")
 
         for b in range(batch_size):
-
             # Get actual proposals for this batch element
             n_proposals = num_proposals_batch[b].item()
             actual_actions = actions_batch[b, :n_proposals]
             
             # Compute log probabilities and entropy for this batch element
-            action_log_probs[b] = gmm_batch[b].log_prob(actual_actions).sum() # TODO: Is the sum operation correct?
+            # The sum operation ensures joint log prob of thickness and location.
+            action_log_probs[b] = gmm_batch[b].log_prob(actual_actions).sum()
             _, entropy[b] = self.get_entropy(gmm_batch[b])
         
         return action_log_probs, state_values, entropy

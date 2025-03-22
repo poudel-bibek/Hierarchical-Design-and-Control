@@ -1,7 +1,4 @@
 def get_config():
-    """
-    Set config here.
-    """
     config = {
         # Simulation
         "sweep": False,  # Use wandb sweeps for hyperparameter tuning
@@ -117,6 +114,8 @@ def classify_and_return_args(train_config, device):
         'max_thickness': train_config['max_thickness'],
         'min_coordinate': train_config['min_coordinate'],
         'max_coordinate': train_config['max_coordinate'],
+        'higher_anneal_lr': train_config['higher_anneal_lr'],
+        'higher_update_freq': train_config['higher_update_freq'],
     }
 
     control_args = {
@@ -139,9 +138,9 @@ def classify_and_return_args(train_config, device):
         'writer': None, # Need dummy values for dummy envs init.
         'save_dir': None,
         'total_action_timesteps_per_episode': None,
-        'num_processes': train_config['lower_num_processes'],
-        'anneal_lr': train_config['lower_anneal_lr'],
-        'update_freq': train_config['lower_update_freq'],
+        'lower_num_processes': train_config['lower_num_processes'],
+        'lower_anneal_lr': train_config['lower_anneal_lr'],
+        'lower_update_freq': train_config['lower_update_freq'],
     }
 
     higher_model_kwargs = { 

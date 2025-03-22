@@ -125,17 +125,19 @@ def train(train_config, is_sweep=False, sweep_config=None):
     # Instead of using total_episodes, we will use total_iterations. 
     # Every iteration, num_process control agents interact with the environment for total_action_timesteps_per_episode steps (which further internally contains action_duration steps)
     total_iterations = train_config['total_timesteps'] // (train_config['lower_max_timesteps'] * train_config['lower_num_processes'])
-    total_updates_higher = train_config['total_timesteps'] // train_config['higher_update_freq']
-    total_updates_lower = train_config['total_timesteps'] // train_config['lower_update_freq']
+    total_updates_higher = total_iterations // train_config['higher_update_freq']
+    total_updates_lower = (train_config['total_timesteps'] / train_config['lower_action_duration']) // train_config['lower_update_freq']
 
     higher_ppo = PPO(**higher_ppo_args)
     higher_env = DesignEnv(design_args, control_args, lower_ppo_args, is_sweep=is_sweep, is_eval=False)
-    higher_env.lower_ppo.total_iterations = total_iterations
+    higher_env.total_updates_lower = total_updates_lower
+
     higher_state = Batch.from_data_list([higher_env.reset()]) # Batch the data before sending to the model.
     print(f"\nHigher state at reset: {higher_state}")
     higher_memory = Memory()
 
     global_step = 0
+    higher_update_count = 0
     for iteration in range(0, total_iterations):
         print(f"\nStarting iteration: {iteration + 1}/{total_iterations} with {global_step} total steps so far\n")
 
@@ -149,6 +151,10 @@ def train(train_config, is_sweep=False, sweep_config=None):
         higher_memory.append(higher_state, higher_action, higher_logprob, higher_reward, higher_done)
 
         if iteration % train_config['higher_update_freq'] == 0:
+            higher_update_count += 1
+            if train_config['higher_anneal_lr']:
+                current_lr_higher = higher_ppo.update_learning_rate(higher_update_count, total_updates_higher)
+
             higher_ppo.update(higher_memory, agent_type='higher')
             higher_memory.clear_memory()
 
@@ -156,10 +162,13 @@ def train(train_config, is_sweep=False, sweep_config=None):
 
         # Log higher level agent stuff.
         if is_sweep:
-            wandb.log({    "higher_avg_reward": higher_reward,
-                            "global_step": global_step          })
+            wandb.log({ "higher_avg_reward": higher_reward,
+                        "higher_current_lr": current_lr_higher if train_config['higher_anneal_lr'] else higher_ppo_args['lr'],
+                        "global_step": global_step          
+                        })
         else:
             writer.add_scalar('Higher/Average_Reward', higher_reward, global_step)
+            writer.add_scalar('Higher/Current_LR', current_lr_higher if train_config['higher_anneal_lr'] else higher_ppo_args['lr'], global_step)
     
     if is_sweep:
         wandb.finish()
