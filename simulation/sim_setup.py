@@ -488,3 +488,114 @@ def get_related_lanes_edges():
     }
 
 
+################### TODO: NEED TO REMOVE/ RE-DO THIS ###################
+# In the latest control env this was removed. 
+
+# dict. Ordered from left to right.
+# Should contain the ID as the crosswalk itself. A pedestrian's current_edge will end with _c0 if they are inside the crosswalk.  (Not present in the route)
+# If the pedestrian is already in the corsswalk, they dont need to be re-routed.
+
+# The vicinity walking edges from where pedestrians have to be re-routed. (Not present in the route)
+
+# The connected edges (Present in the route, are connected to the junctions) from which a couple step lookup ahead can be used to determine if the pedestrian is about to cross the crosswalk. 
+# Actually, the best place to do a one step lookup is from the walking area on top of the related junction itself. So connected_edges may not be used.
+# This cannot be done when the pedestrian is too far away. This is already where we are looking into something that cannot be determined observationally. 
+
+# Re-route edges (Present in the route) which acts as a focal point to ensure that pedestrians are infact crossing the crosswalk.
+# For controlled teleportation to the starting point.
+# Cannot put internal edges in reroute edges (wont be detected in teleportation). Also cannot put the edges after the junction, cannot find a route from there.
+
+# What is excluded is the walking areas in the junctions near the crosswalks. Pedestrians present here could be going anywhere.
+# _w0 or _w1 attached to junction names will be the walking areas over that junction. Pedestrians over these junctions will not be re-routed. 
+# However, pedestrians here might be important for observations later.
+CONTROLLED_CROSSWALKS_DICT = {
+    0: { # This one is special case of a crosswalk (because of the double structure), the ones in the  middle should be excluded
+        'ids': [':9687187500_c0', ':9687187501_c0'],
+        'vicinity_walking_edges': [':9687187501_w1', '1054121747#2', ':9687187495_w0', '1058666192',':9687187500_w0', ':9687187501_w0', ':9687187500_w1'], # To re-route from # ':9687187500_w1' lies in the middle
+        'related_junction_edges': [':9727816658_w0', ':9687187526_w0'], # For forward lookup
+        'connected_edges': ['1054121752#1', '1054121752#0', '1058666191#4', '1058666191#5'],
+        'reroute_edges': {'upside': '1054121747#2' , 'downside': '1058666192' }, # Used as a fulcrum
+        'crossing_nodes': [], # First the bottom one, last one on the top. # Not used 
+    },
+    # Crosswalk no. 1 and 2 are not controlled. They are simply present here to serve as a next best route if crosswalk 0 or 3 are disabled.
+    1: {
+        'ids': [':cluster_172228464_482708521_9687148201_9687148202_#5more_c2',],
+        'vicinity_walking_edges': ['1054116929#4', '1054116929#2',':cluster_172228464_482708521_9687148201_9687148202_#5more_w6','1058666193_0',':cluster_172228464_482708521_9687148201_9687148202_#5more_w5' ], 
+        'related_junction_edges': [':9687148199_w0','1054116933_0',':9687148198_w0',':9727816638_w0'],  
+        'connected_edges': ['1078803478#0','1058666191#4','1058666191#3','1054116932#1','1054116932#0'],
+        'reroute_edges': {'upside': '1054116929#4' , 'downside': '1054116929#2' }, 
+        'crossing_nodes': [], # Not used
+    },
+    2: {
+        'ids': [':cluster_172228464_482708521_9687148201_9687148202_#5more_c1',],
+        'vicinity_walking_edges': ['1054116929#0', '1054116929#1',':cluster_172228464_482708521_9687148201_9687148202_#5more_w4'], 
+        'related_junction_edges': [':9687148197_w0',':9666242268_w0',':9727816638_w0',':9687148198_w0'],
+        'connected_edges': ['1058666191#4','1058666191#3','1050677005#3','452522817#1','1050677005#2'],  
+        'reroute_edges': {'upside': '1054116929#0' , 'downside': '1054116929#1' }, 
+        'crossing_nodes': [], # Not used
+    }, 
+    3: {
+        'ids': [':9727816850_c0'],
+        'vicinity_walking_edges': [':9727816850_w1', '1058666207#1', ':9727816844_w0',':9727816850_w0', '1058666206#0', '1058666207#0' ], # Have to be re-routed # JUnctions should not be here
+        'related_junction_edges': [':9727816846_w0', ':9727816851_w0'], 
+        'connected_edges': ['1050677005#7','1050677005#6','1058666191#1','1058666191#2'],
+        'reroute_edges': {'upside': '1058666207#1' , 'downside': '1058666207#0' }, 
+        'crossing_nodes': ['9727816846', '9727816844', '9727816850', '9727816851'],
+    },
+    4: {
+        'ids': [':9727816623_c0'],
+        'vicinity_walking_edges': ['1058666188#1', '1051865729#3',':9727816623_w0', ':9727816623_w1'],
+        'related_junction_edges': [':9727816625_w0', ':9666274798_w0'], # All edges with _w0 in the end begin with : in front
+        'connected_edges': ['1058666187#2','1058666187#3', '1050677005#10','1050677005#9' ], 
+        'reroute_edges': {'upside': '1051865729#3' , 'downside': '1058666188#1' },
+        'crossing_nodes': ['9727816625', '9727816623', '9666274798'], # First the bottom one, last one on the top.
+    },
+    5: {
+        'ids': [':9740157155_c0'],
+        'vicinity_walking_edges': ['1060131391#1', '1060131391#0', ':9740157155_w0',':9740157155_w1',':9740157153_w0', '1060131390' ],
+        'related_junction_edges': [':9666274886_w0', ':9740157154_w0'],
+        'connected_edges': ['1060131388#2','1060131388#3', '1050677005#13', '1050677005#12'],
+        'reroute_edges': {'upside': '1060131391#1' , 'downside': '1060131391#0'}, 
+        'crossing_nodes': ['9740157154', '9740157153', '9740157155', '9666274886'], # First the bottom one, last one on the top.
+    },
+    6: {
+        'ids': [':cluster_9740157181_9740483933_c0'],
+        'vicinity_walking_edges': [':cluster_9740157181_9740483933_w0', ':cluster_9740157181_9740483933_w1', '1060131401#2', '1060131401#3'],
+        'related_junction_edges': [':9740157180_w0', ':9655154530_w0'],
+        'connected_edges': ['1060131402', ':9740483934_w0', ':9740157180_w0', '1060131401#1', '1050677005#14', '1050677005#13', '1050677007#1'],
+        'reroute_edges': {'upside': '1060131401#3' , 'downside': '1060131401#2'},
+        'crossing_nodes': ['9740157180', 'cluster_9740157181_9740483933', '9655154530'],
+    },
+    7: {
+        'ids': [':9740157194_c0'],
+        'vicinity_walking_edges': ['1060131405#1', ':9740157194_w1', ':9740157194_w0', ':9740157192_w0', '1060131406', '1060131405#0'], # Have to be re-routed
+        'related_junction_edges': [':9740157204_w0', ':9740157195_w0', ':10054309033_w0', ], # One step lookup
+        'connected_edges': ['1050677005#16', '1098062395', '1050677005#18', '1060131403#1', '1060112727#1', '1060131404#1'],
+        'reroute_edges': {'upside': '1060131406'  , 'downside': '1060131405#1'},
+        'crossing_nodes': ['9740157204', '9740157194', '9740157192', '9740157195'], 
+    },
+    8: {
+        'ids': [':9740157209_c0'],
+        'vicinity_walking_edges': ['1060131408#1', ':9740157209_w0', ':9740157209_w1', '1060131408#0', '1060131410' ],
+        'related_junction_edges': [':9740157207_w0', ':9740157211_w0', ':9740157210_w0', '1060131404#2' ], # For lookup
+        'connected_edges': [':9740484420_w0', '1060131404#3', '1050677005#19', '1050677005#18', '1060131409#1' ],
+        'reroute_edges': {'upside': '1060131408#1'  , 'downside': '1060131408#0' }, 
+        'crossing_nodes': ['9740484420', '9740157207', '9740157209', '9740157210'],
+    },
+    9: {
+        'ids': [':9740484527_c0'],
+        'vicinity_walking_edges': ['1060166260#1', ':9740484527_w0', ':9740484527_w1', '1050677005#21'],
+        'related_junction_edges': [':9740484528_w0', ':9740484524_w0'],
+        'connected_edges': ['1060166262#2', '1050677005#20', '1060112787#2', '1060112787#1'],
+        'reroute_edges': {'upside': '1050677005#21' , 'downside': '1060166260#1' },
+        'crossing_nodes': ['9740484528', '9740484527', '9740484524'],
+    },
+    10: {
+        'ids': [':cluster_172228408_9739966907_9739966910_c2'],
+        'vicinity_walking_edges': [':cluster_172228408_9739966907_9739966910_w2', ':cluster_172228408_9739966907_9739966910_w3', '1060112789#1'], # Reroute. w3 covers both to the right and down from up
+        'related_junction_edges': [':9739966908_w0', ':9739966904_w0', '1060112789#0', '1060112789#2'], # Lookup. 89#0 is the right one (downside)
+        'connected_edges': [':9739966895_w0', ':9740484531_w0', '1060112790', ':cluster_172228408_9739966907_9739966910_w1'], # _w1 is the one on the right (downside)
+        'reroute_edges': {'upside': '1060112789#2' , 'downside': '1060112789#1'},
+        'crossing_nodes': [], # Not used
+    },
+}

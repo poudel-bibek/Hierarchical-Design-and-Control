@@ -7,9 +7,8 @@ import torch.nn.functional as F
 from torch_geometric.nn import GATv2Conv
 from torch_geometric.data import Data, Batch
 from torch_geometric.nn import global_mean_pool
-from entropy_calc import gmm_entropy_monte_carlo, gmm_entropy_legendre
 from torch.distributions import MixtureSameFamily, MultivariateNormal, Categorical, Bernoulli
-
+from .ppo_utils import gmm_entropy_monte_carlo, gmm_entropy_legendre
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     """
     Orthogoal initialization of weights and Constant initialization of biases.
@@ -520,7 +519,7 @@ class GAT_v2_ActorCritic(nn.Module):
             # Visualization is only meaningful during act (i.e., not during evaluation)
             if visualize and iteration is not None:
                 markers = (locations.squeeze().detach().cpu().numpy(), thicknesses.squeeze().detach().cpu().numpy())
-                self.visualize_gmm(gmm_batch[b], markers=markers, batch_index=b, thickness_range=(self.min_thickness, self.max_thickness), location_range=(0, 1), iteration=iteration)
+                self.visualize_gmm(gmm_batch[b], markers=markers, batch_index=b, thickness_range=(0, 1), location_range=(0, 1), iteration=iteration)
 
             # Store in output tensor
             proposals[b, :num_actual_proposals[b], 0] = locations.squeeze()

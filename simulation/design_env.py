@@ -11,9 +11,10 @@ from torch_geometric.data import Data
 
 import queue
 from ppo.ppo import PPO
-from sim_setup import CONTROLLED_CROSSWALKS_DICT
-from env_utils import *
-from ..main import parallel_train_worker
+from .env_utils import *
+from .sim_setup import CONTROLLED_CROSSWALKS_DICT
+from .worker import parallel_train_worker
+
 
 class DesignEnv(gym.Env):
     """
@@ -47,8 +48,8 @@ class DesignEnv(gym.Env):
 
     def __init__(self, design_args, control_args, lower_ppo_args, is_sweep=False, is_eval=False):
         super().__init__()
-        self.control_args = control_args
         self.design_args = design_args
+        self.control_args = control_args
         self.lower_ppo_args = lower_ppo_args
         self.is_sweep = is_sweep
         self.is_eval = is_eval
@@ -248,7 +249,7 @@ class DesignEnv(gym.Env):
         
         for rank in range(self.control_args['lower_num_processes']):
             p = mp.Process(
-                target=parallel_worker,
+                target=parallel_train_worker,
                 args=(
                     rank,
                     self.control_args_worker,

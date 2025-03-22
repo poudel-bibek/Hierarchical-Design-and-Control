@@ -1,7 +1,7 @@
 import torch
 import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader
-from .models import CNNActorCritic, MLPActorCritic
+from .models import MLP_ActorCritic, GAT_v2_ActorCritic
 
 class PPO:
     """
@@ -58,8 +58,8 @@ class PPO:
         # Set up the optimizer for the current policy network
         self.initial_lr = lr
         self.optimizer = optim.Adam(self.policy.parameters(), lr=self.initial_lr, eps=1e-5)
-        self.total_iterations = None  # Will be set externally.
-    
+        self.total_iterations = None  # For lr_annealing, will be set externally. 
+
     def update_learning_rate(self, update, total_updates):
         """
         Linear annealing. At the end of training, the learning rate is 0.
