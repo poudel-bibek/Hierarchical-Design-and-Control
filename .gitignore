@@ -22,6 +22,10 @@ saved_models/
 ./wandb
 wandb/
 
+
+./SUMO_files/components/
+/SUMO_files/components/
+
 ./SUMO_files/scaled_trips/scaled_pedtrips_0.xml
 ./SUMO_files/scaled_trips/scaled_pedtrips_1.xml
 ./SUMO_files/scaled_trips/scaled_pedtrips_2.xml
