@@ -210,8 +210,6 @@ class GAT_v2_ActorCritic(nn.Module):
         initial_heads: Number of attention heads for the first GAT layer.
         second_heads: Number of attention heads for the second GAT layer.
         edge_dim: Number of features per edge
-        min_thickness: Minimum thickness of a crosswalk.
-        max_thickness: Maximum thickness of a crosswalk.
         action_dim is the max number of proposals. 
         actions_per_node: number of things to propose per node. Each proposal has 2 features: [location, thickness]
 
@@ -224,8 +222,6 @@ class GAT_v2_ActorCritic(nn.Module):
         super(GAT_v2_ActorCritic, self).__init__()
         self.in_channels = in_channels
         self.max_proposals = action_dim
-        self.min_thickness = kwargs.get('min_thickness', 0.1)
-        self.max_thickness = kwargs.get('max_thickness', 10.0)
         self.num_mixtures = kwargs.get('num_mixtures', 3)
         self.actions_per_node = kwargs.get('actions_per_node', 2)
 
@@ -456,10 +452,6 @@ class GAT_v2_ActorCritic(nn.Module):
         num_proposals_probs_batch = F.softmax(num_proposals_logits, dim=-1) # TODO: verify the use of dim=-1.
         print(f"\nProposal probabilities: {num_proposals_probs_batch}")
 
-        # TODO: Denormalize the means and log_stds.
-        # Thickness should be between min_thickness and max_thickness.
-        # Location should be between 0 and 1.
-
         gmms_batch = []
         for b in range(batch_size):
             # reshape to (num_mixtures, 2)
@@ -520,7 +512,7 @@ class GAT_v2_ActorCritic(nn.Module):
             # Clamp
             # We should be less dependent on clamping here and make sure the GMM itself lies in the desired range.
             locations = torch.clamp(locations, 0.0, 1.0)
-            thicknesses = torch.clamp(thicknesses, self.min_thickness, self.max_thickness)
+            thicknesses = torch.clamp(thicknesses, 0.0, 1.0)
             
             # Recombine the samples
             samples = torch.cat([locations, thicknesses], dim=-1)

@@ -21,9 +21,9 @@ def test_model():
     data = Data(x=x, edge_index=edge_index, edge_attr=edge_attr)
 
     # Debug print
-    # print(f"Creating batch from {len([data, data])} graphs")
+    print(f"Creating batch from {len([data, data])} graphs")
     batch = Batch.from_data_list([data, data])  # Create a batch of 2 graphs
-    # print(f"Batch created with num_graphs: {batch.num_graphs}")
+    print(f"Batch created with num_graphs: {batch.num_graphs}")
 
     # Test 3: Action sampling
     proposals, counts, log_probs = model.act(batch, training=True, iteration=1)
@@ -31,11 +31,11 @@ def test_model():
 
 
     # Test 4: Bounds checking
-    # valid_locations = (proposals == -1) | ((proposals >= 0) & (proposals <= 1))
-    # valid_thickness = (proposals == -1) | ((proposals >= kwargs['min_thickness']) &
-    #                                       (proposals <= kwargs['max_thickness']))
-    # print(f"Valid locations: {valid_locations[:,:,0].all()}")
-    # print(f"Valid thickness: {valid_thickness[:,:,1].all()}")
+    valid_locations = (proposals == -1) | ((proposals >= 0) & (proposals <= 1))
+    valid_thickness = (proposals == -1) | ((proposals >= kwargs['min_thickness']) &
+                                          (proposals <= kwargs['max_thickness']))
+    print(f"Valid locations: {valid_locations[:,:,0].all()}")
+    print(f"Valid thickness: {valid_thickness[:,:,1].all()}")
 
     # Test 5: Evaluation
     action_log_probs, state_values, entropy = model.evaluate(batch, proposals)
@@ -43,9 +43,9 @@ def test_model():
           f"values={state_values.shape}, entropy={entropy.shape}")
 
     # Test 6: Parameter count
-    # param_counts = model.param_count()
-    # print(f"Total params: {param_counts['Grand total']}")
+    param_counts = model.param_count()
+    print(f"Total params: {param_counts['Grand total']}")
 
-    # return "All tests completed!"
+    return "All tests completed!"
 
 test_model()

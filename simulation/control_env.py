@@ -10,6 +10,7 @@ from simulation.sim_setup import get_direction_lookup, get_related_lanes_edges, 
 
 class ControlEnv(gym.Env):
     """
+    Lower level agent.
     Parallelizable environment, includes features:  
     - Scaling the demand.
     - Tracking and occupancy map.
