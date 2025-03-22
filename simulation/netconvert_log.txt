@@ -1,10 +1,10 @@
-Parsing types from './SUMO_files/component_SUMO_files/iteration_base.typ.xml' ... done.
-Parsing nodes from './SUMO_files/component_SUMO_files/iteration_base.nod.xml' ... done.
-Parsing edges from './SUMO_files/component_SUMO_files/iteration_base.edg.xml' ...
-Duplicate edge id occurred ('1060131388#2'); assuming overwriting is wished.
+Parsing types from './simulation/components/iteration_base.typ.xml' ... done.
+Parsing nodes from './simulation/components/iteration_base.nod.xml' ... done.
+Parsing edges from './simulation/components/iteration_base.edg.xml' ...
+Duplicate edge id occurred ('1051865689#2.53'); assuming overwriting is wished.
  done.
-Parsing connections from './SUMO_files/component_SUMO_files/iteration_base.con.xml' ... done.
-Parsing traffic lights from './SUMO_files/component_SUMO_files/iteration_base.tll.xml' ... done.
+Parsing connections from './simulation/components/iteration_base.con.xml' ... done.
+Parsing traffic lights from './simulation/components/iteration_base.tll.xml' ... done.
  Import done:
    178 nodes loaded.
    4 types loaded.
@@ -30,7 +30,7 @@ Warning: Lane '-357518696#6_0' is not connected from any incoming edge at juncti
 Warning: Lane '357518696#4_0' is not connected from any incoming edge at junction '9739966918'.
 Warning: Edge '357518696#6' is not connected to outgoing edges at junction '9655154879'.
 Warning: Lane '773672647#17_0' is not connected from any incoming edge at junction '9666242293'.
- done (0ms).
+ done (1ms).
 Computing traffic light control information ... done (0ms).
 Computing node logics ... done (0ms).
 Computing traffic light logics ... done (0ms).

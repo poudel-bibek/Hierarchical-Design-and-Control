@@ -200,7 +200,7 @@ class DesignEnv(gym.Env):
         """
         # Node (base_xml.nod.xml), Edge (base_xml.edg.xml), Connection (base_xml.con.xml), Type file (base_xml.typ.xml) and Traffic Light (base_xml.tll.xml)
         # Create the output directory if it doesn't exist
-        output_dir = "./SUMO_files/component_SUMO_files"
+        output_dir = "./simulation/components"
         os.makedirs(output_dir, exist_ok=True)
         
         # Run netconvert with output files in the specified directory
@@ -765,7 +765,7 @@ class DesignEnv(gym.Env):
         """
         Update the XML component files to reflect the current state of the networkx graph. 
         For base, use the "original" XML component files. For other iterations, use the "base" XML component files as a foundation and add/ remove elements.
-        Iterative component files are saved in component_SUMO_files directory.
+        Iterative component files are saved in components directory.
         Iterative net files are saved in network_iterations directory.
 
         Networkx graph will already have:
@@ -1224,7 +1224,7 @@ class DesignEnv(gym.Env):
 
         # Generate the final net file using netconvert
         output_file = f'{self.network_dir}/network_iteration_{iteration}.net.xml'
-        netconvert_log_file = f'SUMO_files/netconvert_log.txt'
+        netconvert_log_file = f'simulation/netconvert_log.txt'
         command = (
             f"netconvert "
             f"--node-files={iteration_prefix}.nod.xml "

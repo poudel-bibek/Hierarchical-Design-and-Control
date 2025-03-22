@@ -13,8 +13,8 @@ def get_config():
         "pedestrian_input_trips": "./simulation/original_pedtrips.xml",  # Original Input pedestrian trips file
         "pedestrian_output_trips": "./simulation/scaled_trips/scaled_pedtrips.xml",  # Output pedestrian trips file
         "original_net_file": "./simulation/Craver_traffic_lights_wide.net.xml",  # Original net file
-        "component_dir": "./SUMO_files/component_SUMO_files",
-        "network_dir": "./SUMO_files/network_iterations",
+        "component_dir": "./simulation/components",
+        "network_dir": "./simulation/network_iterations",
         "total_sweep_trials": 128,  # Total number of trials for the wandb sweep
 
         # Demand scaling
