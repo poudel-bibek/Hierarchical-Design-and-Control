@@ -49,8 +49,8 @@ def get_config():
         # Design specific parameters
         "min_thickness": 0.5,  # Minimum thickness for crosswalks
         "max_thickness": 10.0,  # Maximum thickness for crosswalks
-        "min_coordinate": 0.0,  # Minimum coordinate value
-        "max_coordinate": 1.0,  # Maximum coordinate value
+        "clamp_min": 0.01,  # Minimum value for x location and thickness for crosswalks # Add small buffer to avoid exact 0.0 or 1.0
+        "clamp_max": 0.99,  # Maximum value for x location and thickness for crosswalks
         "max_proposals": 10,  # Maximum number of proposals to consider for higher-level agent
         "save_graph_images": True, # Save graph image every iteration.
         "save_gmm_plots": True, # Save GMM visualization every iteration.
@@ -112,8 +112,8 @@ def classify_and_return_args(train_config, device):
         'max_proposals': train_config['max_proposals'],
         'min_thickness': train_config['min_thickness'],
         'max_thickness': train_config['max_thickness'],
-        'min_coordinate': train_config['min_coordinate'],
-        'max_coordinate': train_config['max_coordinate'],
+        'clamp_min': train_config['clamp_min'],
+        'clamp_max': train_config['clamp_max'],
         'higher_anneal_lr': train_config['higher_anneal_lr'],
         'higher_update_freq': train_config['higher_update_freq'],
     }

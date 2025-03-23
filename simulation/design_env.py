@@ -12,7 +12,7 @@ from torch_geometric.data import Data
 import queue
 from ppo.ppo import PPO
 from .env_utils import *
-from .sim_setup import CONTROLLED_CROSSWALKS_DICT
+from .sim_setup import CONTROLLED_CROSSWALKS_DICT, return_horizontal_nodes
 from .worker import parallel_train_worker
 
 
@@ -53,14 +53,9 @@ class DesignEnv(gym.Env):
         self.lower_ppo_args = lower_ppo_args
         self.is_sweep = is_sweep
         self.is_eval = is_eval
-
-        self.max_proposals = design_args['max_proposals']
-        self.min_thickness = design_args['min_thickness']
-        self.min_coordinate = design_args['min_coordinate']
-        self.max_coordinate = design_args['max_coordinate']
-        self.max_thickness = design_args['max_thickness']
-        self.component_dir = design_args['component_dir']
-        self.network_dir = design_args['network_dir']
+        self.max_proposals = self.design_args['max_proposals']
+        self.component_dir = self.design_args['component_dir']
+        self.network_dir = self.design_args['network_dir']
         clear_folders(self.component_dir, self.network_dir) # Do not change the position of this.
         
         # Generate the 5 different component XML files (node, edge, connection, type, tllogic) from the net file.
@@ -68,13 +63,17 @@ class DesignEnv(gym.Env):
 
         # Extract networkx graph from the component files. (Also update locations of nodes in existing_crosswalks)
         pedestrian_networkx_graph  = self._extract_networkx_graph() 
-        self._initialize_normalizers(pedestrian_networkx_graph) # normalizers are extracted from networkx graph
+        self.horizontal_nodes_top_ped, self.horizontal_nodes_bottom_ped = return_horizontal_nodes()
+
+        # Initialize normalizers
+        self._initialize_normalizers(pedestrian_networkx_graph)
+        self.min_thickness = self.design_args['min_thickness']
+        self.max_thickness = self.design_args['max_thickness']
+
         self.existing_crosswalks = self._get_existing_crosswalks(pedestrian_networkx_graph) # Make use of the networkx graph to add locations
         
         # Cleanup the pedestrian walkway graph (i.e, remove isolated, fringe, existing crosswalks) to create a base canvas
         self.base_networkx_graph = self._cleanup_graph(pedestrian_networkx_graph, self.existing_crosswalks)
-        self.horizontal_nodes_top_ped = ['9666242268', '9666274719', '9666274722', '9666274721', '9727816851', '9666274744', '9666274574', '9666274798', '9666274635', '9666274616', '9666274886', '9655154530', '9655154527', '9655154520', '10054309033', '9740157195', '9740157210', '10054309051', '9740484524', '9740484531']
-        self.horizontal_nodes_bottom_ped = ['9727816638', '9727816862', '9727816846', '9727816629', '9727779405', '9740157080', '9727816625', '9740157142', '9740157169', '9740157145', '9740484033', '9740157174', '9740157171', '9740157154', '9740157158', '9740411703', '9740411701', '9740483978', '9740483934', '9740157180', '9740483946', '9740157204', '9740484420', '9740157211', '9740484523', '9740484522', '9740484512', '9740484528', '9739966899', '9739966895']
         
         self.horizontal_edges_veh_original_data = self._get_original_veh_edge_config()
         self._update_xml_files(self.base_networkx_graph, 'base') # Create base XML files from latest networkx graph
@@ -101,13 +100,13 @@ class DesignEnv(gym.Env):
     @property
     def action_space(self):
         """
-        
+        Both location and thickness are generated in the range [0, 1], then clamped to [0.01, 0.99], then denormalized.
         """
         return spaces.Dict({
             'num_proposals': spaces.Discrete(self.max_proposals + 1),  # 0 to max_proposals
             'proposals': spaces.Box(
-                low=np.array([[self.min_coordinate, self.min_thickness]] * self.max_proposals),
-                high=np.array([[self.max_coordinate, self.max_thickness]] * self.max_proposals),
+                low=np.array([[0, 0]] * self.max_proposals),
+                high=np.array([[1, 1]] * self.max_proposals),
                 dtype=np.float32
             )
         })
@@ -365,17 +364,23 @@ class DesignEnv(gym.Env):
         latest_horizontal_nodes_bottom_ped = self.horizontal_nodes_bottom_ped
 
         for i, (location, thickness) in enumerate(proposals):
-            
-            # 1. Denormalize the location (x-coordinate). 
+            location = round(location.item(), 2) # round to prevent going out of bounds.
+            thickness = round(thickness.item(), 2)
+
+            # 1. Denormalize the location (x-coordinate) and thickness
             denorm_location = self.normalizer_x['min'] + location * (self.normalizer_x['max'] - self.normalizer_x['min'])
-            #print(f"\nLocation: {location} Denormalized location: {denorm_location}\n")
+            print(f"\nLocation: {location} Denormalized location: {denorm_location}")
+
+            denorm_thickness = self.min_thickness + thickness * (self.max_thickness - self.min_thickness)
+            print(f"Thickness: {thickness} Denormalized thickness: {denorm_thickness}\n")
 
             # 2. Add to base networkx graph
             # Add new nodes in both sides in this intersection of type 'regular'.
             # Connect the new nodes to the existing nodes via edges with the given thickness.
 
             latest_horizontal_segment = self._get_horizontal_segment_ped(latest_horizontal_nodes_top_ped, latest_horizontal_nodes_bottom_ped, self.iterative_networkx_graph) # Start with set of nodes in base graph
-            #print(f"\nLatest horizontal segment: {latest_horizontal_segment}\n")
+            print(f"\nLatest horizontal segment (Top): {latest_horizontal_segment['top']}\n")
+            print(f"\nLatest horizontal segment (Bottom): {latest_horizontal_segment['bottom']}\n")
             new_intersects = self._find_intersects_ped(denorm_location, latest_horizontal_segment, self.iterative_networkx_graph)
             #print(f"\nNew intersects: {new_intersects}\n")
 
@@ -414,9 +419,9 @@ class DesignEnv(gym.Env):
             # new method, interpolation. Always using the original vehicle edge list (not updated with split of split).
             mid_node_pos = (denorm_location, interpolate_y_coordinate(denorm_location, self.horizontal_edges_veh_original_data))
 
-            self.iterative_networkx_graph.add_node(mid_node_id, pos=mid_node_pos, type='middle', width=thickness) # The width is used later
-            self.iterative_networkx_graph.add_edge(mid_node_details['top']['node_id'], mid_node_id, width=thickness) # Thickness is from sampled proposal
-            self.iterative_networkx_graph.add_edge(mid_node_id, mid_node_details['bottom']['node_id'], width=thickness) # Thickness is from sampled proposal
+            self.iterative_networkx_graph.add_node(mid_node_id, pos=mid_node_pos, type='middle', width=denorm_thickness) 
+            self.iterative_networkx_graph.add_edge(mid_node_details['top']['node_id'], mid_node_id, width=denorm_thickness) 
+            self.iterative_networkx_graph.add_edge(mid_node_id, mid_node_details['bottom']['node_id'], width=denorm_thickness) 
 
         if self.design_args['save_graph_images']:
             save_graph_visualization(graph=self.iterative_networkx_graph, iteration=iteration)
@@ -451,6 +456,7 @@ class DesignEnv(gym.Env):
         for side in ['top', 'bottom']:
             intersections[side] = {}
             intersect = self._find_segment_intersects_ped(latest_horizontal_segment[side], x_location)
+            print(f"\n{side} Intersect: {intersect}\n")
 
             from_node, to_node = intersect['edge'][0], intersect['edge'][1]
             
@@ -938,11 +944,6 @@ class DesignEnv(gym.Env):
             edge_data = networkx_graph.get_edge_data(f, t)
             edge_id = edge_data.get('id', f'edge_{f}_{t}') # Get it from the networkx graph.
             width = edge_data.get('width', None) # There should be a width for all edges.
-            
-            # Ensure width is positive (greater than 0) to avoid netconvert errors
-            if width is None or float(width) <= 0:
-                width = 0.1  # Set a small positive default width
-                
             edge_attribs = {
                 'id': edge_id,
                 'from': f,
@@ -1138,11 +1139,6 @@ class DesignEnv(gym.Env):
                 # Then, a crossing element should be added with those edges.
                 middle_node = e1_data.get('new_node')
                 width = networkx_graph.nodes[middle_node].get('width')
-                
-                # Ensure width is positive (greater than 0) to avoid netconvert errors
-                if width is None or float(width) <= 0:
-                    width = 0.1  # Set a small positive default width
-                    
                 crossing_attribs = {'node': middle_node, 'edges': e1 + ' ' + e2, 'priority': '1', 'width': str(width), 'linkIndex': '2' } # Width/ Thickness needs to come from the model.
                 crossing_element = ET.Element('crossing', crossing_attribs)
                 crossing_element.text = None  # Ensure there's no text content
@@ -1261,13 +1257,32 @@ class DesignEnv(gym.Env):
                     print("Failed all attempts to run netconvert")
                     raise
 
-    def _initialize_normalizers(self, graph):
+    def _initialize_normalizers(self, pedestrian_networkx_graph):
         """
         Initialize normalizers based on the graph coordinates
         """
-        # Extract all x and y coordinates from the graph
-        coords = np.array([data['pos'] for _, data in graph.nodes(data=True)])
-        x_coords = coords[:, 0]
+        # Get all horizontal segments
+        horizontal_segment = self._get_horizontal_segment_ped(
+            self.horizontal_nodes_top_ped, 
+            self.horizontal_nodes_bottom_ped, 
+            pedestrian_networkx_graph
+        )
+        
+        # Find the leftmost and rightmost valid x coordinates from both top and bottom segments
+        top_x_coords = list(horizontal_segment['top'].keys())
+        bottom_x_coords = list(horizontal_segment['bottom'].keys())
+        
+        # Get the leftmost valid x (start of first segment)
+        min_x = min(min(top_x_coords), min(bottom_x_coords))
+        
+        # Get the rightmost valid x (end of last segment)
+        max_top_x = max(x + length for x, (length, _) in horizontal_segment['top'].items())
+        max_bottom_x = max(x + length for x, (length, _) in horizontal_segment['bottom'].items())
+        max_x = max(max_top_x, max_bottom_x)
+        
+        self.normalizer_x = {'min': float(min_x), 'max': float(max_x)}
+        
+        # Keep the y coordinate normalization as is
+        coords = np.array([data['pos'] for _, data in pedestrian_networkx_graph.nodes(data=True)])
         y_coords = coords[:, 1]
-        self.normalizer_x = {'min': float(np.min(x_coords)), 'max': float(np.max(x_coords))}
         self.normalizer_y = {'min': float(np.min(y_coords)), 'max': float(np.max(y_coords))}

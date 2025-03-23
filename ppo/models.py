@@ -467,7 +467,7 @@ class GAT_v2_ActorCritic(nn.Module):
             gmms_batch.append(gmm)
         return gmms_batch, num_proposals_probs_batch
     
-    def act(self, states_batch, device = None, training = True, iteration=None, visualize=False):
+    def act(self, states_batch, iteration, clamp_min, clamp_max, device, training = True, visualize=False):
         """
         Sample actions from the GMM (propose upto max_proposals number of crosswalks).
         Policy gradient methods require the log probabilities of the actions to be returned as well.
@@ -508,8 +508,8 @@ class GAT_v2_ActorCritic(nn.Module):
             # Clamp
             # Although means are constrained to [0,1], log_stds are not.
             # We should be less dependent on clamping here and make sure the GMM itself lies in the desired range.
-            locations = torch.clamp(locations, 0.01, 0.99)  # Add small buffer to avoid exact 0.0 or 1.0
-            thicknesses = torch.clamp(thicknesses, 0.01, 0.99)  # Add small buffer to avoid exact 0.0 or 1.0
+            locations = torch.clamp(locations, clamp_min, clamp_max)  
+            thicknesses = torch.clamp(thicknesses, clamp_min, clamp_max) 
             
             # Recombine the samples
             samples = torch.cat([locations, thicknesses], dim=-1)

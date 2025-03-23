@@ -132,6 +132,9 @@ def train(train_config, is_sweep=False, sweep_config=None):
     higher_env = DesignEnv(design_args, control_args, lower_ppo_args, is_sweep=is_sweep, is_eval=False)
     higher_env.total_updates_lower = total_updates_lower
 
+    higher_ppo.policy_old = higher_ppo.policy_old.to(device)
+    higher_ppo.policy = higher_ppo.policy.to(device)
+
     higher_state = Batch.from_data_list([higher_env.reset()]) # Batch the data before sending to the model.
     print(f"\nHigher state at reset: {higher_state}")
     higher_memory = Memory()
@@ -143,7 +146,12 @@ def train(train_config, is_sweep=False, sweep_config=None):
 
         # Higher level agent takes node features, edge index, edge attributes and batch (to make single large graph) as input 
         # To produce padded fixed-sized actions num_actual_proposals is also returned.
-        higher_action, num_actual_proposals, higher_logprob = higher_ppo.policy_old.act(higher_state, iteration, visualize=True) 
+        higher_action, num_actual_proposals, higher_logprob = higher_ppo.policy_old.act(higher_state, 
+                                                                                        iteration, 
+                                                                                        design_args['clamp_min'], 
+                                                                                        design_args['clamp_max'], 
+                                                                                        device,
+                                                                                        visualize=True) 
         
         # Since the higher agent internally takes a step where a number of parallel lower agents take their own steps, 
         # We return things relevant to both the higher and lower agents. First, for higher.
