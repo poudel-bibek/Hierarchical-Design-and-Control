@@ -17,41 +17,9 @@ from torch.utils.tensorboard import SummaryWriter
 from utils import *
 from simulation.control_env import ControlEnv
 from simulation.design_env import DesignEnv
-from simulation.worker import parallel_train_worker, parallel_eval_worker
+from simulation.worker import parallel_eval_worker
+from utils import load_policy, save_config
 
-def save_config(config, save_path):
-    """
-    Save hyperparameters to json.
-    """
-    config_to_save = {
-        "hyperparameters": config,
-    }
-    with open(save_path, 'w') as f:
-        json.dump(config_to_save, f, indent=4)
-
-def save_policy(policy, normalizer, save_path):  
-    """
-    Save policy state dict and welford normalizer stats. # TODO: save for both agents.
-    """
-    torch.save({  
-        'policy_state_dict': policy.state_dict(),  
-        'state_normalizer_mean': normalizer.mean.numpy(),  
-        'state_normalizer_M2': normalizer.M2.numpy(),  
-        'state_normalizer_count': normalizer.count.value  
-    }, save_path)
-
-def load_policy(policy, normalizer, load_path):
-    """
-    Load policy state dict and welford normalizer stats.
-    """
-    checkpoint = torch.load(load_path)
-    # In place operations
-    policy.load_state_dict(checkpoint['policy_state_dict'])
-    normalizer.manual_load(
-        mean=torch.from_numpy(checkpoint['state_normalizer_mean']),  
-        M2=torch.from_numpy(checkpoint['state_normalizer_M2']),  
-        count=checkpoint['state_normalizer_count']
-    )
 
 def train(train_config, is_sweep=False, sweep_config=None):
     """
@@ -159,7 +127,9 @@ def train(train_config, is_sweep=False, sweep_config=None):
                                                                                      iteration,
                                                                                      SEED,
                                                                                      lower_state_normalizer,
-                                                                                     lower_reward_normalizer)
+                                                                                     lower_reward_normalizer,
+                                                                                     eval_args,
+                                                                                     is_sweep)
         
         higher_memory.append(higher_state, higher_action, higher_logprob, higher_reward, higher_done)
 

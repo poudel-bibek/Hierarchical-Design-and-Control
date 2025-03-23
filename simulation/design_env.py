@@ -9,13 +9,12 @@ import xml.etree.ElementTree as ET
 from gymnasium import spaces
 from torch_geometric.data import Data
 
-import queue
 from ppo.ppo import PPO
 from ppo.ppo_utils import Memory
 from .env_utils import *
 from .sim_setup import CONTROLLED_CROSSWALKS_DICT, return_horizontal_nodes
 from .worker import parallel_train_worker
-
+from utils import save_policy, get_averages
 
 class DesignEnv(gym.Env):
     """
@@ -225,7 +224,9 @@ class DesignEnv(gym.Env):
              iteration, 
              SEED, 
              shared_state_normalizer,
-             shared_reward_normalizer):
+             shared_reward_normalizer,
+             eval_args,
+             is_sweep):
         
         """
         Every step in the design environment involves:
@@ -248,7 +249,7 @@ class DesignEnv(gym.Env):
         
         lower_old_policy = self.lower_ppo.policy_old.to(self.lower_ppo_args['device'])
         lower_old_policy.share_memory() # The same policy is shared among all workers.
-        lower_old_policy.eval() # So that dropout, batnorm, laternote etc. are not used during inference
+        lower_old_policy.eval() # So that dropout, batchnorm, layer norm etc. are not used during inference
 
         lower_queue = mp.Queue()
         lower_processes = []
@@ -318,12 +319,12 @@ class DesignEnv(gym.Env):
 
                     # Save (and evaluate the latest policy) every save_freq updates
                     if self.lower_update_count % self.control_args['lower_save_freq'] == 0:
-                        latest_polic_path = os.path.join(self.control_args['save_dir'], f'lower_policy_{self.lower_update_count}.pth')
-                        save_policy(self.lower_ppo.policy, shared_state_normalizer, latest_polic_path)
+                        latest_policy_path = os.path.join(self.control_args['save_dir'], f'lower_policy_at_step_{self.global_step}.pth')
+                        save_policy(self.lower_ppo.policy, shared_state_normalizer, latest_policy_path)
 
                         # Evaluate the latest policy
-                        print(f"Evaluating policy: {latest_policy_path} at step {global_step}")
-                        eval_json = eval(control_args_worker, ppo_args, eval_args, policy_path=latest_policy_path, tl= False) # which policy to evaluate?
+                        print(f"Evaluating policy: {latest_policy_path} at step {self.global_step}")
+                        eval_json = eval(self.control_args_worker, self.lower_ppo_args, eval_args, policy_path=latest_policy_path, tl= False) # which policy to evaluate?
                         _, eval_veh_avg_wait, eval_ped_avg_wait, _, _ = get_averages(eval_json)
                         eval_veh_avg_wait = np.mean(eval_veh_avg_wait)
                         eval_ped_avg_wait = np.mean(eval_ped_avg_wait)
@@ -332,39 +333,39 @@ class DesignEnv(gym.Env):
 
                     # Save best policies 
                     if avg_reward > best_reward:
-                        save_policy(control_ppo.policy, shared_state_normalizer, os.path.join(control_args['save_dir'], 'best_reward_policy.pth'))
+                        save_policy(self.lower_ppo.policy, shared_state_normalizer, os.path.join(self.control_args['save_dir'], 'best_reward_policy.pth'))
                         best_reward = avg_reward
                     if loss['total_loss'] < best_loss:
-                        save_policy(control_ppo.policy, shared_state_normalizer, os.path.join(control_args['save_dir'], 'best_loss_policy.pth'))
+                        save_policy(self.lower_ppo.policy, shared_state_normalizer, os.path.join(self.control_args['save_dir'], 'best_loss_policy.pth'))
                         best_loss = loss['total_loss']
                     if avg_eval < best_eval:
-                        save_policy(control_ppo.policy, shared_state_normalizer, os.path.join(control_args['save_dir'], 'best_eval_policy.pth'))
+                        save_policy(self.lower_ppo.policy, shared_state_normalizer, os.path.join(self.control_args['save_dir'], 'best_eval_policy.pth'))
                         best_eval = avg_eval
 
                     # logging
                     if is_sweep: # Wandb for hyperparameter tuning
                         wandb.log({ "iteration": iteration,
                                         "avg_reward": avg_reward, # Set as maximize in the sweep config
-                                        "update_count": update_count,
+                                        "update_count": self.lower_update_count,
                                         "policy_loss": loss['policy_loss'],
                                         "value_loss": loss['value_loss'], 
                                         "entropy_loss": loss['entropy_loss'],
                                         "total_loss": loss['total_loss'],
-                                        "current_lr": current_lr if control_args['anneal_lr'] else ppo_args['lr'],
+                                        "current_lr": current_lr_lower if self.control_args['lower_anneal_lr'] else self.lower_ppo_args['lr'],
                                         "approx_kl": loss['approx_kl'],
                                         "eval_veh_avg_wait": eval_veh_avg_wait,
                                         "eval_ped_avg_wait": eval_ped_avg_wait,
                                         "avg_eval": avg_eval,
-                                        "global_step": global_step })
+                                        "global_step": self.global_step })
                         
                     else: # Tensorboard for regular training
                         self.writer.add_scalar('Lower/Average_Reward', avg_reward, self.global_step)
-                        self.writer.add_scalar('Lower/Total_Policy_Updates', update_count, self.global_step)
+                        self.writer.add_scalar('Lower/Total_Policy_Updates', self.lower_update_count, self.global_step)
                         self.writer.add_scalar('Lower/Policy_Loss', loss['policy_loss'], self.global_step)
                         self.writer.add_scalar('Lower/Value_Loss', loss['value_loss'], self.global_step)
                         self.writer.add_scalar('Lower/Entropy_Loss', loss['entropy_loss'], self.global_step)
                         self.writer.add_scalar('Lower/Total_Loss', loss['total_loss'], self.global_step)
-                        self.writer.add_scalar('Lower/Current_LR', current_lr if control_args['anneal_lr'] else ppo_args['lr'], self.global_step)
+                        self.writer.add_scalar('Lower/Current_LR', current_lr_lower if self.control_args['lower_anneal_lr'] else self.lower_ppo_args['lr'], self.global_step)
                         self.writer.add_scalar('Lower/Approx_KL', loss['approx_kl'], self.global_step)
                         self.writer.add_scalar('Evaluation/Veh_Avg_Wait', eval_veh_avg_wait, self.global_step)
                         self.writer.add_scalar('Evaluation/Ped_Avg_Wait', eval_ped_avg_wait, self.global_step)
@@ -373,13 +374,13 @@ class DesignEnv(gym.Env):
                         
                         
          # Clean up. The join() method ensures that the main program waits for all processes to complete before continuing.
-        for p in train_processes:
+        for p in lower_processes:
             p.join() 
         print(f"All processes joined\n\n")
 
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-        del train_queue
+        del lower_queue
 
         # Higher level agent's reward can only be obtained after the lower level workers have finished
         # It is also averaged across the various lower level workers.

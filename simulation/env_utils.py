@@ -23,7 +23,7 @@ def create_new_sumocfg(network_iteration):
                             </output>
                         </configuration>"""
     
-    temp_config_path = './SUMO_files/iterative_craver.sumocfg'
+    temp_config_path = './simulation/Craver_traffic_lights_iterative.sumocfg'
     with open(temp_config_path, 'w') as f:
         f.write(config_content)
         

@@ -1,27 +1,23 @@
-***Starting server on port 33513 ***
-Loading net-file from './simulation/Craver_traffic_lights_wide.net.xml' ... done (26ms).
-Loading route-files incrementally from './simulation/scaled_trips/scaled_vehtrips_5.xml'
-Loading route-files incrementally from './simulation/scaled_trips/scaled_pedtrips_5.xml'
+***Starting server on port 45565 ***
+Loading net-file from './simulation/network_iterations/network_iteration_0.net.xml' ... done (15ms).
+Warning: Unused states in tlLogic 'iter0_1_mid', program '0' in phase 0 after tl-index 1
+Loading route-files incrementally from './simulation/scaled_trips/scaled_vehtrips_4.xml'
+Loading route-files incrementally from './simulation/scaled_trips/scaled_pedtrips_4.xml'
 Loading done.
 Simulation started with time: 0.00.
-Simulation ended at time: 730.00.
-Reason: TraCI requested termination.
+Error: Answered with error to command 0xc2: Traffic light '9727816850' is not known
+Error: tcpip::Socket::recvAndCheck @ recv: peer shutdown
+Quitting (on error).
+Simulation ended at time: 0.00.
 Performance:
- Duration: 208.89s
- TraCI-Duration: 189.52s
- Real time factor: 3.49475
- UPS: 83.179740
- UPS-Persons: 1023.410010
+ Duration: 0.54s
+ TraCI-Duration: 0.00s
+ Real time factor: 0
+ UPS: 0.000000
 Vehicles:
- Inserted: 96 (Loaded: 107)
- Running: 28
+ Inserted: 0 (Loaded: 1)
+ Running: 0
  Waiting: 0
 Persons:
- Inserted: 1099
- Running: 402
-DijkstraRouter answered 19116 queries and explored 5.61 edges on average.
-DijkstraRouter spent 0.02s answering queries (0.00ms on average).
-DijkstraRouter answered 1008 queries and explored 473.39 edges on average.
-DijkstraRouter spent 0.07s answering queries (0.07ms on average).
-DijkstraRouter answered 96 queries and explored 58.21 edges on average.
-DijkstraRouter spent 0.00s answering queries (0.04ms on average).
+ Inserted: 1
+ Running: 0
