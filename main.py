@@ -139,10 +139,9 @@ def train(train_config, is_sweep=False, sweep_config=None):
     print(f"\nHigher state at reset: {higher_state}")
     higher_memory = Memory()
 
-    global_step = 0
     higher_update_count = 0
     for iteration in range(0, total_iterations):
-        print(f"\nStarting iteration: {iteration + 1}/{total_iterations} with {global_step} total steps so far\n")
+        print(f"\nStarting iteration: {iteration + 1}/{total_iterations} with {higher_env.global_step} total steps so far\n")
 
         # Higher level agent takes node features, edge index, edge attributes and batch (to make single large graph) as input 
         # To produce padded fixed-sized actions num_actual_proposals is also returned.
@@ -155,7 +154,13 @@ def train(train_config, is_sweep=False, sweep_config=None):
         
         # Since the higher agent internally takes a step where a number of parallel lower agents take their own steps, 
         # We return things relevant to both the higher and lower agents. First, for higher.
-        higher_next_state, higher_reward, higher_done, higher_info = higher_env.step(higher_action, num_actual_proposals, iteration, global_step)
+        higher_next_state, higher_reward, higher_done, higher_info = higher_env.step(higher_action, 
+                                                                                     num_actual_proposals, 
+                                                                                     iteration,
+                                                                                     SEED,
+                                                                                     lower_state_normalizer,
+                                                                                     lower_reward_normalizer)
+        
         higher_memory.append(higher_state, higher_action, higher_logprob, higher_reward, higher_done)
 
         if iteration % train_config['higher_update_freq'] == 0:
@@ -172,16 +177,16 @@ def train(train_config, is_sweep=False, sweep_config=None):
         if is_sweep:
             wandb.log({ "higher_avg_reward": higher_reward,
                         "higher_current_lr": current_lr_higher if train_config['higher_anneal_lr'] else higher_ppo_args['lr'],
-                        "global_step": global_step          
+                        "global_step": higher_env.global_step          
                         })
         else:
-            writer.add_scalar('Higher/Average_Reward', higher_reward, global_step)
-            writer.add_scalar('Higher/Current_LR', current_lr_higher if train_config['higher_anneal_lr'] else higher_ppo_args['lr'], global_step)
+            writer.add_scalar('Higher/Average_Reward', higher_reward, higher_env.global_step)
+            writer.add_scalar('Higher/Current_LR', current_lr_higher if train_config['higher_anneal_lr'] else higher_ppo_args['lr'], higher_env.global_step)
     
     if is_sweep:
         wandb.finish()
     else:
-        writer.close()
+        writer.close() # TODO: close writer for both agents?
 
 def eval(control_args, 
          ppo_args, 

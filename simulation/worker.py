@@ -14,7 +14,8 @@ def parallel_train_worker(rank,
                          worker_seed, 
                          shared_state_normalizer, 
                          shared_reward_normalizer, 
-                         worker_device):
+                         worker_device, 
+                         network_iteration):
     """
     At every iteration, a number of workers will each parallelly carry out one episode in control environment.
     - Worker environment runs in CPU (SUMO runs in CPU).
@@ -29,7 +30,7 @@ def parallel_train_worker(rank,
     np.random.seed(worker_seed)
     torch.manual_seed(worker_seed)
 
-    worker_env = ControlEnv(control_args, worker_id=rank)
+    worker_env = ControlEnv(control_args, worker_id=rank, network_iteration=network_iteration)
     memory_transfer_freq = control_args['memory_transfer_freq']  # Get from config
     local_memory = Memory() # A worker instance must have their own memory 
 

@@ -11,6 +11,7 @@ from torch_geometric.data import Data
 
 import queue
 from ppo.ppo import PPO
+from ppo.ppo_utils import Memory
 from .env_utils import *
 from .sim_setup import CONTROLLED_CROSSWALKS_DICT, return_horizontal_nodes
 from .worker import parallel_train_worker
@@ -86,7 +87,11 @@ class DesignEnv(gym.Env):
 
         # Lower level agent
         self.lower_ppo = PPO(**self.lower_ppo_args)
+
+        self.global_step = 0
         self.action_timesteps = 0 # keep track of how many times action has been taken by all lower level workers
+        self.lower_update_count = 0
+
         self.writer = self.control_args['writer']
         self.best_reward_lower = float('-inf')
         self.total_updates_lower = None
@@ -214,129 +219,170 @@ class DesignEnv(gym.Env):
             print(f"Error running netconvert: {e}")
             print("Error output:", e.stderr)
 
-    def step(self, action, num_actual_proposals, iteration, global_step):
+    def step(self, 
+             action, 
+             num_actual_proposals, 
+             iteration, 
+             SEED, 
+             shared_state_normalizer,
+             shared_reward_normalizer):
+        
         """
         Every step in the design environment involves:
         - Updating the network xml file based on the design action.
         - A number of parallel workers (that utilize the new network file) to each carry out one episode in the control environment.
         """
 
-        print(f"\nHigher level action received: {action}\n")
+        # print(f"\nHigher level action received: {action}\n")
         # Convert tensor action to proposals
         action = action.cpu().numpy()  # Convert to numpy array if it's not already
         proposals = action.squeeze(0)[:num_actual_proposals]  # Only consider the actual proposals
-        print(f"\nProposals: {proposals}")
+        # print(f"\nProposals: {proposals}")
 
         # Apply the action to output the latest SUMO network file as well as modify the iterative_torch_graph.
         self._apply_action(proposals, iteration)
 
-        # Here you would typically:
-        # 1. Calculate the reward
-        # 2. Determine if the episode is done
-        # 3. Collect any additional info for the info dict
-
-        reward = 0  # You need to implement a proper reward function
+        reward = 0  # TODO: need to implement a reward function. Can this ? Yes.
         done = False
         info = {}
-
-        # Then, for the lower level agent.
-        manager = mp.Manager()
-        memory_queue = manager.Queue()
-        processes = []
         
+        lower_old_policy = self.lower_ppo.policy_old.to(self.lower_ppo_args['device'])
+        lower_old_policy.share_memory() # The same policy is shared among all workers.
+        lower_old_policy.eval() # So that dropout, batnorm, laternote etc. are not used during inference
+
+        lower_queue = mp.Queue()
+        lower_processes = []
+        active_lower_workers = []
         for rank in range(self.control_args['lower_num_processes']):
+            worker_seed = SEED + iteration * 1000 + rank
             p = mp.Process(
                 target=parallel_train_worker,
                 args=(
                     rank,
+                    lower_old_policy,
                     self.control_args_worker,
-                    self.model_init_params_worker,
-                    self.lower_ppo.policy_old.state_dict(),
-                    memory_queue,
-                    self.control_args['global_seed'],
+                    lower_queue,
+                    worker_seed,
+                    shared_state_normalizer,
+                    shared_reward_normalizer,
                     self.lower_ppo_args['device'],
-                    iteration
+                    iteration)
                 )
-            )
             p.start()
-            processes.append(p)
+            lower_processes.append(p)
+            active_lower_workers.append(rank)
+             
+        all_memories = Memory()
+        while active_lower_workers:
+            print(f"Active workers: {active_lower_workers}")
+            rank, memory = lower_queue.get(timeout=60)
 
-        if self.control_args['lower_anneal_lr']:
-            current_lr_lower = self.lower_ppo.update_learning_rate(iteration, self.total_updates_lower)
+            if memory is None:
+                print(f"Worker {rank} finished")
+                active_lower_workers.remove(rank)
+            else:
+                current_action_timesteps = len(memory.states)
+                print(f"Memory from worker {rank} received. Memory size: {current_action_timesteps}")
+                all_memories.actions.extend(torch.from_numpy(np.asarray(memory.actions)))
+                all_memories.states.extend(torch.from_numpy(np.asarray(memory.states)))
+                all_memories.values.extend(memory.values)
+                all_memories.logprobs.extend(memory.logprobs)
+                all_memories.rewards.extend(memory.rewards)
+                all_memories.is_terminals.extend(memory.is_terminals)
 
-        all_memories = []
-        active_workers = set(range(self.control_args['lower_num_processes']))
+                self.action_timesteps += current_action_timesteps
+                self.global_step += current_action_timesteps * self.control_args['lower_action_duration']
+                print(f"Action timesteps: {self.action_timesteps}, global step: {self.global_step}")
+                del memory #https://pytorch.org/docs/stable/multiprocessing.html
 
-        while active_workers:
-            try:
-                rank, memory = memory_queue.get(timeout=60) # Add a timeout to prevent infinite waiting
+                # Update PPO every n times (or close to n) action has been taken 
+                if self.action_timesteps >= self.control_args['lower_update_freq']:
+                    print(f"Updating PPO with {len(all_memories.actions)} memories") 
 
-                if memory is None:
-                    active_workers.remove(rank)
-                else:
-                    all_memories.append(memory)
-                    print(f"Memory from worker {rank} received. Memory size: {len(memory.states)}")
+                    self.lower_update_count += 1
 
-                    self.action_timesteps += len(memory.states)
-                    # Update lower level PPO every n times action has been taken
-                    if self.action_timesteps % self.control_args['lower_update_freq'] == 0:
-                        loss = self.lower_ppo.update(all_memories, agent_type='lower')
+                    # Anneal after every update
+                    if self.control_args['lower_anneal_lr']:
+                        current_lr_lower = self.lower_ppo.update_learning_rate(iteration, self.total_updates_lower)
 
-                        total_lower_reward = sum(sum(memory.rewards) for memory in all_memories)
-                        avg_lower_reward = total_lower_reward / self.control_args['lower_num_processes'] # Average reward per process in this iteration
-                        print(f"\nAverage Reward per process: {avg_lower_reward:.2f}\n")
+                    avg_reward = sum(all_memories.rewards) / len(all_memories.rewards)
+                    print(f"\nAverage Reward (across all memories): {avg_reward}\n")
+
+                    loss = self.lower_ppo.update(all_memories)
+
+                    # Reset all memories
+                    del all_memories
+                    all_memories = Memory() 
+                    self.action_timesteps = 0
+                    print(f"Size of all memories after update: {len(all_memories.actions)}")
+
+                    # Save (and evaluate the latest policy) every save_freq updates
+                    if self.lower_update_count % self.control_args['lower_save_freq'] == 0:
+                        latest_polic_path = os.path.join(self.control_args['save_dir'], f'lower_policy_{self.lower_update_count}.pth')
+                        save_policy(self.lower_ppo.policy, shared_state_normalizer, latest_polic_path)
+
+                        # Evaluate the latest policy
+                        print(f"Evaluating policy: {latest_policy_path} at step {global_step}")
+                        eval_json = eval(control_args_worker, ppo_args, eval_args, policy_path=latest_policy_path, tl= False) # which policy to evaluate?
+                        _, eval_veh_avg_wait, eval_ped_avg_wait, _, _ = get_averages(eval_json)
+                        eval_veh_avg_wait = np.mean(eval_veh_avg_wait)
+                        eval_ped_avg_wait = np.mean(eval_ped_avg_wait)
+                        avg_eval = ((eval_veh_avg_wait + eval_ped_avg_wait) / 2)
+                        print(f"Eval veh avg wait: {eval_veh_avg_wait}, eval ped avg wait: {eval_ped_avg_wait}, avg eval: {avg_eval}")
+
+                    # Save best policies 
+                    if avg_reward > best_reward:
+                        save_policy(control_ppo.policy, shared_state_normalizer, os.path.join(control_args['save_dir'], 'best_reward_policy.pth'))
+                        best_reward = avg_reward
+                    if loss['total_loss'] < best_loss:
+                        save_policy(control_ppo.policy, shared_state_normalizer, os.path.join(control_args['save_dir'], 'best_loss_policy.pth'))
+                        best_loss = loss['total_loss']
+                    if avg_eval < best_eval:
+                        save_policy(control_ppo.policy, shared_state_normalizer, os.path.join(control_args['save_dir'], 'best_eval_policy.pth'))
+                        best_eval = avg_eval
+
+                    # logging
+                    if is_sweep: # Wandb for hyperparameter tuning
+                        wandb.log({ "iteration": iteration,
+                                        "avg_reward": avg_reward, # Set as maximize in the sweep config
+                                        "update_count": update_count,
+                                        "policy_loss": loss['policy_loss'],
+                                        "value_loss": loss['value_loss'], 
+                                        "entropy_loss": loss['entropy_loss'],
+                                        "total_loss": loss['total_loss'],
+                                        "current_lr": current_lr if control_args['anneal_lr'] else ppo_args['lr'],
+                                        "approx_kl": loss['approx_kl'],
+                                        "eval_veh_avg_wait": eval_veh_avg_wait,
+                                        "eval_ped_avg_wait": eval_ped_avg_wait,
+                                        "avg_eval": avg_eval,
+                                        "global_step": global_step })
                         
-                        # clear memory to prevent memory growth (after the reward calculation)
-                        for memory in all_memories:
-                            memory.clear_memory()
-
-                        # reset all memories
-                        del all_memories #https://pytorch.org/docs/stable/multiprocessing.html
-                        all_memories = []
-
-                        # logging after update
-                        if loss is not None:
-                            if self.is_sweep: # Wandb for hyperparameter tuning
-                                wandb.log({     "iteration": iteration,
-                                                "lower_avg_reward": avg_lower_reward, # Set as maximize in the sweep config
-                                                "lower_policy_loss": loss['policy_loss'],
-                                                "lower_value_loss": loss['value_loss'], 
-                                                "lower_entropy_loss": loss['entropy_loss'],
-                                                "lower_total_loss": loss['total_loss'],
-                                                "lower_current_lr": current_lr_lower if self.control_args['lower_anneal_lr'] else self.control_args['lr'],
-                                                "global_step": global_step          })
-                                
-                            else: # Tensorboard for regular training
-                                total_updates = int(self.action_timesteps / self.control_args['lower_update_freq'])
-                                self.writer.add_scalar('Lower/Average_Reward', avg_lower_reward, global_step)
-                                self.writer.add_scalar('Lower/Total_Policy_Updates', total_updates, global_step)
-                                self.writer.add_scalar('Lower/Policy_Loss', loss['policy_loss'], global_step)
-                                self.writer.add_scalar('Lower/Value_Loss', loss['value_loss'], global_step)
-                                self.writer.add_scalar('Lower/Entropy_Loss', loss['entropy_loss'], global_step)
-                                self.writer.add_scalar('Lower/Total_Loss', loss['total_loss'], global_step)
-                                self.writer.add_scalar('Lower/Current_LR', current_lr_lower, global_step)
-                                print(f"Logged lower agent data at step {global_step}")
-
-                                # Save model every n times it has been updated (may not every iteration)
-                                if self.control_args['save_freq'] > 0 and total_updates % self.control_args['save_freq'] == 0:
-                                    torch.save(self.lower_ppo.policy.state_dict(), os.path.join(self.control_args['save_dir'], f'control_model_iteration_{iteration+1}.pth'))
-
-                                # Save best model so far
-                                if avg_lower_reward > self.best_reward_lower:
-                                    torch.save(self.lower_ppo.policy.state_dict(), os.path.join(self.control_args['save_dir'], 'best_control_model.pth'))
-                                    self.best_reward_lower = avg_lower_reward
+                    else: # Tensorboard for regular training
+                        self.writer.add_scalar('Lower/Average_Reward', avg_reward, self.global_step)
+                        self.writer.add_scalar('Lower/Total_Policy_Updates', update_count, self.global_step)
+                        self.writer.add_scalar('Lower/Policy_Loss', loss['policy_loss'], self.global_step)
+                        self.writer.add_scalar('Lower/Value_Loss', loss['value_loss'], self.global_step)
+                        self.writer.add_scalar('Lower/Entropy_Loss', loss['entropy_loss'], self.global_step)
+                        self.writer.add_scalar('Lower/Total_Loss', loss['total_loss'], self.global_step)
+                        self.writer.add_scalar('Lower/Current_LR', current_lr if control_args['anneal_lr'] else ppo_args['lr'], self.global_step)
+                        self.writer.add_scalar('Lower/Approx_KL', loss['approx_kl'], self.global_step)
+                        self.writer.add_scalar('Evaluation/Veh_Avg_Wait', eval_veh_avg_wait, self.global_step)
+                        self.writer.add_scalar('Evaluation/Ped_Avg_Wait', eval_ped_avg_wait, self.global_step)
+                        self.writer.add_scalar('Evaluation/Avg_Eval', avg_eval, self.global_step)
+                        print(f"Logged lower agent data at step {self.global_step}")
                         
-                        else: # For some reason..
-                            print("Warning: loss is None")
+                        
+         # Clean up. The join() method ensures that the main program waits for all processes to complete before continuing.
+        for p in train_processes:
+            p.join() 
+        print(f"All processes joined\n\n")
 
-            except queue.Empty:
-                print("Timeout waiting for worker. Continuing...")
-        
-        # At the end of an iteration, wait for all processes to finish
-        # The join() method is called on each process in the processes list. This ensures that the main program waits for all processes to complete before continuing.
-        for p in processes:
-            p.join()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        del train_queue
 
+        # Higher level agent's reward can only be obtained after the lower level workers have finished
+        # It is also averaged across the various lower level workers.
         average_higher_reward = self._get_reward(iteration)
 
         iterative_torch_graph = self._convert_to_torch_geometric(self.iterative_networkx_graph)
@@ -379,10 +425,10 @@ class DesignEnv(gym.Env):
             # Connect the new nodes to the existing nodes via edges with the given thickness.
 
             latest_horizontal_segment = self._get_horizontal_segment_ped(latest_horizontal_nodes_top_ped, latest_horizontal_nodes_bottom_ped, self.iterative_networkx_graph) # Start with set of nodes in base graph
-            print(f"\nLatest horizontal segment (Top): {latest_horizontal_segment['top']}\n")
-            print(f"\nLatest horizontal segment (Bottom): {latest_horizontal_segment['bottom']}\n")
+            # print(f"\nLatest horizontal segment (Top): {latest_horizontal_segment['top']}\n")
+            # print(f"\nLatest horizontal segment (Bottom): {latest_horizontal_segment['bottom']}\n")
             new_intersects = self._find_intersects_ped(denorm_location, latest_horizontal_segment, self.iterative_networkx_graph)
-            #print(f"\nNew intersects: {new_intersects}\n")
+            # print(f"\nNew intersects: {new_intersects}\n")
 
             mid_node_details = {'top': {'y_cord': None, 'node_id': None}, 'bottom': {'y_cord': None, 'node_id': None}}
             # Now add an edge from from_node to the pos of the new node. As well as from the new node to to_node.
@@ -1273,12 +1319,12 @@ class DesignEnv(gym.Env):
         bottom_x_coords = list(horizontal_segment['bottom'].keys())
         
         # Get the leftmost valid x (start of first segment)
-        min_x = min(min(top_x_coords), min(bottom_x_coords))
+        min_x = max(min(top_x_coords) + 1, min(bottom_x_coords) + 1) # add a small buffer.
         
         # Get the rightmost valid x (end of last segment)
         max_top_x = max(x + length for x, (length, _) in horizontal_segment['top'].items())
         max_bottom_x = max(x + length for x, (length, _) in horizontal_segment['bottom'].items())
-        max_x = max(max_top_x, max_bottom_x)
+        max_x = min(max_top_x - 1, max_bottom_x - 1) # subtract a small buffer.
         
         self.normalizer_x = {'min': float(min_x), 'max': float(max_x)}
         

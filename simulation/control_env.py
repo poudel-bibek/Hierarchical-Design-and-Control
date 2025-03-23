@@ -6,7 +6,8 @@ import random
 import gymnasium as gym
 import numpy as np
 from utils import scale_demand
-from simulation.sim_setup import get_direction_lookup, get_related_lanes_edges, get_intersection_phase_groups
+from .env_utils import *
+from .sim_setup import *
 
 class ControlEnv(gym.Env):
     """
@@ -16,9 +17,11 @@ class ControlEnv(gym.Env):
     - Tracking and occupancy map.
     """
 
-    def __init__(self, control_args, worker_id=None):
+    def __init__(self, control_args, worker_id=None, network_iteration=None):
         super().__init__()
         self.worker_id = worker_id
+        self.network_iteration = network_iteration
+
         self.vehicle_input_trips = control_args['vehicle_input_trips']
         self.vehicle_output_trips = control_args['vehicle_output_trips']
         self.pedestrian_input_trips = control_args['pedestrian_input_trips']
@@ -1166,19 +1169,23 @@ class ControlEnv(gym.Env):
             scale_factor_pedestrian = random.uniform(self.demand_scale_min, self.demand_scale_max)
             scale_demand(self.pedestrian_input_trips, self.pedestrian_output_trips, scale_factor_pedestrian, demand_type="pedestrian")
 
+
+        # create the new sumocfg file before the call
+        create_new_sumocfg(self.network_iteration)
+
         if self.auto_start:
             sumo_cmd = ["sumo-gui" if self.use_gui else "sumo", 
                         "--verbose",
                         "--start" , 
                         "--quit-on-end", 
-                        "-c", "./simulation/Craver_traffic_lights.sumocfg", 
+                        "-c", "./simulation/Craver_traffic_lights_iterative.sumocfg", 
                         "--step-length", str(self.step_length),
                         "--route-files", f"{self.vehicle_output_trips},{self.pedestrian_output_trips}"]
         else:
             sumo_cmd = ["sumo-gui" if self.use_gui else "sumo", 
                         "--verbose",
                         "--quit-on-end", 
-                        "-c", "./simulation/Craver_traffic_lights.sumocfg", 
+                        "-c", "./simulation/Craver_traffic_lights_iterative.sumocfg", 
                         "--step-length", str(self.step_length),
                         "--route-files", f"{self.vehicle_output_trips},{self.pedestrian_output_trips}"]
         max_retries = 3
