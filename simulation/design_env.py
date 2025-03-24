@@ -98,10 +98,7 @@ class DesignEnv(gym.Env):
 
         self.writer = self.control_args['writer']
         self.best_reward_lower = float('-inf')
-        self.total_updates_lower = self.design_args.get('total_updates_lower', 100)
-        self.best_reward = float('-inf')
-        self.best_loss = float('inf')
-        self.best_eval = float('inf')
+        self.total_updates_lower = None
 
         # Bugfix: Removing unpicklable object (writer) from control_args
         self.control_args_worker = {k: v for k, v in self.control_args.items() if k != 'writer'}

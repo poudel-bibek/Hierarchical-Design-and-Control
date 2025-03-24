@@ -1,6 +1,5 @@
 import os
 import json
-import time
 import wandb
 import torch
 import random
@@ -13,13 +12,11 @@ import torch.multiprocessing as mp
 from torch_geometric.data import Batch
 from sweep import HyperParameterTuner
 from torch.utils.tensorboard import SummaryWriter
-
 from utils import *
 from simulation.control_env import ControlEnv
 from simulation.design_env import DesignEnv
 from simulation.worker import parallel_eval_worker
 from utils import load_policy, save_config
-
 
 def train(train_config, is_sweep=False, sweep_config=None):
     """
@@ -206,7 +203,8 @@ def eval(control_args,
                 'shared_policy': shared_policy,
                 'control_args': control_args,
                 'worker_device': eval_device,
-                'shared_eval_normalizer': shared_eval_normalizer
+                'shared_eval_normalizer': shared_eval_normalizer,
+                'num_proposals': control_args['max_proposals']
             }
             p = mp.Process(
                 target=parallel_eval_worker,

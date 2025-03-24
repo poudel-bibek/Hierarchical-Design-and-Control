@@ -649,26 +649,32 @@ class ControlEnv(gym.Env):
 
         * Main and vicinity are given equal weightage (1). A single person in observation areas should represent same val.
         """
-        
-        self.corrected_occupancy_map = self._step_operations(self._get_occupancy_map(), print_map=print_map)
-        observation = list(current_phase) # 8 elements
 
+        # initialize a full observation
+        observation = -1 * np.ones(self.per_timestep_state_dim, dtype=np.float32)
+        self.corrected_occupancy_map = self._step_operations(self._get_occupancy_map(), print_map=print_map)
+        length = len(current_phase)
+        observation[:length] = np.array(current_phase, dtype=np.float32)
+        
         # Intersection
         # - vehicles
         int_incoming = [] # 12 directions
         for direction_turn in self.direction_turn_intersection_incoming:
             int_incoming.append(len(self.corrected_occupancy_map['cluster_172228464_482708521_9687148201_9687148202_#5more']["vehicle"]["incoming"][direction_turn]))
-        observation.extend(int_incoming)
+        observation[length:length + len(int_incoming)] = np.array(int_incoming, dtype=np.float32)
+        length += len(int_incoming)
 
         int_inside = [] # 8 directions
         for direction_turn in self.direction_turn_intersection_inside:
             int_inside.append(len(self.corrected_occupancy_map['cluster_172228464_482708521_9687148201_9687148202_#5more']["vehicle"]["inside"][direction_turn]))
-        observation.extend(int_inside)
+        observation[length:length + len(int_inside)] = np.array(int_inside, dtype=np.float32)
+        length += len(int_inside)
   
         int_outgoing = [] # 4 directions
         for direction in self.directions:
             int_outgoing.append(len(self.corrected_occupancy_map['cluster_172228464_482708521_9687148201_9687148202_#5more']["vehicle"]["outgoing"][direction]))
-        observation.extend(int_outgoing)
+        observation[length:length + len(int_outgoing)] = np.array(int_outgoing, dtype=np.float32)
+        length += len(int_outgoing)
 
         # - pedestrians
         int_incoming_ped = [] # 4 directions. This contains both main and vicinity areas. Sum (70% = main, 30% = vicinity)
@@ -676,42 +682,51 @@ class ControlEnv(gym.Env):
             main = len(self.corrected_occupancy_map['cluster_172228464_482708521_9687148201_9687148202_#5more']["pedestrian"]["incoming"][direction]["main"])
             vicinity = len(self.corrected_occupancy_map['cluster_172228464_482708521_9687148201_9687148202_#5more']["pedestrian"]["incoming"][direction]["vicinity"])
             int_incoming_ped.append(main + vicinity)
-        observation.extend(int_incoming_ped)
+        observation[length:length + len(int_incoming_ped)] = np.array(int_incoming_ped, dtype=np.float32)
+        length += len(int_incoming_ped)
 
         int_outgoing_ped = [] # 4 directions
         for direction in self.directions:
             int_outgoing_ped.append(len(self.corrected_occupancy_map['cluster_172228464_482708521_9687148201_9687148202_#5more']["pedestrian"]["outgoing"][direction]["main"]))
-        observation.extend(int_outgoing_ped)
+        observation[length:length + len(int_outgoing_ped)] = np.array(int_outgoing_ped, dtype=np.float32)
+        length += len(int_outgoing_ped)
 
-        # Midblock (7 TLs)
+        # Midblock (Only add max_proposals TLs)
         for tl_id in self.tl_ids[1:]:
             # - vehicles
             mb_incoming = [] # 2 directions
             for direction_turn in self.direction_turn_midblock:
                 mb_incoming.append(len(self.corrected_occupancy_map[tl_id]["vehicle"]["incoming"][direction_turn]))
-            observation.extend(mb_incoming)
+            observation[length:length + len(mb_incoming)] = np.array(mb_incoming, dtype=np.float32)
+            length += len(mb_incoming)
 
             mb_inside = [] # 2 directions
             for direction_turn in self.direction_turn_midblock:
                 mb_inside.append(len(self.corrected_occupancy_map[tl_id]["vehicle"]["inside"][direction_turn]))
-            observation.extend(mb_inside)
+            observation[length:length + len(mb_inside)] = np.array(mb_inside, dtype=np.float32)
+            length += len(mb_inside)
 
             mb_outgoing = [] # 2 directions
             for direction in self.direction_turn_midblock:
                 mb_outgoing.append(len(self.corrected_occupancy_map[tl_id]["vehicle"]["outgoing"][direction]))
-            observation.extend(mb_outgoing)
+            observation[length:length + len(mb_outgoing)] = np.array(mb_outgoing, dtype=np.float32)
+            length += len(mb_outgoing)
 
             # - pedestrians
             # Incoming, 1 direction
-            observation.append(len(self.corrected_occupancy_map[tl_id]["pedestrian"]["incoming"]["north"]["main"]))
+            observation[length:length + len(self.corrected_occupancy_map[tl_id]["pedestrian"]["incoming"]["north"]["main"])] = \
+                np.array(len(self.corrected_occupancy_map[tl_id]["pedestrian"]["incoming"]["north"]["main"]), dtype=np.float32)
+            length += len(self.corrected_occupancy_map[tl_id]["pedestrian"]["incoming"]["north"]["main"])
 
             # Outgoing, 1 direction
-            observation.append(len(self.corrected_occupancy_map[tl_id]["pedestrian"]["outgoing"]["north"]["main"]))
+            observation[length:length + len(self.corrected_occupancy_map[tl_id]["pedestrian"]["outgoing"]["north"]["main"])] = \
+                np.array(len(self.corrected_occupancy_map[tl_id]["pedestrian"]["outgoing"]["north"]["main"]), dtype=np.float32)
+            length += len(self.corrected_occupancy_map[tl_id]["pedestrian"]["outgoing"]["north"]["main"])
         # print(f"\nObservation before normalization: {observation}")
 
         # Normalize with running mean and std
         observation = np.asarray(observation, dtype=np.float32)
-        #print(f"\nObservation: shape: {observation.shape}") 
+        # print(f"\nObservation: shape: {observation.shape}") 
         return observation
 
     def _apply_action(self, action, current_action_step, switch_state):
@@ -730,8 +745,8 @@ class ControlEnv(gym.Env):
 
         * It does not matter what phases are specified in the Tlogic in net file, we override it from here.
         -----
-        In the design env, there may be variable number of Mid-block TLs.
-
+        In the design env, there are variable number of Mid-block TLs. 
+        For these TLs, switch state is no longer valid because the same TL may not have existed in previous timestep.
         """
         #print(f"Action: {action}, switch_state: {switch_state}, type: {type(switch_state)}")
         current_phase = []
@@ -763,7 +778,7 @@ class ControlEnv(gym.Env):
         traci.trafficlight.setRedYellowGreenState(self.tl_ids[0], int_state)
         
         # Midblock
-        print(f"\nSwitch state: {switch_state}\n")
+        # print(f"\nSwitch state: {switch_state}\n")
 
         for i in range(1, len(self.tl_ids)):
             tl_id = self.tl_ids[i]
@@ -1211,10 +1226,7 @@ class ControlEnv(gym.Env):
         self.step_count = 0 # This counts the timesteps in an episode. Needs reset.
         
         # Get the actual traffic light IDs from the current network (add new ones)
-        additional_tls = traci.trafficlight.getIDList()
-        for tl_id in additional_tls:
-            if tl_id not in self.tl_ids:
-                self.tl_ids.append(tl_id)
+        self.tl_ids.extend([tl_id for tl_id in traci.trafficlight.getIDList() if tl_id not in self.tl_ids])
         #print(f"Traffic light IDs in current network: {self.tl_ids}")
 
         self.dynamically_populate_edges_lanes(extreme_edge_dict)
@@ -1226,8 +1238,8 @@ class ControlEnv(gym.Env):
         #print(f"Number of actions during warmup: {num_actions_warmup}")
         observation_buffer = []
         for i in range(num_actions_warmup):
-            # Randomly sample actions (1 digit for intersection, 7 bits for crosswalks)
-            action = np.concatenate([np.random.randint(4, size=1), np.random.randint(2, size=7)]).astype(np.int32)
+            # Randomly sample actions (1 digit for intersection, the rest of the bits for mid-block crosswalks)
+            action = np.concatenate([np.random.randint(4, size=1), np.random.randint(2, size= len(self.tl_ids) - 1)]).astype(np.int32)
             #print(f"\nWarmup action {i}: {action}\n")
             if i==0:
                 prev_action = action

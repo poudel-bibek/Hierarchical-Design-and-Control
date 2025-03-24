@@ -46,7 +46,7 @@ def parallel_train_worker(rank,
         with torch.no_grad():
             state = shared_state_normalizer.normalize(state)
             state = state.to(worker_device)
-            action, logprob = shared_policy_old.act(state) # sim runs in CPU, state will initially always be in CPU.
+            action, logprob = shared_policy_old.act(state, num_proposals) # sim runs in CPU, state will initially always be in CPU.
             value = shared_policy_old.critic(state.unsqueeze(0)) # add a batch dimension
 
             state = state.detach().cpu().numpy() # 2D
@@ -56,7 +56,7 @@ def parallel_train_worker(rank,
 
         # Perform action
         # These reward and next_state are for the action_duration timesteps.
-        next_state, reward, done, truncated, _ = worker_env.train_step(action, num_proposals) # need the returned state to be 2D
+        next_state, reward, done, truncated, _ = worker_env.train_step(action) # need the returned state to be 2D
         reward = shared_reward_normalizer.normalize(reward).item()
         ep_reward += reward
 
@@ -138,7 +138,7 @@ def parallel_eval_worker(rank,
                 state = shared_eval_normalizer.normalize(state)
                 state = state.to(worker_device)
 
-                action, _ = shared_policy.act(state)
+                action, _ = shared_policy.act(state, eval_worker_config['num_proposals'])
                 action = action.detach().cpu() # sim runs in CPU
                 state, reward, done, truncated, _ = env.eval_step(action, tl, unsignalized=unsignalized)
 
