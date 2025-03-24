@@ -33,6 +33,7 @@ class ControlEnv(gym.Env):
         self.step_length = control_args['step_length'] # SUMO allows to specify how long (in real world time) should each step be.
         self.action_duration = control_args['action_duration']
         self.max_timesteps = control_args['max_timesteps']
+        self.max_proposals = control_args['max_proposals']
         self.use_gui = control_args['gui']
         self.auto_start = control_args['auto_start']
         self.warmup_steps = control_args['warmup_steps'] # is a list of two values
@@ -83,7 +84,6 @@ class ControlEnv(gym.Env):
         # Normalization parameters (100m cutoff distance with 5m veh and 2.5m gap = approx 13 vehicles)
         self.max_pressure_vehicle = 15
         self.max_pressure_pedestrian = 25 # arbitrary
-        self.max_switches = len(self.tl_ids)
         self.cutoff_distance = 100
 
         # For safety conflict tracking (only in unsignalized)
@@ -450,12 +450,12 @@ class ControlEnv(gym.Env):
             1 = allow vehicular traffic through North-South only
             2 = allow dedicated left turns through N-E and S-W only
             3 = disallow vehicular traffic in all directions
-        - Next seven bits: Mid-block crosswalk signals (each bit is Bernoulli)
+        - Next max_proposals bits: Mid-block crosswalk signals (each bit is Bernoulli)
             1  = allow vehicles to cross (pedestrians red) at a given mid-block segment
             0  = disallow vehicles to cross (pedestrians green) at that segment
         """
         # Simple action
-        action_space = [4] + [2] * 7  # First value is 0-3 for intersection, remaining 7 are binary
+        action_space = [4] + [2] * self.max_proposals  # First value is 0-3 for intersection, remaining are binary
         return gym.spaces.MultiDiscrete(action_space)
 
     @property
@@ -618,7 +618,8 @@ class ControlEnv(gym.Env):
 
     def _get_observation(self, current_phase, print_map=False):
         """
-        * Per step observation size = 96
+        * Per step observation size = 120
+        * Assume max_proposals = 10
         * Composed of: 
             - Current phase information (8 elements that transitions throughout the action duration)
             - Intersection (32 elements):
@@ -629,7 +630,7 @@ class ControlEnv(gym.Env):
                 - Pedestrians
                     - Incoming (4 directions)
                     - Outgoing (4 directions)
-            - 7 Midblocks (7x8 = 56 elements):
+            - max_proposals Midblocks (10 x 8 = 80 elements):
                 - Vehicles: 
                     - Incoming (2 directions)
                     - Inside (2 directions)
@@ -637,7 +638,7 @@ class ControlEnv(gym.Env):
                 - Pedestrians
                     - Incoming (1 direction)
                     - Outgoing (1 direction)
-            - 8 + 32 + 56 = 96
+            - 8 + 32 + 80 = 120
 
         * Each action persists for a number of timesteps (transitioning though phases); observation is collected at each timestep.
         * Pressure itself is not a part of the observation (only used for reward calculation).
@@ -762,6 +763,8 @@ class ControlEnv(gym.Env):
         traci.trafficlight.setRedYellowGreenState(self.tl_ids[0], int_state)
         
         # Midblock
+        print(f"\nSwitch state: {switch_state}\n")
+
         for i in range(1, len(self.tl_ids)):
             tl_id = self.tl_ids[i]
             mb_switch_state = switch_state[i]
@@ -1146,7 +1149,7 @@ class ControlEnv(gym.Env):
         """
         return self.step_count >= self.max_timesteps
 
-    def reset(self, tl= False):
+    def reset(self, extreme_edge_dict, tl= False):
         """
         """
         if self.sumo_running:
@@ -1214,7 +1217,7 @@ class ControlEnv(gym.Env):
                 self.tl_ids.append(tl_id)
         #print(f"Traffic light IDs in current network: {self.tl_ids}")
 
-        self.dynamically_populate_edges_lanes()
+        self.dynamically_populate_edges_lanes(extreme_edge_dict)
 
         # Warmup period
         # How many actions to take during warmup
@@ -1264,7 +1267,7 @@ class ControlEnv(gym.Env):
         
         return observation, {} # info is empty
 
-    def dynamically_populate_edges_lanes(self):
+    def dynamically_populate_edges_lanes(self, extreme_edge_dict):
         """
         Get midblock TLs lanes/edges for occupancy map to use. i.e., update self.tl_lane_dict with latest network iteration.
         - For vehicle + inside (pedestrians dont have inside), use the mid-block TL id with _0 for west-straight, _1 for east-straight.
@@ -1278,20 +1281,21 @@ class ControlEnv(gym.Env):
         # For each midblock traffic light (everything except the intersection)
         for tl_id in self.tl_ids:
             if tl_id == 'cluster_172228464_482708521_9687148201_9687148202_#5more':
-                # Skip the intersection - it's already properly defined
-                continue
+                if extreme_edge_dict['rightmost']['new'] is not None: # Just check one (if it has been split)
+                    self.tl_lane_dict[tl_id]["vehicle"]["incoming"]["east-straight"] = [f"-{extreme_edge_dict['leftmost']['new']}_0"]
+
+                    # counterpart
+                    self.tl_lane_dict[tl_id]["vehicle"]["outgoing"]["east"] = [f"{extreme_edge_dict['leftmost']['new']}_0"]
             
             # Skip if the traffic light ID already exists in the dictionary
             if tl_id in self.tl_lane_dict:
                 continue
                 
-            
-            # Get controlled links for the traffic light
-            controlled_lanes = traci.trafficlight.getControlledLanes(tl_id)
+            # controlled_lanes = traci.trafficlight.getControlledLanes(tl_id)
             controlled_links = traci.trafficlight.getControlledLinks(tl_id)
 
-            print(f"Controlled lanes for {tl_id}: {controlled_lanes}")
-            print(f"Controlled links for {tl_id}: {controlled_links}")
+            # print(f"Controlled lanes for {tl_id}: {controlled_lanes}")
+            # print(f"Controlled links for {tl_id}: {controlled_links}")
 
             tl_internal = f":{tl_id}"
             self.tl_lane_dict[tl_id] = {
@@ -1323,28 +1327,30 @@ class ControlEnv(gym.Env):
                 }
             }
             
-            # For vehicle incoming + outgoing, keep adding until the total length is near cutoff distance or we encounter another TL. 
-            # For pedestrians, adding other relevant, immediate lanes. 
-
-            print(f"Updated dictionary for {tl_id}:")
-            print(f"  Vehicle lanes:")
-            print(f"    Incoming:")
-            print(f"      West-straight: {self.tl_lane_dict[tl_id]['vehicle']['incoming']['west-straight']}")
-            print(f"      East-straight: {self.tl_lane_dict[tl_id]['vehicle']['incoming']['east-straight']}")
-            print(f"    Inside:")
-            print(f"      West-straight: {self.tl_lane_dict[tl_id]['vehicle']['inside']['west-straight']}")
-            print(f"      East-straight: {self.tl_lane_dict[tl_id]['vehicle']['inside']['east-straight']}")
-            print(f"    Outgoing:")
-            print(f"      West-straight: {self.tl_lane_dict[tl_id]['vehicle']['outgoing']['west-straight']}")
-            print(f"      East-straight: {self.tl_lane_dict[tl_id]['vehicle']['outgoing']['east-straight']}")
-            print(f"  Pedestrian areas:")
-            print(f"    Incoming (North/Main): {self.tl_lane_dict[tl_id]['pedestrian']['incoming']['north']['main']}")
-            print(f"    Outgoing (North/Main): {self.tl_lane_dict[tl_id]['pedestrian']['outgoing']['north']['main']}")
-
+            # TODO: For vehicle incoming + outgoing, keep adding until the total length is near cutoff distance or we encounter another TL. 
+            # Do this for east-straight of the intersection as well.
             
+            # For pedestrians, add just one immediate lane on each side of the crossing. 
+            top_edge = f"edge_{tl_id.split('mid')[0]}top_{tl_id}"
+            bottom_edge = f"edge_{tl_id.split('mid')[0]}bottom_{tl_id}"
+            self.tl_lane_dict[tl_id]["pedestrian"]["incoming"]["north"]["main"].append(top_edge)
+            self.tl_lane_dict[tl_id]["pedestrian"]["incoming"]["north"]["main"].append(bottom_edge)
 
-        
-        breakpoint()
+            # print(f"\nUpdated dictionary for {tl_id}:")
+            # print(f"  Vehicle lanes:")
+            # print(f"    Incoming:")
+            # print(f"      West-straight: {self.tl_lane_dict[tl_id]['vehicle']['incoming']['west-straight']}")
+            # print(f"      East-straight: {self.tl_lane_dict[tl_id]['vehicle']['incoming']['east-straight']}")
+            # print(f"    Inside:")
+            # print(f"      West-straight: {self.tl_lane_dict[tl_id]['vehicle']['inside']['west-straight']}")
+            # print(f"      East-straight: {self.tl_lane_dict[tl_id]['vehicle']['inside']['east-straight']}")
+            # print(f"    Outgoing:")
+            # print(f"      West-straight: {self.tl_lane_dict[tl_id]['vehicle']['outgoing']['west-straight']}")
+            # print(f"      East-straight: {self.tl_lane_dict[tl_id]['vehicle']['outgoing']['east-straight']}")
+            # print(f"  Pedestrian areas:")
+            # print(f"    Incoming (North/Main): {self.tl_lane_dict[tl_id]['pedestrian']['incoming']['north']['main']}")
+            # print(f"    Outgoing (North/Main): {self.tl_lane_dict[tl_id]['pedestrian']['outgoing']['north']['main']}\n")
+
         print(f"Updated traffic light lane dictionary with {len(self.tl_ids)} traffic lights")
 
     def close(self):

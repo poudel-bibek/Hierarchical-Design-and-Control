@@ -91,11 +91,15 @@ class MLP_ActorCritic(nn.Module):
         flat = state.view(bsz, -1)  # shape: (B, in_channels*action_duration*per_timestep_state_dim)
         return self.critic_value(self.critic_layers(flat))
 
-    def act(self, state):
+    def act(self, state, num_proposals):
         """
         Sample an action exactly like in the CNN version:
           - intersection action from first 4 logits (Categorical)
-          - midblock from next 7 logits (Bernoulli)
+          - midblock from next num_proposals logits (Bernoulli)
+          - Ignore the rest of the logits.
+
+        TODO: Is there a bias in log_prob because of the number of proposals?
+        How to propoerly handle the rest (is ignoring them good?)
         """
         # print("Sampling...")
         state = state.reshape(1, 1, state.shape[0], state.shape[1])
@@ -107,12 +111,11 @@ class MLP_ActorCritic(nn.Module):
         intersection_dist = Categorical(logits=intersection_logits)
         intersection_action = intersection_dist.sample()  # [1]
 
-
-        # The next 7 logits => midblock (Bernoulli)
-        midblock_logits = action_logits[:, 4:]
+        # The next num_proposals logits => midblock (Bernoulli)
+        midblock_logits = action_logits[:, 4:num_proposals]
         # midblock_probs = torch.sigmoid(midblock_logits)
         midblock_dist = Bernoulli(logits=midblock_logits)
-        midblock_actions = midblock_dist.sample()  # shape [1,7]
+        midblock_actions = midblock_dist.sample()  # shape [1,num_proposals]
 
         # print(f"\nIntersection logits: {intersection_logits}")
         # print(f"\nMidblock logits: {midblock_logits}")
@@ -125,14 +128,16 @@ class MLP_ActorCritic(nn.Module):
         return combined_action.int(), log_prob
 
 
-    def evaluate(self, states, actions):
+    def evaluate(self, states, actions, num_proposals):
         """
         Evaluate a batch of states and pre-sampled actions. 
+
+        TODO: Remove the bias due to number of proposals.
         """
         # print("Evaluating...")
         action_logits = self.actor(states)
         intersection_logits = action_logits[:, :4]
-        midblock_logits = action_logits[:, 4:]
+        midblock_logits = action_logits[:, 4:num_proposals]
 
         # Distributions
         # intersection_probs = torch.softmax(intersection_logits, dim=1)
@@ -140,9 +145,9 @@ class MLP_ActorCritic(nn.Module):
         # midblock_probs = torch.sigmoid(midblock_logits)
         midblock_dist = Bernoulli(logits=midblock_logits)
 
-        # Actions in shape (B,1) for intersection, (B,7) for midblock
+        # Actions in shape (B,1) for intersection, (B,num_proposals) for midblock
         intersection_action = actions[:, :1].squeeze(1).long() # Categorical expects long
-        midblock_actions = actions[:, 1:].float()
+        midblock_actions = actions[:, 1:num_proposals].float()
 
         intersection_log_probs = intersection_dist.log_prob(intersection_action)
         # print(f"\nIntersection log probs: {intersection_log_probs}, shape: {intersection_log_probs.shape}")
@@ -486,18 +491,18 @@ class GAT_v2_ActorCritic(nn.Module):
 
         # Sample one proposal for each batch element (add 1 to ensure at least 1 proposal; default starts from index 0)
         # Using torch multinomial to sample from discrete distribution.
-        num_actual_proposals = torch.multinomial(num_proposals_probs_batch, 1).squeeze(-1) + 1
-        print(f"\nnum_actual_proposals: {num_actual_proposals.shape, num_actual_proposals}\n")
+        num_proposals = torch.multinomial(num_proposals_probs_batch, 1).squeeze(-1) + 1
+        print(f"\nnum_proposals: {num_proposals.shape, num_proposals}\n")
 
         batch_size = states_batch.num_graphs 
         # Initialize output tensors with -1 so that its easier to infer actual proposals in critic.
-        proposals = torch.full((batch_size, self.max_proposals, 2), -1.0, dtype=torch.float32, device=device) 
+        padded_proposals = torch.full((batch_size, self.max_proposals, 2), -1.0, dtype=torch.float32, device=device) 
         log_probs = torch.zeros(batch_size, device=device)
         
         for b in range(batch_size):
             # Sample proposals for this batch element
             if training: 
-                samples = gmm_batch[b].sample((num_actual_proposals[b].item(),))
+                samples = gmm_batch[b].sample((num_proposals[b].item(),))
             else: 
                 # TODO: At test, sample greedily at each mode.
                 # Is the number of mixture components = number of modes?
@@ -520,14 +525,14 @@ class GAT_v2_ActorCritic(nn.Module):
                 self.visualize_gmm(gmm_batch[b], markers=markers, batch_index=b, thickness_range=(0, 1), location_range=(0, 1), iteration=iteration)
 
             # Store in output tensor
-            proposals[b, :num_actual_proposals[b], 0] = locations.squeeze()
-            proposals[b, :num_actual_proposals[b], 1] = thicknesses.squeeze()
+            padded_proposals[b, :num_proposals[b], 0] = locations.squeeze()
+            padded_proposals[b, :num_proposals[b], 1] = thicknesses.squeeze()
             
             # Compute log probabilities for this batch element
             # SUM operation is correct for joint log prob of thickness and location.
             log_probs[b] = gmm_batch[b].log_prob(samples).sum() 
 
-        return proposals, num_actual_proposals, log_probs
+        return padded_proposals, num_proposals, log_probs
     
     def evaluate(self, states_batch, actions_batch, device = None):
         """

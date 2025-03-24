@@ -11,9 +11,11 @@ def parallel_train_worker(rank,
                          shared_policy_old, 
                          control_args, 
                          train_queue, 
-                         worker_seed, 
+                         worker_seed,
+                         num_proposals,
                          shared_state_normalizer, 
                          shared_reward_normalizer, 
+                         extreme_edge_dict,
                          worker_device, 
                          network_iteration):
     """
@@ -34,7 +36,7 @@ def parallel_train_worker(rank,
     memory_transfer_freq = control_args['memory_transfer_freq']  # Get from config
     local_memory = Memory() # A worker instance must have their own memory 
 
-    state, _ = worker_env.reset()
+    state, _ = worker_env.reset(extreme_edge_dict)
     ep_reward = 0
     steps_since_update = 0
 
@@ -54,7 +56,7 @@ def parallel_train_worker(rank,
 
         # Perform action
         # These reward and next_state are for the action_duration timesteps.
-        next_state, reward, done, truncated, _ = worker_env.train_step(action) # need the returned state to be 2D
+        next_state, reward, done, truncated, _ = worker_env.train_step(action, num_proposals) # need the returned state to be 2D
         reward = shared_reward_normalizer.normalize(reward).item()
         ep_reward += reward
 

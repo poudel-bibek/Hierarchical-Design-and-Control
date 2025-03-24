@@ -76,6 +76,11 @@ class DesignEnv(gym.Env):
         self.base_networkx_graph = self._cleanup_graph(pedestrian_networkx_graph, self.existing_crosswalks)
         
         self.horizontal_edges_veh_original_data = self._get_original_veh_edge_config()
+        
+        # Relevant to the intersection
+        self.extreme_edge_dict = {'leftmost': {'old': "16666012#2", 'new': None},
+                             'rightmost': {'old': "16666012#17", 'new': None}}
+                             
         self._update_xml_files(self.base_networkx_graph, 'base') # Create base XML files from latest networkx graph
 
         if self.design_args['save_graph_images']:
@@ -93,7 +98,10 @@ class DesignEnv(gym.Env):
 
         self.writer = self.control_args['writer']
         self.best_reward_lower = float('-inf')
-        self.total_updates_lower = None
+        self.total_updates_lower = self.design_args.get('total_updates_lower', 100)
+        self.best_reward = float('-inf')
+        self.best_loss = float('inf')
+        self.best_eval = float('inf')
 
         # Bugfix: Removing unpicklable object (writer) from control_args
         self.control_args_worker = {k: v for k, v in self.control_args.items() if k != 'writer'}
@@ -219,8 +227,8 @@ class DesignEnv(gym.Env):
             print("Error output:", e.stderr)
 
     def step(self, 
-             action, 
-             num_actual_proposals, 
+             padded_proposals, 
+             num_proposals, 
              iteration, 
              SEED, 
              shared_state_normalizer,
@@ -236,14 +244,13 @@ class DesignEnv(gym.Env):
 
         # print(f"\nHigher level action received: {action}\n")
         # Convert tensor action to proposals
-        action = action.cpu().numpy()  # Convert to numpy array if it's not already
-        proposals = action.squeeze(0)[:num_actual_proposals]  # Only consider the actual proposals
-        # print(f"\nProposals: {proposals}")
+        padded_proposals = padded_proposals.cpu().numpy()  # Convert to numpy array if it's not already
+        proposals = padded_proposals[0][:num_proposals]  # Only consider the actual proposals
+        print(f"\nProposals: {proposals}")
 
         # Apply the action to output the latest SUMO network file as well as modify the iterative_torch_graph.
         self._apply_action(proposals, iteration)
 
-        reward = 0  # TODO: need to implement a reward function. Can this ? Yes.
         done = False
         info = {}
         
@@ -264,8 +271,10 @@ class DesignEnv(gym.Env):
                     self.control_args_worker,
                     lower_queue,
                     worker_seed,
+                    num_proposals,
                     shared_state_normalizer,
                     shared_reward_normalizer,
+                    self.extreme_edge_dict,
                     self.lower_ppo_args['device'],
                     iteration)
                 )
@@ -1140,12 +1149,11 @@ class DesignEnv(gym.Env):
                 rightmost_new = f'16666012#{edge_id.split("#")[1]}'
 
         # One of the counterparts (among -ve, +ve) is enough.
-        extreme_edge_dict = {'leftmost': {'old': "16666012#2", 'new': leftmost_new},
-                             'rightmost': {'old': "16666012#17", 'new': rightmost_new}}
+        self.extreme_edge_dict['leftmost']['new'] = leftmost_new
+        self.extreme_edge_dict['rightmost']['new'] = rightmost_new
         
-
         # Updates to connections and crossings in connections file.
-        for direction, direction_data in extreme_edge_dict.items():
+        for direction, direction_data in self.extreme_edge_dict.items():
             old_edge = direction_data['old']
             if old_edge in old_veh_edges_to_remove:
                 new_edge = direction_data['new']
@@ -1223,7 +1231,7 @@ class DesignEnv(gym.Env):
 
         # TL 6. The default crossings in TL (that were kept above) may still refer to the old edges.
         # In addition, there may also be a connection of the -ve and +ve sides of the old edges.
-        for direction, direction_data in extreme_edge_dict.items():
+        for direction, direction_data in self.extreme_edge_dict.items():
             old_edge = direction_data['old']
             if old_edge in old_veh_edges_to_remove:
                 new_edge = direction_data['new']
@@ -1315,17 +1323,19 @@ class DesignEnv(gym.Env):
             pedestrian_networkx_graph
         )
         
+        offset = 2 # Add or Subtract a small buffer.
+
         # Find the leftmost and rightmost valid x coordinates from both top and bottom segments
         top_x_coords = list(horizontal_segment['top'].keys())
         bottom_x_coords = list(horizontal_segment['bottom'].keys())
         
         # Get the leftmost valid x (start of first segment)
-        min_x = max(min(top_x_coords) + 1, min(bottom_x_coords) + 1) # add a small buffer.
+        min_x = max(min(top_x_coords) + offset, min(bottom_x_coords) + offset) 
         
         # Get the rightmost valid x (end of last segment)
         max_top_x = max(x + length for x, (length, _) in horizontal_segment['top'].items())
         max_bottom_x = max(x + length for x, (length, _) in horizontal_segment['bottom'].items())
-        max_x = min(max_top_x - 1, max_bottom_x - 1) # subtract a small buffer.
+        max_x = min(max_top_x - offset, max_bottom_x - offset) 
         
         self.normalizer_x = {'min': float(min_x), 'max': float(max_x)}
         
