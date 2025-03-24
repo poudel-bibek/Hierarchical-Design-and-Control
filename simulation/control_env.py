@@ -50,14 +50,9 @@ class ControlEnv(gym.Env):
         self.vehicle_output_trips = self.vehicle_output_trips.replace('.xml', f'{self.unique_suffix}.xml')
 
         self.pedestrian_output_trips = self.pedestrian_output_trips.replace('.xml', f'{self.unique_suffix}.xml')
-        self.tl_ids = ['cluster_172228464_482708521_9687148201_9687148202_#5more', # Intersection
-                       '9727816850', # Mid block TL + crosswalks from left to right
-                       '9727816623',
-                       '9740157155',
-                       'cluster_9740157181_9740483933',
-                       '9740157194',
-                       '9740157209',
-                       '9740484527'] 
+
+        # This list has to be gotten from the latest network. Will be populated dynamically during reset
+        self.tl_ids = ['cluster_172228464_482708521_9687148201_9687148202_#5more'] # Intersection will always be present.
         
         self.previous_action = None
         # Number of simulation steps that should occur for each action. 
@@ -89,7 +84,8 @@ class ControlEnv(gym.Env):
         self.max_pressure_vehicle = 15
         self.max_pressure_pedestrian = 25 # arbitrary
         self.max_switches = len(self.tl_ids)
-        
+        self.cutoff_distance = 100
+
         # For safety conflict tracking (only in unsignalized)
         self.recorded_conflicts = set()  # Set of unique conflict identifiers to prevent double-counting
         self.total_conflicts = 0         # Running total of unique vehicle-pedestrian conflicts
@@ -111,7 +107,7 @@ class ControlEnv(gym.Env):
         else:
             return "center" # cases where both blinkers are on (emergency) or off
 
-    def _step_operations(self, occupancy_map, print_map=False, cutoff_distance=100):
+    def _step_operations(self, occupancy_map, print_map=False):
         """
         Some corrections have to be done to the occupancy map every step.
         1. Pedestrians wanting to cross, and pedestrians already crossed both are going to be in the same area in simulation. This mechanism helps distinguish between them. 
@@ -155,14 +151,14 @@ class ControlEnv(gym.Env):
                 for direction_turn in self.direction_turn_intersection_incoming:
                     for veh_id in occupancy_map[tl_id]["vehicle"]["incoming"][direction_turn]:
                         distance = self._get_vehicle_distance_to_junction(tl_id, veh_id)
-                        if distance > cutoff_distance:
+                        if distance > self.cutoff_distance:
                             occupancy_map[tl_id]["vehicle"]["incoming"][direction_turn].remove(veh_id)
 
                 # Outgoing
                 for direction in self.directions:
                     for veh_id in occupancy_map[tl_id]["vehicle"]["outgoing"][direction]:
                         distance = self._get_vehicle_distance_to_junction(tl_id, veh_id)
-                        if distance > cutoff_distance:
+                        if distance > self.cutoff_distance:
                             occupancy_map[tl_id]["vehicle"]["outgoing"][direction].remove(veh_id)
 
             else: # Midblock has two directions (west-straight, east-straight) 
@@ -170,7 +166,7 @@ class ControlEnv(gym.Env):
                     for direction_turn in self.direction_turn_midblock:
                         for veh_id in occupancy_map[tl_id]["vehicle"][group][direction_turn]:
                             distance = self._get_vehicle_distance_to_junction(tl_id, veh_id)
-                            if distance > cutoff_distance:
+                            if distance > self.cutoff_distance:
                                 occupancy_map[tl_id]["vehicle"][group][direction_turn].remove(veh_id)
 
         if print_map: 
@@ -653,7 +649,7 @@ class ControlEnv(gym.Env):
         * Main and vicinity are given equal weightage (1). A single person in observation areas should represent same val.
         """
         
-        self.corrected_occupancy_map = self._step_operations(self._get_occupancy_map(), print_map=print_map, cutoff_distance=100)
+        self.corrected_occupancy_map = self._step_operations(self._get_occupancy_map(), print_map=print_map)
         observation = list(current_phase) # 8 elements
 
         # Intersection
@@ -732,6 +728,9 @@ class ControlEnv(gym.Env):
              - Action 0: 5 timestep of rrG
 
         * It does not matter what phases are specified in the Tlogic in net file, we override it from here.
+        -----
+        In the design env, there may be variable number of Mid-block TLs.
+
         """
         #print(f"Action: {action}, switch_state: {switch_state}, type: {type(switch_state)}")
         current_phase = []
@@ -783,7 +782,7 @@ class ControlEnv(gym.Env):
             if tl_id == "cluster_9740157181_9740483933": # For this TL, add 4 small 'g's after the first letter
                 mb_phase_string = mb_phase_string[0] + "g"*5 + mb_phase_string[1:]
 
-            #print(f"Setting phase: {mb_phase_string} for {tl_id}")
+            #print(f"\nSetting phase: {mb_phase_string} for Midblock TL: {tl_id}\n")
             traci.trafficlight.setRedYellowGreenState(tl_id, mb_phase_string)
 
         return current_phase
@@ -1183,7 +1182,7 @@ class ControlEnv(gym.Env):
                         "--route-files", f"{self.vehicle_output_trips},{self.pedestrian_output_trips}"]
         else:
             sumo_cmd = ["sumo-gui" if self.use_gui else "sumo", 
-                        "--verbose",
+                        "--verbose",  
                         "--quit-on-end", 
                         "-c", "./simulation/Craver_traffic_lights_iterative.sumocfg", 
                         "--step-length", str(self.step_length),
@@ -1207,7 +1206,15 @@ class ControlEnv(gym.Env):
 
         self.sumo_running = True
         self.step_count = 0 # This counts the timesteps in an episode. Needs reset.
-        self.tl_lane_dict = get_related_lanes_edges()
+        
+        # Get the actual traffic light IDs from the current network (add new ones)
+        additional_tls = traci.trafficlight.getIDList()
+        for tl_id in additional_tls:
+            if tl_id not in self.tl_ids:
+                self.tl_ids.append(tl_id)
+        #print(f"Traffic light IDs in current network: {self.tl_ids}")
+
+        self.dynamically_populate_edges_lanes()
 
         # Warmup period
         # How many actions to take during warmup
@@ -1256,6 +1263,89 @@ class ControlEnv(gym.Env):
         self.total_switches = 0 # Only applicable for RL.
         
         return observation, {} # info is empty
+
+    def dynamically_populate_edges_lanes(self):
+        """
+        Get midblock TLs lanes/edges for occupancy map to use. i.e., update self.tl_lane_dict with latest network iteration.
+        - For vehicle + inside (pedestrians dont have inside), use the mid-block TL id with _0 for west-straight, _1 for east-straight.
+        - For vehicle  + incoming or outgoing, use controlled_links but need to add more until either total length is equal to cut off distance or we encounter another TL. 
+        - For pedestrians + outgoing, use the mid-block TL id with _c0 
+        - For pedestrians + incoming, use the mid-block TL id with _w0 and _w1 (there will be more.) 
+        - For vehicles, in both incoming and outgoing, west-straight will have a negative sign in edge id. east-straight will have a positive sign.
+        - Sometimes the returned controlled links are empty. Because for pedestrians, we are using a single direction, the other direction is not present.
+        """
+        
+        # For each midblock traffic light (everything except the intersection)
+        for tl_id in self.tl_ids:
+            if tl_id == 'cluster_172228464_482708521_9687148201_9687148202_#5more':
+                # Skip the intersection - it's already properly defined
+                continue
+            
+            # Skip if the traffic light ID already exists in the dictionary
+            if tl_id in self.tl_lane_dict:
+                continue
+                
+            
+            # Get controlled links for the traffic light
+            controlled_lanes = traci.trafficlight.getControlledLanes(tl_id)
+            controlled_links = traci.trafficlight.getControlledLinks(tl_id)
+
+            print(f"Controlled lanes for {tl_id}: {controlled_lanes}")
+            print(f"Controlled links for {tl_id}: {controlled_links}")
+
+            tl_internal = f":{tl_id}"
+            self.tl_lane_dict[tl_id] = {
+                "vehicle": {
+                    "incoming": {
+                        "west-straight": [controlled_links[0][0][0]],
+                        "east-straight": [controlled_links[1][0][0]]
+                    },
+                    "inside": {
+                        "west-straight": [f"{tl_internal}_0"],
+                        "east-straight": [f"{tl_internal}_1"]
+                    },
+                    "outgoing": {
+                        "west-straight": [controlled_links[0][0][1]],
+                        "east-straight": [controlled_links[1][0][1]]
+                    }
+                },
+                "pedestrian": {
+                    "incoming": {
+                        "north": {
+                            "main": [f"{tl_internal}_w0", f"{tl_internal}_w1"]
+                        }
+                    },
+                    "outgoing": {
+                        "north": {
+                            "main": [f"{tl_internal}_c0"]
+                        }
+                    }
+                }
+            }
+            
+            # For vehicle incoming + outgoing, keep adding until the total length is near cutoff distance or we encounter another TL. 
+            # For pedestrians, adding other relevant, immediate lanes. 
+
+            print(f"Updated dictionary for {tl_id}:")
+            print(f"  Vehicle lanes:")
+            print(f"    Incoming:")
+            print(f"      West-straight: {self.tl_lane_dict[tl_id]['vehicle']['incoming']['west-straight']}")
+            print(f"      East-straight: {self.tl_lane_dict[tl_id]['vehicle']['incoming']['east-straight']}")
+            print(f"    Inside:")
+            print(f"      West-straight: {self.tl_lane_dict[tl_id]['vehicle']['inside']['west-straight']}")
+            print(f"      East-straight: {self.tl_lane_dict[tl_id]['vehicle']['inside']['east-straight']}")
+            print(f"    Outgoing:")
+            print(f"      West-straight: {self.tl_lane_dict[tl_id]['vehicle']['outgoing']['west-straight']}")
+            print(f"      East-straight: {self.tl_lane_dict[tl_id]['vehicle']['outgoing']['east-straight']}")
+            print(f"  Pedestrian areas:")
+            print(f"    Incoming (North/Main): {self.tl_lane_dict[tl_id]['pedestrian']['incoming']['north']['main']}")
+            print(f"    Outgoing (North/Main): {self.tl_lane_dict[tl_id]['pedestrian']['outgoing']['north']['main']}")
+
+            
+
+        
+        breakpoint()
+        print(f"Updated traffic light lane dictionary with {len(self.tl_ids)} traffic lights")
 
     def close(self):
         if self.sumo_running:
