@@ -1,28 +1,33 @@
-***Starting server on port 48487 ***
-Loading net-file from './simulation/network_iterations/network_iteration_0.net.xml' ... done (14ms).
-Loading route-files incrementally from './simulation/scaled_trips/scaled_vehtrips_7.xml'
-Loading route-files incrementally from './simulation/scaled_trips/scaled_pedtrips_7.xml'
+***Starting server on port 52025 ***
+Loading net-file from './simulation/network_iterations/network_iteration_0.net.xml' ... done (15ms).
+Warning: Unused states in tlLogic 'iter0_4_mid', program '0' in phase 0 after tl-index 1
+Loading route-files incrementally from './simulation/scaled_trips/scaled_vehtrips_5.xml'
+Loading route-files incrementally from './simulation/scaled_trips/scaled_pedtrips_5.xml'
 Loading done.
 Simulation started with time: 0.00.
-Error: tcpip::Socket::recvAndCheck @ recv: peer shutdown
+Error: tcpip::Socket::recvAndCheck @ recv: Connection reset by peer
 Quitting (on error).
-Simulation ended at time: 230.00.
+Simulation ended at time: 479.00.
 Performance:
- Duration: 14.27s
- TraCI-Duration: 12.12s
- Real time factor: 16.1222
- UPS: 169.423805
- UPS-Persons: 2077.947568
+ Duration: 70.10s
+ TraCI-Duration: 63.03s
+ Real time factor: 6.8331
+ UPS: 93.666191
+ UPS-Persons: 1030.713267
 Vehicles:
- Inserted: 29 (Loaded: 44)
- Running: 19
+ Inserted: 36 (Loaded: 45)
+ Running: 18
  Waiting: 0
 Persons:
- Inserted: 493
- Running: 252
-DijkstraRouter answered 1691 queries and explored 4.32 edges on average.
+ Inserted: 517
+ Running: 239
+DijkstraRouter answered 5379 queries and explored 4.94 edges on average.
 DijkstraRouter spent 0.00s answering queries (0.00ms on average).
-DijkstraRouter answered 282 queries and explored 523.17 edges on average.
-DijkstraRouter spent 0.01s answering queries (0.03ms on average).
-DijkstraRouter answered 29 queries and explored 50.93 edges on average.
-DijkstraRouter spent 0.00s answering queries (0.07ms on average).
+DijkstraRouter answered 409 queries and explored 517.90 edges on average.
+DijkstraRouter spent 0.04s answering queries (0.10ms on average).
+DijkstraRouter answered 36 queries and explored 60.06 edges on average.
+DijkstraRouter spent 0.00s answering queries (0.06ms on average).
+queries (0.08ms on average).
+DijkstraRouter answered 58 queries and explored 60.59 edges on average.
+DijkstraRouter spent 0.00s answering queries (0.02ms on average).
+wering queries (0.00ms on average).

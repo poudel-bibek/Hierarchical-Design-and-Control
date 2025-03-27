@@ -488,6 +488,8 @@ class ControlEnv(gym.Env):
             self.step_count += 1
             obs = self._get_observation(current_phase)
             observation_buffer.append(obs)
+
+            time.sleep(0.01)
             
         # outside the loop
         # Do before reward calculation
@@ -590,6 +592,10 @@ class ControlEnv(gym.Env):
             - Action = 0 means vehicle red (pedestrian green)
             - We only enfore a mandatory yellow phase if there is a 1 to 0 transition i.e., only consider this as a switch.
         """
+        print(f"Current action: {current_action}, type: {type(current_action)}")
+        print(f"Previous action: {previous_action}, type: {type(previous_action)}")
+        print(f"TL ids: {self.tl_ids}, length: {len(self.tl_ids)}")
+        
         current_action = ''.join(map(str, current_action))
         previous_action = ''.join(map(str, previous_action))
         current_intersection_action = current_action[0:1]
@@ -605,8 +611,8 @@ class ControlEnv(gym.Env):
         switch_state.extend(intersection_switch)
         midblock_switch = [int(c1 == '1' and c2 == '0') for c1, c2 in zip(previous_mid_block_action, current_mid_block_action)] # only detect 1->0 transitions
         switch_state.extend(midblock_switch)
-        # print(f"Switch state: {switch_state}")
-
+        print(f"Switch state: {switch_state}")
+        # breakpoint()
         # For the plot, also detect all the switches.
         full_switch_state = []
         for i in range(len(current_action)):
@@ -746,7 +752,7 @@ class ControlEnv(gym.Env):
         * It does not matter what phases are specified in the Tlogic in net file, we override it from here.
         -----
         In the design env, there are variable number of Mid-block TLs. 
-        For these TLs, switch state is no longer valid because the same TL may not have existed in previous timestep.
+        
         """
         #print(f"Action: {action}, switch_state: {switch_state}, type: {type(switch_state)}")
         current_phase = []

@@ -112,7 +112,7 @@ class MLP_ActorCritic(nn.Module):
         intersection_action = intersection_dist.sample()  # [1]
 
         # The next num_proposals logits => midblock (Bernoulli)
-        midblock_logits = action_logits[:, 4:num_proposals]
+        midblock_logits = action_logits[:, 4: 4 + num_proposals]
         # midblock_probs = torch.sigmoid(midblock_logits)
         midblock_dist = Bernoulli(logits=midblock_logits)
         midblock_actions = midblock_dist.sample()  # shape [1,num_proposals]
@@ -120,7 +120,12 @@ class MLP_ActorCritic(nn.Module):
         # print(f"\nIntersection logits: {intersection_logits}")
         # print(f"\nMidblock logits: {midblock_logits}")
 
+        print(f"\nIntersection action: {intersection_action}")
+        print(f"\nMidblock actions: {midblock_actions}")
+        
         combined_action = torch.cat([intersection_action, midblock_actions.squeeze(0)], dim=0)
+        print(f"\nCombined action: {combined_action}")
+
         log_prob = intersection_dist.log_prob(intersection_action) + \
                    midblock_dist.log_prob(midblock_actions).sum()
 

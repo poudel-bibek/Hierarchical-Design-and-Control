@@ -83,7 +83,7 @@ def get_config():
         "lower_per_timestep_state_dim": 8 + 32 + 8 * 10,  # Number of features per timestep (corresponding to max_proposals = 10), calculation in _get_observation function.
         "lower_step_length": 1.0,  # Real-world time in seconds per simulation timestep (default: 1.0). 
         "lower_action_duration": 10,  # Number of simulation timesteps for each action (default: 10)
-        "lower_warmup_steps": [100, 250],  # Number of steps to run before collecting data
+        "lower_warmup_steps": [350, 450],  # Number of steps to run before collecting data
         "lower_auto_start": True,  # Automatically start the simulation
 
         # Evaluation
