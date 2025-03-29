@@ -49,8 +49,8 @@ def get_config():
         # Design specific parameters
         "min_thickness": 0.5,  # Minimum thickness for crosswalks
         "max_thickness": 10.0,  # Maximum thickness for crosswalks
-        "clamp_min": 0.01,  # Minimum value for x location and thickness for crosswalks # Add small buffer to avoid exact 0.0 or 1.0
-        "clamp_max": 0.99,  # Maximum value for x location and thickness for crosswalks
+        "clamp_min": 0.06,  # Minimum value for x location and thickness for crosswalks # Add small buffer to avoid exact 0.0 or 1.0
+        "clamp_max": 0.94,  # Maximum value for x location and thickness for crosswalks
         "max_proposals": 10,  # Maximum number of proposals to consider for higher-level agent
         "save_graph_images": True, # Save graph image every iteration.
         "save_gmm_plots": True, # Save GMM visualization every iteration.
@@ -78,12 +78,12 @@ def get_config():
         "lower_action_dim": 7 + 4,  # 7 + 4 for simple action. Number of action logits (not the same as number of actions. think about it)
         "lower_in_channels": 1, # in_channels for cnn
         "lower_activation": "tanh",  # Policy activation function
-        "lower_max_timesteps": 600,  # Maximum number of steps in one episode (make this multiple of 16*10)
+        "lower_max_timesteps": 200,  # Maximum number of steps in one episode (make this multiple of 16*10)
         "lower_memory_transfer_freq": 16,  # Frequency of memory transfer from worker to main process 
         "lower_per_timestep_state_dim": 8 + 32 + 8 * 10,  # Number of features per timestep (corresponding to max_proposals = 10), calculation in _get_observation function.
         "lower_step_length": 1.0,  # Real-world time in seconds per simulation timestep (default: 1.0). 
         "lower_action_duration": 10,  # Number of simulation timesteps for each action (default: 10)
-        "lower_warmup_steps": [350, 450],  # Number of steps to run before collecting data
+        "lower_warmup_steps": [50, 100],  # Number of steps to run before collecting data
         "lower_auto_start": True,  # Automatically start the simulation
 
         # Evaluation
@@ -126,7 +126,7 @@ def classify_and_return_args(train_config, device):
         'manual_demand_veh': train_config['manual_demand_veh'],
         'manual_demand_ped': train_config['manual_demand_ped'],
         'step_length': train_config['lower_step_length'],
-        'action_duration': train_config['lower_action_duration'],
+        'lower_action_duration': train_config['lower_action_duration'],
         'warmup_steps': train_config['lower_warmup_steps'],
         'per_timestep_state_dim': train_config['lower_per_timestep_state_dim'], 
         'gui': train_config['gui'],

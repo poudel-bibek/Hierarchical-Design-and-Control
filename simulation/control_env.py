@@ -31,7 +31,7 @@ class ControlEnv(gym.Env):
         self.demand_scale_min = control_args['demand_scale_min']
         self.demand_scale_max = control_args['demand_scale_max']
         self.step_length = control_args['step_length'] # SUMO allows to specify how long (in real world time) should each step be.
-        self.action_duration = control_args['action_duration']
+        self.action_duration = control_args['lower_action_duration']
         self.max_timesteps = control_args['max_timesteps']
         self.max_proposals = control_args['max_proposals']
         self.use_gui = control_args['gui']
@@ -489,7 +489,7 @@ class ControlEnv(gym.Env):
             obs = self._get_observation(current_phase)
             observation_buffer.append(obs)
 
-            time.sleep(0.01)
+            # time.sleep(0.01)
             
         # outside the loop
         # Do before reward calculation
@@ -592,9 +592,9 @@ class ControlEnv(gym.Env):
             - Action = 0 means vehicle red (pedestrian green)
             - We only enfore a mandatory yellow phase if there is a 1 to 0 transition i.e., only consider this as a switch.
         """
-        print(f"Current action: {current_action}, type: {type(current_action)}")
-        print(f"Previous action: {previous_action}, type: {type(previous_action)}")
-        print(f"TL ids: {self.tl_ids}, length: {len(self.tl_ids)}")
+        # print(f"Current action: {current_action}, type: {type(current_action)}")
+        # print(f"Previous action: {previous_action}, type: {type(previous_action)}")
+        # print(f"TL ids: {self.tl_ids}, length: {len(self.tl_ids)}")
         
         current_action = ''.join(map(str, current_action))
         previous_action = ''.join(map(str, previous_action))
@@ -611,7 +611,7 @@ class ControlEnv(gym.Env):
         switch_state.extend(intersection_switch)
         midblock_switch = [int(c1 == '1' and c2 == '0') for c1, c2 in zip(previous_mid_block_action, current_mid_block_action)] # only detect 1->0 transitions
         switch_state.extend(midblock_switch)
-        print(f"Switch state: {switch_state}")
+        # print(f"Switch state: {switch_state}")
         # breakpoint()
         # For the plot, also detect all the switches.
         full_switch_state = []
@@ -784,9 +784,13 @@ class ControlEnv(gym.Env):
         traci.trafficlight.setRedYellowGreenState(self.tl_ids[0], int_state)
         
         # Midblock
-        # print(f"\nSwitch state: {switch_state}\n")
+        print(f"\nSwitch state: {switch_state}\n")
 
         for i in range(1, len(self.tl_ids)):
+            print(f"i: {i}")
+            print(f"TL: {self.tl_ids[i]}")
+            print(f"Switch state: {switch_state[i]}")
+            
             tl_id = self.tl_ids[i]
             mb_switch_state = switch_state[i]
 
@@ -1173,9 +1177,9 @@ class ControlEnv(gym.Env):
     def reset(self, extreme_edge_dict, tl= False):
         """
         """
-        if self.sumo_running:
-            time.sleep(5) # Wait until the process really finishes 
-            traci.close(False) #https://sumo.dlr.de/docs/TraCI/Interfacing_TraCI_from_Python.html
+        # if self.sumo_running:
+        #     time.sleep(5) # Wait until the process really finishes 
+        #     traci.close(False) #https://sumo.dlr.de/docs/TraCI/Interfacing_TraCI_from_Python.html
         
         if self.manual_demand_veh is not None :
             #scaling = convert_demand_to_scale_factor(self.manual_demand_veh, "vehicle", self.vehicle_input_trips) # Convert the demand to scaling factor first

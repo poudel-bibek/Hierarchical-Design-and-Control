@@ -1,5 +1,6 @@
 import torch
 import torch.optim as optim
+from .ppo_utils import GraphDataset, collate_fn
 from torch.utils.data import TensorDataset, DataLoader
 from .models import MLP_ActorCritic, GAT_v2_ActorCritic
 
@@ -36,12 +37,13 @@ class PPO:
         self.gae_lambda = gae_lambda
         self.max_grad_norm = max_grad_norm
         self.vf_clip_param = vf_clip_param
+        self.agent_type = agent_type
 
-        if agent_type == 'lower':
+        if self.agent_type == 'lower':
             self.policy = MLP_ActorCritic(self.model_dim, self.action_dim, **model_kwargs).to(self.device)
             self.policy_old = MLP_ActorCritic(self.model_dim, self.action_dim, **model_kwargs).to(self.device) 
 
-        elif agent_type == "higher":
+        elif self.agent_type == "higher":
             self.policy = GAT_v2_ActorCritic(self.model_dim, self.action_dim, **model_kwargs).to(self.device)
             self.policy_old = GAT_v2_ActorCritic(self.model_dim, self.action_dim, **model_kwargs).to(self.device)
 
@@ -106,14 +108,15 @@ class PPO:
         The paper expresses the loss as maximization objective. We convert it to minimization by changing the sign.
         """
 
-        # print(f"\nMemories.states: {memories.states}")
+        print(f"\nMemories.states: {memories.states}, type: {type(memories.states)}")
         # print(f"\nMemories.actions: {memories.actions}")
         # print(f"\nMemories.values: {memories.values}")
         # print(f"\nMemories.logprobs: {memories.logprobs}")
         # print(f"\nMemories.rewards: {memories.rewards}")
         # print(f"\nMemories.is_terminals: {memories.is_terminals}")
 
-        states = torch.stack(memories.states, dim=0)
+        # states = torch.stack(memories.states, dim=0)
+
         actions = torch.stack(memories.actions, dim=0)
         old_values = torch.tensor(memories.values, dtype=torch.float32)
         old_logprobs = torch.tensor(memories.logprobs, dtype=torch.float32)
@@ -138,22 +141,52 @@ class PPO:
         # print(f"\nReturns: {returns}, shape: {returns.shape}")
 
         # Normalize the advantages (only for use in policy loss calculation) after they have been added to get returns.
-        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8) # Small constant to prevent division by zero
+        # Check if advantages tensor has more than one element before normalizing
+        if advantages.numel() > 1:
+            advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8) # Small constant to prevent division by zero
+        elif advantages.numel() == 1:
+             # Handle single element case (std is 0), maybe set advantage to 0 or keep as is? Let's set to 0.
+             print("Warning: Only one advantage value found, setting normalized advantage to 0.")
+             advantages = torch.zeros_like(advantages)
         # print(f"\nAdvantages after normalization: {advantages}, shape: {advantages.shape}")
 
         # Create a dataloader for mini-batching 
-        dataset = TensorDataset(states, actions, old_logprobs, advantages, returns, old_values)
-        dataloader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
+        # dataset = TensorDataset(states, actions, old_logprobs, advantages, returns, old_values)
+        # dataloader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
+
+        if self.agent_type == 'lower':
+            states = torch.stack(memories.states, dim=0)
+            dataset = TensorDataset(states, actions, old_logprobs, advantages, returns, old_values)
+            dataloader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
+        else:  # higher level agent
+            states = memories.states  # Already a list of DataBatch objects
+            dataset = GraphDataset(states, actions, old_logprobs, advantages, returns, old_values)
+            # Make sure batch_size does not exceed the number of items in the dataset
+            actual_batch_size = min(self.batch_size, len(dataset))
+            if actual_batch_size == 0:
+                print("Warning: Empty dataset for PPO update. Skipping update.")
+                return {} # Return empty dict or handle as appropriate
+            dataloader = DataLoader(dataset, batch_size=actual_batch_size, shuffle=True, collate_fn=collate_fn)
+
 
         avg_policy_loss = 0
         avg_value_loss = 0
         avg_entropy_loss = 0
         avg_total_loss = 0
+        approx_kl = torch.tensor(0.0) # Initialize approx_kl
 
         # Optimize policy for K epochs (terminology used in PPO paper)
         for _ in range(self.K_epochs):
-            for states_batch, actions_batch, old_logprobs_batch, advantages_batch, returns_batch, old_values_batch in dataloader:
+            for batch_data in dataloader:
+                # Unpack batch data correctly based on agent type
+                if self.agent_type == 'lower':
+                    states_batch, actions_batch, old_logprobs_batch, advantages_batch, returns_batch, old_values_batch = batch_data
+                else: # higher agent (GraphDataset)
+                    # Assuming collate_fn returns a tuple: (states_batch, actions_batch, old_logprobs_batch, ...)
+                    states_batch, actions_batch, old_logprobs_batch, advantages_batch, returns_batch, old_values_batch = batch_data
                 
+                states_batch = states_batch.to(self.device) # Move DataBatch to device
+                actions_batch = actions_batch.to(self.device)
                 old_logprobs_batch = old_logprobs_batch.to(self.device)
                 advantages_batch = advantages_batch.to(self.device)
                 returns_batch = returns_batch.to(self.device)
@@ -165,11 +198,13 @@ class PPO:
                 # print(f"\nOld values batch shape: {old_values_batch.shape}")
 
                 # Evaluating old actions and values using current policy network
-                logprobs, state_values, dist_entropy = self.policy.evaluate(states_batch.to(self.device), actions_batch.to(self.device))
-                state_values = state_values.squeeze(-1)
+                logprobs, state_values, dist_entropy = self.policy.evaluate(states_batch, actions_batch, device = self.device) # Removed .to(self.device) for states_batch and actions_batch as they are moved above
+                # state_values should already be squeezed by the critic
+                # state_values = state_values.squeeze(-1) 
 
                 # Finding the ratio (pi_theta / pi_theta_old) for importance sampling (we want to use the samples obtained from old policy to get the new policy)
-                logratios = logprobs - old_logprobs_batch.squeeze(-1) # New log probs, state_values, dist_entropy need to remain attached to the graph.
+                # Ensure shapes match for subtraction
+                logratios = logprobs - old_logprobs_batch # Removed squeeze, assuming logprobs and old_logprobs_batch have compatible shapes (B,)
                 ratios = logratios.exp()
                 # print(f"\nLogprobs: {logprobs.shape}")
                 # print(f"\nOld logprobs: {old_logprobs_batch.squeeze(-1).shape}")
@@ -231,11 +266,15 @@ class PPO:
                     # TODO: Early stopping (at the minibatch level) based on KL divergence? Do it in main.
 
 
-        num_batches = len(dataloader) * self.K_epochs
-        avg_policy_loss /= num_batches
-        avg_value_loss /= num_batches
-        avg_entropy_loss /= num_batches
-        avg_total_loss /= num_batches
+        num_batches = len(dataloader)
+        if num_batches > 0:
+            avg_policy_loss /= (num_batches * self.K_epochs)
+            avg_value_loss /= (num_batches * self.K_epochs)
+            avg_entropy_loss /= (num_batches * self.K_epochs)
+            avg_total_loss /= (num_batches * self.K_epochs)
+        else:
+             avg_policy_loss, avg_value_loss, avg_entropy_loss, avg_total_loss = 0, 0, 0, 0
+
 
         # print("\nPolicy New params:")
         # for name, param in self.policy.named_parameters():

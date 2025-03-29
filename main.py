@@ -105,11 +105,14 @@ def train(train_config, is_sweep=False, sweep_config=None):
     higher_memory = Memory()
 
     higher_update_count = 0
-    for iteration in range(0, total_iterations):
-        print(f"\nStarting iteration: {iteration + 1}/{total_iterations} with {higher_env.global_step} total steps so far\n")
+    current_lr_higher = higher_ppo_args['lr']
+    
+    for iteration in range(1, total_iterations + 1):
+        print(f"\nStarting iteration: {iteration}/{total_iterations} with {higher_env.global_step} total steps so far\n")
 
         # Higher level agent takes node features, edge index, edge attributes and batch (to make single large graph) as input 
         # To produce padded fixed-sized actions num_actual_proposals is also returned.
+        higher_ppo.policy_old.eval()
         padded_proposals, num_proposals, higher_logprob = higher_ppo.policy_old.act(higher_state, 
                                                                                         iteration, 
                                                                                         design_args['clamp_min'], 
@@ -128,17 +131,27 @@ def train(train_config, is_sweep=False, sweep_config=None):
                                                                                      eval_args,
                                                                                      is_sweep)
         
-        higher_memory.append(higher_state, padded_proposals, higher_logprob, higher_reward, higher_done)
+        # Get value from critic network
+        with torch.no_grad():
+            critic_output = higher_ppo.policy_old.critic(higher_state)
+            print(f"Critic output shape: {critic_output.shape}")
+            print(f"Critic output: {critic_output}")
+            # The critic returns a tensor of shape [1], so we can directly call .item()
+            higher_value = critic_output.item()
+        
+        higher_memory.append(higher_state, padded_proposals, higher_value, higher_logprob, higher_reward, higher_done)
 
         if iteration % train_config['higher_update_freq'] == 0:
             higher_update_count += 1
             if train_config['higher_anneal_lr']:
                 current_lr_higher = higher_ppo.update_learning_rate(higher_update_count, total_updates_higher)
 
-            higher_ppo.update(higher_memory, agent_type='higher')
-            higher_memory.clear_memory()
+            higher_ppo.update(higher_memory)
+            # Reset memory
+            del higher_memory
+            higher_memory = Memory()
 
-        higher_state = higher_next_state
+        higher_state = Batch.from_data_list([higher_next_state]) # Convert Data object back to Batch
 
         # Log higher level agent stuff.
         if is_sweep:

@@ -120,11 +120,11 @@ class MLP_ActorCritic(nn.Module):
         # print(f"\nIntersection logits: {intersection_logits}")
         # print(f"\nMidblock logits: {midblock_logits}")
 
-        print(f"\nIntersection action: {intersection_action}")
-        print(f"\nMidblock actions: {midblock_actions}")
+        # print(f"\nIntersection action: {intersection_action}")
+        # print(f"\nMidblock actions: {midblock_actions}")
         
         combined_action = torch.cat([intersection_action, midblock_actions.squeeze(0)], dim=0)
-        print(f"\nCombined action: {combined_action}")
+        # print(f"\nCombined action: {combined_action}")
 
         log_prob = intersection_dist.log_prob(intersection_action) + \
                    midblock_dist.log_prob(midblock_actions).sum()
@@ -133,7 +133,7 @@ class MLP_ActorCritic(nn.Module):
         return combined_action.int(), log_prob
 
 
-    def evaluate(self, states, actions, num_proposals):
+    def evaluate(self, states, actions, num_proposals, device=None):
         """
         Evaluate a batch of states and pre-sampled actions. 
 
@@ -430,7 +430,8 @@ class GAT_v2_ActorCritic(nn.Module):
         y = self.activation(y)
 
         y = self.readout_layer(y, states_batch.batch)   
-        return self.critic_layers(y).squeeze(-1)  # Ensure output is of shape (batch_size,)
+        critic_features = self.critic_layers(y)
+        return self.critic_value(critic_features).squeeze(-1)  # Ensure output is of shape (batch_size,)
 
     def get_gmm_distribution(self, states_batch):
         """
@@ -514,13 +515,23 @@ class GAT_v2_ActorCritic(nn.Module):
                 samples = gmm_batch[b].sample((1,))
 
             locations, thicknesses = samples.split(1, dim=-1)
-            
-            # Clamp
+            # print(f"\nBefore clamping: Locations: {locations}, Thicknesses: {thicknesses}")
+        
+            # Apply a noisy clamp individually to prevent exact overlap at same locations.
             # Although means are constrained to [0,1], log_stds are not.
             # We should be less dependent on clamping here and make sure the GMM itself lies in the desired range.
-            locations = torch.clamp(locations, clamp_min, clamp_max)  
-            thicknesses = torch.clamp(thicknesses, clamp_min, clamp_max) 
+            below_min_mask_loc = locations < clamp_min
+            above_max_mask_loc = locations > clamp_max
+            locations[below_min_mask_loc] = 0.0 + torch.rand_like(locations[below_min_mask_loc], device=device) * clamp_min # In the range [0, clamp_min]
+            locations[above_max_mask_loc] = clamp_max + torch.rand_like(locations[above_max_mask_loc], device=device) * (1.0 - clamp_max) # In the range [clamp_max, clamp_max + noise_offset]
             
+            # Standard clamp
+            # locations = torch.clamp(locations, clamp_min, clamp_max)  
+            
+            thicknesses = torch.clamp(thicknesses, clamp_min, clamp_max) 
+
+            # print(f"\nAfter clamping: Locations: {locations}, Thicknesses: {thicknesses}")
+ 
             # Recombine the samples
             samples = torch.cat([locations, thicknesses], dim=-1)
             
@@ -562,7 +573,7 @@ class GAT_v2_ActorCritic(nn.Module):
         
         print(f"\nActions batch: {actions_batch}\n")
         # Compute num_proposals_batch by checking for -1 in actions
-        num_proposals_batch = (actions_batch[:, :, 0] != -1).sum(dim=1)
+        num_proposals_batch = (actions_batch[:, :, :, 0] != -1).sum(dim=2) # squeeze reduces to two dimensions.
         print(f"\nNum proposals batch: {num_proposals_batch}\n")
 
         for b in range(batch_size):

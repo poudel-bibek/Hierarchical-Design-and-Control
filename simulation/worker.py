@@ -77,9 +77,11 @@ def parallel_train_worker(rank,
     # In PPO, we do not make use of the total reward. We only use the rewards collected in the memory.
     print(f"Worker {rank} finished. Total reward: {ep_reward}")
     worker_env.close()
-    time.sleep(10) # Essential
+    time.sleep(5) # Essential
     del worker_env
+    print(f"Worker {rank} puts None in queue")
     train_queue.put((rank, None))  # Signal that this worker is done 
+    
 
 
 def parallel_eval_worker(rank, 

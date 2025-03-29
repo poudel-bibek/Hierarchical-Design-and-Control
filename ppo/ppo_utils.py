@@ -94,13 +94,13 @@ class GraphDataset(torch.utils.data.Dataset):
     """
     Graph data loading helper for the higher-level agent
     """
-    def __init__(self, states, actions, logprobs, advantages, returns):
+    def __init__(self, states, actions, logprobs, advantages, returns, old_values):
         self.states = states 
         self.actions = actions
         self.logprobs = logprobs
         self.advantages = advantages
         self.returns = returns
-
+        self.old_values = old_values
     def __len__(self):
         return len(self.states)
 
@@ -110,27 +110,31 @@ class GraphDataset(torch.utils.data.Dataset):
             self.actions[idx],
             self.logprobs[idx],
             self.advantages[idx],
-            self.returns[idx]
+            self.returns[idx],
+            self.old_values[idx]
         )
 
 def collate_fn(data):
     """
     Collate function for the higher-level agent
     """
-    states_batch, actions_batch, old_logprobs_batch, advantages_batch, returns_batch = zip(*data)
+    states_batch, actions_batch, old_logprobs_batch, advantages_batch, returns_batch, old_values_batch = zip(*data)
+    print(f"\nStates batch: {states_batch}")
+    print(f"\nActions batch: {actions_batch}")
+    print(f"\nOld logprobs batch: {old_logprobs_batch}")
+    print(f"\nAdvantages batch: {advantages_batch}")
+    print(f"\nReturns batch: {returns_batch}")
+    print(f"\nOld values batch: {old_values_batch}")
     states_batch = Batch.from_data_list(states_batch)  
 
-    # Concatenate actions_batch tensors along the first dimension
-    actions_batch = torch.cat([a for a in actions_batch], dim=0)  # Now shape is (batch_size, max_proposals, 2)
-
-    # Concatenate old_logprobs_batch tensors along the first dimension
-    old_logprobs_batch = torch.cat([l for l in old_logprobs_batch], dim=0)  # Shape is (batch_size,)
+    actions_batch = torch.stack(actions_batch, dim=0)
+    old_logprobs_batch = torch.stack(old_logprobs_batch, dim=0)
 
     # Stack advantages and returns (already scalar tensors)
     advantages_batch = torch.stack(advantages_batch)  # Shape is (batch_size,)
     returns_batch = torch.stack(returns_batch)        # Shape is (batch_size,)
-
-    return states_batch, actions_batch, old_logprobs_batch, advantages_batch, returns_batch
+    old_values_batch = torch.stack(old_values_batch)  # Shape is (batch_size,)
+    return states_batch, actions_batch, old_logprobs_batch, advantages_batch, returns_batch, old_values_batch
 
 
 

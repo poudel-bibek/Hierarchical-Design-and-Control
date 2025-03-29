@@ -1,7 +1,7 @@
 Parsing types from './simulation/components/iteration_0.typ.xml' ... done.
 Parsing nodes from './simulation/components/iteration_0.nod.xml' ... done.
 Parsing edges from './simulation/components/iteration_0.edg.xml' ...
-Duplicate edge id occurred ('1051865675#2'); assuming overwriting is wished.
+Duplicate edge id occurred ('1060131404#2'); assuming overwriting is wished.
  done.
 Parsing connections from './simulation/components/iteration_0.con.xml' ... done.
 Parsing traffic lights from './simulation/components/iteration_0.tll.xml' ... done.
@@ -10,7 +10,7 @@ Parsing traffic lights from './simulation/components/iteration_0.tll.xml' ... do
    4 types loaded.
    290 edges loaded.
 Removing self-loops ... done (0ms).
-Removing empty nodes ... done (1ms).
+Removing empty nodes ... done (0ms).
    0 nodes removed.
 Moving network to origin ... done (0ms).
 Computing turning directions ... done (0ms).
@@ -24,20 +24,20 @@ Computing approached edges ... done (0ms).
 Guessing and setting roundabouts ... done (0ms).
 Computing approaching lanes ... done (0ms).
 Dividing of lanes on approached lanes ... done (0ms).
-Processing turnarounds ... done (0ms).
+Processing turnarounds ... done (1ms).
 Rechecking of lane endings ...
 Warning: Lane '-357518696#6_0' is not connected from any incoming edge at junction '9655154879'.
 Warning: Lane '357518696#4_0' is not connected from any incoming edge at junction '9739966918'.
 Warning: Edge '357518696#6' is not connected to outgoing edges at junction '9655154879'.
 Warning: Lane '773672647#17_0' is not connected from any incoming edge at junction '9666242293'.
  done (0ms).
-Warning: Discarding invalid crossing ':9727816623_c0_mid_c0' at junction '9727816623_c0_mid' with edges [16666012#5_right1 -16666012#5_right1] (no walkingarea found).
-Warning: Discarding invalid crossing ':9727816850_c0_mid_c0' at junction '9727816850_c0_mid' with edges [16666012#2_right5 -16666012#2_right5] (no walkingarea found).
+Warning: Discarding invalid crossing ':9727816623_c0_mid_c0' at junction '9727816623_c0_mid' with edges [16666012#5_right2 -16666012#5_right2] (no walkingarea found).
+Warning: Discarding invalid crossing ':9727816850_c0_mid_c0' at junction '9727816850_c0_mid' with edges [16666012#2_right4 -16666012#2_right4] (no walkingarea found).
 Computing traffic light control information ... done (0ms).
-Computing node logics ... done (0ms).
+Computing node logics ... done (1ms).
 Computing traffic light logics ... done (0ms).
  8 traffic light(s) computed.
-Building inner edges ... done (1ms).
+Building inner edges ... done (0ms).
 -----------------------------------------------------
 Summary:
  Node type statistics:
