@@ -101,7 +101,7 @@ class MLP_ActorCritic(nn.Module):
         TODO: Is there a bias in log_prob because of the number of proposals?
         How to propoerly handle the rest (is ignoring them good?)
         """
-        # print("Sampling...")
+        print(f"Sampling actions for intersection and {num_proposals} midblock proposals...")
         state = state.reshape(1, 1, state.shape[0], state.shape[1])
         action_logits = self.actor(state)
 
@@ -117,15 +117,15 @@ class MLP_ActorCritic(nn.Module):
         midblock_dist = Bernoulli(logits=midblock_logits)
         midblock_actions = midblock_dist.sample()  # shape [1,num_proposals]
 
-        # print(f"\nIntersection logits: {intersection_logits}")
-        # print(f"\nMidblock logits: {midblock_logits}")
+        print(f"\nIntersection logits: {intersection_logits}")
+        print(f"\nMidblock logits: {midblock_logits}")
 
-        # print(f"\nIntersection action: {intersection_action}")
-        # print(f"\nMidblock actions: {midblock_actions}")
+        print(f"\nIntersection action: {intersection_action}")
+        print(f"\nMidblock actions: {midblock_actions}")
         
         combined_action = torch.cat([intersection_action, midblock_actions.squeeze(0)], dim=0)
-        # print(f"\nCombined action: {combined_action}")
-
+        print(f"\nCombined action: {combined_action}")
+        
         log_prob = intersection_dist.log_prob(intersection_action) + \
                    midblock_dist.log_prob(midblock_actions).sum()
 
@@ -692,10 +692,14 @@ class GAT_v2_ActorCritic(nn.Module):
             cbar.set_label('Density', fontweight='bold', fontsize=fs)
             cbar.ax.tick_params(labelsize=fs-2)
 
+            # Get and plot component means
+            means = gmm_single.component_distribution.loc.detach().cpu().numpy()
+            ax.scatter(means[:, 0], means[:, 1], c='blue', marker='o', s=120, edgecolors='black', label='Component Means', zorder=11)
+
             locations, thicknesses = markers
             ax.scatter(locations, thicknesses, c='r', marker='x', s=100, label='Samples Drawn', zorder=10)
             legend = ax.legend(loc='upper right', frameon=True, framealpha=1.0)
-            legend.set_zorder(11)  
+            legend.set_zorder(12) # Ensure legend is on top
             
             ax.set_xlabel('Location', fontweight='bold', fontsize=fs)
             ax.set_ylabel('Thickness', fontweight='bold', fontsize=fs)

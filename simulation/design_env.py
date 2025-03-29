@@ -417,8 +417,8 @@ class DesignEnv(gym.Env):
         latest_horizontal_nodes_bottom_ped = self.horizontal_nodes_bottom_ped
 
         for i, (location, thickness) in enumerate(proposals):
-            location = round(location.item(), 2) # round to prevent going out of bounds.
-            thickness = round(thickness.item(), 2)
+            location = location.item() 
+            thickness = thickness.item()
 
             # 1. Denormalize the location (x-coordinate) and thickness
             denorm_location = self.normalizer_x['min'] + location * (self.normalizer_x['max'] - self.normalizer_x['min'])
@@ -509,9 +509,9 @@ class DesignEnv(gym.Env):
         for side in ['top', 'bottom']:
             intersections[side] = {}
             intersect = self._find_segment_intersects_ped(latest_horizontal_segment[side], x_location)
-            print(f"\nLatest horizontal segment: {latest_horizontal_segment[side]}")
-            print(f" Bounds of the graph: min x: {min([data['pos'][0] for _, data in latest_graph.nodes(data=True)])} max x: {max([data['pos'][0] for _, data in latest_graph.nodes(data=True)])}")
-            print(f"\n{side} Intersect: {intersect}\n")
+            # print(f"\nLatest horizontal segment: {latest_horizontal_segment[side]}")
+            # print(f" Bounds of the graph: min x: {min([data['pos'][0] for _, data in latest_graph.nodes(data=True)])} max x: {max([data['pos'][0] for _, data in latest_graph.nodes(data=True)])}")
+            # print(f"\n{side} Intersect: {intersect}\n")
 
             from_node, to_node = intersect['edge'][0], intersect['edge'][1]
             

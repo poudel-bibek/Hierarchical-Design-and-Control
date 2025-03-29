@@ -36,7 +36,7 @@ def parallel_train_worker(rank,
     memory_transfer_freq = control_args['memory_transfer_freq']  # Get from config
     local_memory = Memory() # A worker instance must have their own memory 
 
-    state, _ = worker_env.reset(extreme_edge_dict)
+    state, _ = worker_env.reset(extreme_edge_dict, num_proposals)
     ep_reward = 0
     steps_since_update = 0
 

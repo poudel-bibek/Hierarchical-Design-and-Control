@@ -75,7 +75,7 @@ def get_config():
         "lower_num_processes": 8,  # Number of parallel processes to use (agent has multiple workers)
         "lower_model_size": "medium",  # Model size for CNN: 'small' or 'medium'
         "lower_dropout_rate": 0.25,  # Dropout rate for CNN
-        "lower_action_dim": 7 + 4,  # 7 + 4 for simple action. Number of action logits (not the same as number of actions. think about it)
+        "lower_action_dim": None, # will be set later
         "lower_in_channels": 1, # in_channels for cnn
         "lower_activation": "tanh",  # Policy activation function
         "lower_max_timesteps": 200,  # Maximum number of steps in one episode (make this multiple of 16*10)
@@ -184,7 +184,7 @@ def classify_and_return_args(train_config, device):
 
     lower_ppo_args = {
         'model_dim': train_config['lower_in_channels'], 
-        'action_dim': train_config['lower_action_dim'],
+        'action_dim': train_config['max_proposals'] + 4, # 4 for intersection action and max_proposals for midblock actions.
         'device': device,
         'lr': train_config['lower_lr'],
         'gamma': train_config['lower_gamma'],

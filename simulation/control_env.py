@@ -49,13 +49,13 @@ class ControlEnv(gym.Env):
         self.prev_ped_waiting_time = {}
 
         self.vehicle_output_trips = self.vehicle_output_trips.replace('.xml', f'{self.unique_suffix}.xml')
-
         self.pedestrian_output_trips = self.pedestrian_output_trips.replace('.xml', f'{self.unique_suffix}.xml')
 
         # This list has to be gotten from the latest network. Will be populated dynamically during reset
         self.tl_ids = ['cluster_172228464_482708521_9687148201_9687148202_#5more'] # Intersection will always be present.
         
         self.previous_action = None
+        self.num_proposals = 0
         # Number of simulation steps that should occur for each action. 
         self.steps_per_action = int(self.action_duration / self.step_length) # This is also one of the dimensions of the size of the observation buffer
         self.per_timestep_state_dim = control_args['per_timestep_state_dim']
@@ -592,9 +592,9 @@ class ControlEnv(gym.Env):
             - Action = 0 means vehicle red (pedestrian green)
             - We only enfore a mandatory yellow phase if there is a 1 to 0 transition i.e., only consider this as a switch.
         """
-        # print(f"Current action: {current_action}, type: {type(current_action)}")
-        # print(f"Previous action: {previous_action}, type: {type(previous_action)}")
-        # print(f"TL ids: {self.tl_ids}, length: {len(self.tl_ids)}")
+
+        print(f"TL ids: {self.tl_ids}, length: {len(self.tl_ids)}")
+        print(f"Num proposals: {self.num_proposals}")
         
         current_action = ''.join(map(str, current_action))
         previous_action = ''.join(map(str, previous_action))
@@ -603,8 +603,8 @@ class ControlEnv(gym.Env):
         previous_intersection_action = previous_action[0:1]
         previous_mid_block_action = previous_action[1:]
         
-        # print(f"Previous actions: Intersection: {previous_intersection_action}, Midblock: {previous_mid_block_action}")
-        # print(f"Current actions: Intersection: {current_intersection_action}, Midblock: {current_mid_block_action}")
+        print(f"Previous actions: Intersection: {previous_intersection_action}, Midblock: {previous_mid_block_action}")
+        print(f"Current actions: Intersection: {current_intersection_action}, Midblock: {current_mid_block_action}")
         
         switch_state = []
         intersection_switch = [int(c1 == '0' and c2 == '1') or int(c1 == '1' and c2 == '0') or int(c1 == '2' and c2 == '0') for c1, c2 in zip(previous_intersection_action, current_intersection_action)]
@@ -613,14 +613,14 @@ class ControlEnv(gym.Env):
         switch_state.extend(midblock_switch)
         # print(f"Switch state: {switch_state}")
         # breakpoint()
-        # For the plot, also detect all the switches.
-        full_switch_state = []
-        for i in range(len(current_action)):
-            full_switch_state.append(int(current_action[i] != previous_action[i]))
-        
+
+        # For the plot, also detect all the switches (full = as long as the phase changes).
+        # full_switch_state = []
+        # for i in range(len(current_action)):
+        #     full_switch_state.append(int(current_action[i] != previous_action[i]))
         # print(f"Full switch state: {full_switch_state}\n")
 
-        return switch_state, full_switch_state
+        return switch_state, []
 
     def _get_observation(self, current_phase, print_map=False):
         """
@@ -785,7 +785,6 @@ class ControlEnv(gym.Env):
         
         # Midblock
         print(f"\nSwitch state: {switch_state}\n")
-
         for i in range(1, len(self.tl_ids)):
             print(f"i: {i}")
             print(f"TL: {self.tl_ids[i]}")
@@ -1174,7 +1173,7 @@ class ControlEnv(gym.Env):
         """
         return self.step_count >= self.max_timesteps
 
-    def reset(self, extreme_edge_dict, tl= False):
+    def reset(self, extreme_edge_dict, num_proposals, tl= False):
         """
         """
         # if self.sumo_running:
@@ -1236,9 +1235,14 @@ class ControlEnv(gym.Env):
         self.step_count = 0 # This counts the timesteps in an episode. Needs reset.
         
         # Get the actual traffic light IDs from the current network (add new ones)
-        self.tl_ids.extend([tl_id for tl_id in traci.trafficlight.getIDList() if tl_id not in self.tl_ids])
-        #print(f"Traffic light IDs in current network: {self.tl_ids}")
+        new_tl_ids = [tl_id for tl_id in traci.trafficlight.getIDList() if tl_id not in self.tl_ids]
 
+        if num_proposals != len(new_tl_ids):
+            raise ValueError(f"Number of proposals ({num_proposals}) does not match the number of traffic light IDs ({len(new_tl_ids)}, {new_tl_ids})")
+        
+        self.tl_ids.extend(new_tl_ids)
+        #print(f"Traffic light IDs in current network: {self.tl_ids}")
+        self.num_proposals = num_proposals
         self.dynamically_populate_edges_lanes(extreme_edge_dict)
 
         # Warmup period

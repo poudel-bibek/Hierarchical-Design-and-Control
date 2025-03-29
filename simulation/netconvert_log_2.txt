@@ -1,7 +1,7 @@
 Parsing types from './simulation/components/iteration_2.typ.xml' ... done.
 Parsing nodes from './simulation/components/iteration_2.nod.xml' ... done.
 Parsing edges from './simulation/components/iteration_2.edg.xml' ...
-Duplicate edge id occurred ('1060112787#2'); assuming overwriting is wished.
+Duplicate edge id occurred ('1060131399#1'); assuming overwriting is wished.
  done.
 Parsing connections from './simulation/components/iteration_2.con.xml' ... done.
 Parsing traffic lights from './simulation/components/iteration_2.tll.xml' ... done.
@@ -15,7 +15,7 @@ Removing empty nodes ... done (0ms).
 Moving network to origin ... done (0ms).
 Computing turning directions ... done (0ms).
 Assigning nodes to traffic lights ... done (0ms).
-Sorting nodes' edges ... done (1ms).
+Sorting nodes' edges ... done (0ms).
 Computing node shapes ... done (1ms).
 Computing edge shapes ... done (1ms).
 Computing node types ... done (0ms).
@@ -51,6 +51,4 @@ Summary:
 -----------------------------------------------------
 Writing network ...
 Warning: Unused state in tlLogic 'cluster_172228464_482708521_9687148201_9687148202_#5more', program '0' at tl-index 17
-Warning: Unused state in tlLogic 'iter2_3_mid', program '0' at tl-index 2
-Warning: Unused state in tlLogic 'iter2_6_mid', program '0' at tl-index 2
  done (5ms).
