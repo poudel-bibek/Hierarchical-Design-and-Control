@@ -101,7 +101,7 @@ class MLP_ActorCritic(nn.Module):
         TODO: Is there a bias in log_prob because of the number of proposals?
         How to propoerly handle the rest (is ignoring them good?)
         """
-        print(f"Sampling actions for intersection and {num_proposals} midblock proposals...")
+        # print(f"Sampling actions for intersection and {num_proposals} midblock proposals...")
         state = state.reshape(1, 1, state.shape[0], state.shape[1])
         action_logits = self.actor(state)
 
@@ -117,15 +117,15 @@ class MLP_ActorCritic(nn.Module):
         midblock_dist = Bernoulli(logits=midblock_logits)
         midblock_actions = midblock_dist.sample()  # shape [1,num_proposals]
 
-        print(f"\nIntersection logits: {intersection_logits}")
-        print(f"\nMidblock logits: {midblock_logits}")
+        # print(f"\nIntersection logits: {intersection_logits}")
+        # print(f"\nMidblock logits: {midblock_logits}")
 
-        print(f"\nIntersection action: {intersection_action}")
-        print(f"\nMidblock actions: {midblock_actions}")
+        # print(f"\nIntersection action: {intersection_action}")
+        # print(f"\nMidblock actions: {midblock_actions}")
         
         combined_action = torch.cat([intersection_action, midblock_actions.squeeze(0)], dim=0)
-        print(f"\nCombined action: {combined_action}")
-        
+        # print(f"\nCombined action: {combined_action}")
+
         log_prob = intersection_dist.log_prob(intersection_action) + \
                    midblock_dist.log_prob(midblock_actions).sum()
 
@@ -136,7 +136,8 @@ class MLP_ActorCritic(nn.Module):
     def evaluate(self, states, actions, num_proposals, device=None):
         """
         Evaluate a batch of states and pre-sampled actions. 
-
+        number of proposals remains same for all parallel actors that collect experiences. 
+        
         TODO: Remove the bias due to number of proposals.
         """
         # print("Evaluating...")
@@ -449,21 +450,21 @@ class GAT_v2_ActorCritic(nn.Module):
         # batch_size = 1 looks like [0, 0, 0, 0, ... num_nodes times]
         # batch_size = 4 looks like [0, 0, 1, 1, 2, 2, 3, 3, ... num_nodes times]
         batch_size = states_batch.num_graphs 
-        print(f"\nInside get_gmm_distribution:\nBatch size: {batch_size}")
+        # print(f"\nInside get_gmm_distribution:\nBatch size: {batch_size}")
 
         # Returns (batch_size, num_mixtures * 5) and (batch_size, max_proposals)
         means, log_stds, mix_logits, num_proposals_logits = self.actor(states_batch)
-        print(f"\nMeans: {means}, Log-stds: {log_stds}, Mix logits: {mix_logits}, Num proposal logits: {num_proposals_logits}")
+        # print(f"\nMeans: {means}, Log-stds: {log_stds}, Mix logits: {mix_logits}, Num proposal logits: {num_proposals_logits}")
 
         num_proposals_probs_batch = F.softmax(num_proposals_logits, dim=-1)
-        print(f"\nProposal probabilities: {num_proposals_probs_batch}")
+        # print(f"\nProposal probabilities: {num_proposals_probs_batch}")
 
         gmms_batch = []
         for b in range(batch_size):
             # reshape to (num_mixtures, 2)
             means_b = means[b].reshape(self.num_mixtures, 2)
             log_stds_b = log_stds[b].reshape(self.num_mixtures, 2)
-            print(f"\nMeans item {b}: {means_b} \nLog-stds item {b}: {log_stds_b}")
+            # print(f"\nMeans item {b}: {means_b} \nLog-stds item {b}: {log_stds_b}")
             
             # diagonal covariance matrix
             scale_diag = torch.exp(log_stds_b) # exponentiate the logstdss
@@ -493,12 +494,12 @@ class GAT_v2_ActorCritic(nn.Module):
 
         # properly batch the data using Batch.from_data_list() before sending here. 
         gmm_batch, num_proposals_probs_batch = self.get_gmm_distribution(states_batch.to(device))
-        print(f"\n\nGMMs: {gmm_batch}\n\n")
+        # print(f"\n\nGMMs: {gmm_batch}\n\n")
 
         # Sample one proposal for each batch element (add 1 to ensure at least 1 proposal; default starts from index 0)
         # Using torch multinomial to sample from discrete distribution.
         num_proposals = torch.multinomial(num_proposals_probs_batch, 1).squeeze(-1) + 1
-        print(f"\nnum_proposals: {num_proposals.shape, num_proposals}\n")
+        # print(f"\nnum_proposals: {num_proposals.shape, num_proposals}\n")
 
         batch_size = states_batch.num_graphs 
         # Initialize output tensors with -1 so that its easier to infer actual proposals in critic.
@@ -571,10 +572,10 @@ class GAT_v2_ActorCritic(nn.Module):
         action_log_probs = torch.zeros(batch_size, device=device)
         entropy = torch.zeros(batch_size, device=device)
         
-        print(f"\nActions batch: {actions_batch}\n")
+        # print(f"\nActions batch: {actions_batch}\n")
         # Compute num_proposals_batch by checking for -1 in actions
         num_proposals_batch = (actions_batch[:, :, :, 0] != -1).sum(dim=2) # squeeze reduces to two dimensions.
-        print(f"\nNum proposals batch: {num_proposals_batch}\n")
+        # print(f"\nNum proposals batch: {num_proposals_batch}\n")
 
         for b in range(batch_size):
             # Get actual proposals for this batch element

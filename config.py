@@ -65,6 +65,7 @@ def get_config():
         "lower_max_grad_norm": 0.75,  # Maximum gradient norm for gradient clipping
         "lower_vf_clip_param": 0.5,  # Value function clipping parameter
         "lower_update_freq": 1024,  # Number of action timesteps between each policy update
+        "lower_save_freq": 2,  # Save lower-level policy after every n updates (0 to disable).
         "lower_lr": 1e-4,  # Learning rate
         "lower_gamma": 0.99,  # Discount factor
         "lower_K_epochs": 4,  # Number of epochs to update policy
@@ -142,6 +143,7 @@ def classify_and_return_args(train_config, device):
         'lower_num_processes': train_config['lower_num_processes'],
         'lower_anneal_lr': train_config['lower_anneal_lr'],
         'lower_update_freq': train_config['lower_update_freq'],
+        'lower_save_freq': train_config['lower_save_freq'],
     }
 
     higher_model_kwargs = { 

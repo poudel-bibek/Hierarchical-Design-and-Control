@@ -44,9 +44,9 @@ def clear_folders(component_dir, network_dir):
     for folder in folders_to_clear:
         if os.path.exists(folder):
             shutil.rmtree(folder)
-            print(f"Cleared existing {folder} folder.")
+            # print(f"Cleared existing {folder} folder.")
         os.makedirs(folder)
-        print(f"Created new {folder} folder.")
+        # print(f"Created new {folder} folder.")
 
 # Instead of setting the y-coordinate of the middle node as mid_point in networkx_graph, interpolation is used.
 def interpolate_y_coordinate(denorm_x_coordinate, horizontal_edges_veh_original_data):
@@ -94,7 +94,7 @@ def save_graph_visualization(graph, iteration):
     save_path = os.path.join('graph_iterations', f'graph_iteration_{iteration}.png')
     
     plt.savefig(save_path, dpi=300, bbox_inches='tight')
-    print(f"Graph visualization saved to {save_path}")
+    # print(f"Graph visualization saved to {save_path}")
     plt.close()
 
 def save_better_graph_visualization(graph, iteration, 
@@ -291,7 +291,7 @@ def save_better_graph_visualization(graph, iteration,
     os.makedirs('graph_iterations', exist_ok=True)
     save_path = os.path.join('graph_iterations', f'enhanced_graph_iteration_{iteration}.png')
     plt.savefig(save_path, dpi=dpi, bbox_inches='tight', facecolor='white')
-    print(f"Enhanced graph visualization saved to {save_path}")
+    # print(f"Enhanced graph visualization saved to {save_path}")
     plt.close()
 
 #### XML related Utils #####    
@@ -369,7 +369,7 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
             # The directions are reversed in top and bottom. For top, greater than `to` and less than `from`.
             if (edge_data['to_x'] < x_coord < edge_data['from_x']) and edge_id not in edges_to_remove: 
 
-                print(f"Top edge {edge_id} intersects mnode {m_node} at x={x_coord:.2f}.")
+                # print(f"Top edge {edge_id} intersects mnode {m_node} at x={x_coord:.2f}.")
                 edges_to_remove.append(edge_id)
     
                 # Add new edges to edges_to_add
@@ -417,7 +417,7 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
                 for connection in conn_root.findall('connection'): # This root is updated later so find all works
                     from_edge, to_edge = connection.get('from'), connection.get('to') # Existing connection edge ids 
                     if from_edge == edge_id or to_edge == edge_id:
-                        print(f"mnode {m_node} intersects top edge {edge_id} at x={x_coord:.2f} and is ref in conn: {connection}.")
+                        # print(f"mnode {m_node} intersects top edge {edge_id} at x={x_coord:.2f} and is ref in conn: {connection}.")
 
                         if edge_id == from_edge: 
                             attributes = {'from': left_edge_id_top  , 'to': to_edge, 'fromLane': str(0), 'toLane': connection.get('toLane')}
@@ -436,7 +436,7 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
             # For bottom, greater than `from` and less than `to`.
             if (edge_data['from_x'] < x_coord < edge_data['to_x']) and edge_id not in edges_to_remove:
 
-                print(f"Bottom edge {edge_id} intersects mnode {m_node} at x={x_coord:.2f}.")
+                # print(f"Bottom edge {edge_id} intersects mnode {m_node} at x={x_coord:.2f}.")
                 edges_to_remove.append(edge_id) # Need to check both in top and bottom.
                 
                 # Add new edges to edges_to_add
@@ -482,7 +482,7 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
                 for connection in conn_root.findall('connection'): # This root is updated later so find all works.
                     from_edge, to_edge = connection.get('from'), connection.get('to') # Existing connection edge ids 
                     if from_edge == edge_id or to_edge == edge_id:
-                        print(f"mnode {m_node} intersects bottom edge {edge_id} at x={x_coord:.2f} and is ref in conn: {connection}.")
+                        # print(f"mnode {m_node} intersects bottom edge {edge_id} at x={x_coord:.2f} and is ref in conn: {connection}.")
 
                         if edge_id == from_edge: 
                             attributes = {'from': right_edge_id_bottom, 'to': to_edge, 'fromLane': str(0), 'toLane': connection.get('toLane')}

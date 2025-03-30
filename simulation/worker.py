@@ -75,11 +75,10 @@ def parallel_train_worker(rank,
             break
 
     # In PPO, we do not make use of the total reward. We only use the rewards collected in the memory.
-    print(f"Worker {rank} finished. Total reward: {ep_reward}")
     worker_env.close()
     time.sleep(5) # Essential
     del worker_env
-    print(f"Worker {rank} puts None in queue")
+    print(f"Worker {rank} finished. Reward: {ep_reward}. Worker puts None in queue.")
     train_queue.put((rank, None))  # Signal that this worker is done 
     
 
@@ -103,66 +102,92 @@ def parallel_eval_worker(rank,
         - If unsignalized, all midblock TLs have no lights (equivalent to having all phases green)
     """
     
-    shared_policy = eval_worker_config['shared_policy']
-    worker_demand_scale = eval_worker_config['worker_demand_scale']
-    control_args = eval_worker_config['control_args']
+    worker_result = None # Initialize worker_result to None
+    env = None # Initialize env to None
+    worker_demand_scale = eval_worker_config.get('worker_demand_scale', 'unknown_scale') # Get scale early for finally block
 
-    # We set the demand manually (so that automatic scaling does not happen)
-    control_args['manual_demand_veh'] = worker_demand_scale
-    control_args['manual_demand_ped'] = worker_demand_scale
-    env = ControlEnv(control_args, worker_id=rank)
-    worker_result = {}
-    
-    # Run the worker
-    for i in range(eval_worker_config['n_iterations']):
-        worker_result[i] = {}
+    try:
+        shared_policy = eval_worker_config['shared_policy']
+        control_args = eval_worker_config['control_args']
 
-        SEED = random.randint(0, 1000000)
-        random.seed(SEED)
-        np.random.seed(SEED)
-        torch.manual_seed(SEED)
-        if torch.cuda.is_available():
-            torch.cuda.manual_seed_all(SEED)
+        # We set the demand manually (so that automatic scaling does not happen)
+        control_args['manual_demand_veh'] = worker_demand_scale
+        control_args['manual_demand_ped'] = worker_demand_scale
+        env = ControlEnv(control_args, worker_id=rank)
+        worker_result = {} # Initialize results dict here
+        
+        # Run the worker
+        for i in range(eval_worker_config['n_iterations']):
+            worker_result[i] = {}
 
-        worker_result[i]['SEED'] = SEED
-        worker_device = eval_worker_config['worker_device']
-        shared_eval_normalizer = eval_worker_config['shared_eval_normalizer']
-        # Run the worker (reset includes warmup)
-        state, _ = env.reset(tl = tl)
-        veh_waiting_time_this_episode = 0
-        ped_waiting_time_this_episode = 0
-        veh_unique_ids_this_episode = 0
-        ped_unique_ids_this_episode = 0
+            SEED = random.randint(0, 1000000)
+            random.seed(SEED)
+            np.random.seed(SEED)
+            torch.manual_seed(SEED)
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed_all(SEED)
 
-        with torch.no_grad():
-            for _ in range(eval_worker_config['total_action_timesteps_per_episode']):
-                state = torch.FloatTensor(state)
-                state = shared_eval_normalizer.normalize(state)
-                state = state.to(worker_device)
+            worker_result[i]['SEED'] = SEED
+            worker_device = eval_worker_config['worker_device']
+            shared_eval_normalizer = eval_worker_config['shared_eval_normalizer']
+            # Run the worker (reset includes warmup)
+            state, _ = env.reset(tl = tl)
+            veh_waiting_time_this_episode = 0
+            ped_waiting_time_this_episode = 0
+            veh_unique_ids_this_episode = 0
+            ped_unique_ids_this_episode = 0
 
-                action, _ = shared_policy.act(state, eval_worker_config['num_proposals'])
-                action = action.detach().cpu() # sim runs in CPU
-                state, reward, done, truncated, _ = env.eval_step(action, tl, unsignalized=unsignalized)
+            with torch.no_grad():
+                for _ in range(eval_worker_config['total_action_timesteps_per_episode']):
+                    state = torch.FloatTensor(state)
+                    state = shared_eval_normalizer.normalize(state)
+                    state = state.to(worker_device)
 
-                # During this step, get all vehicles and pedestrians
-                veh_waiting_time_this_step = env.get_vehicle_waiting_time()
-                ped_waiting_time_this_step = env.get_pedestrian_waiting_time()
+                    action, _ = shared_policy.act(state, eval_worker_config['num_proposals'])
+                    action = action.detach().cpu() # sim runs in CPU
+                    state, reward, done, truncated, _ = env.eval_step(action, tl, unsignalized=unsignalized)
 
-                veh_waiting_time_this_episode += veh_waiting_time_this_step
-                ped_waiting_time_this_episode += ped_waiting_time_this_step
+                    # During this step, get all vehicles and pedestrians
+                    veh_waiting_time_this_step = env.get_vehicle_waiting_time()
+                    ped_waiting_time_this_step = env.get_pedestrian_waiting_time()
 
-                veh_unique_ids_this_episode, ped_unique_ids_this_episode = env.total_unique_ids()
+                    veh_waiting_time_this_episode += veh_waiting_time_this_step
+                    ped_waiting_time_this_episode += ped_waiting_time_this_step
 
-        # gather performance metrics
-        worker_result[i]['total_veh_waiting_time'] = veh_waiting_time_this_episode
-        worker_result[i]['total_ped_waiting_time'] = ped_waiting_time_this_episode
-        worker_result[i]['veh_avg_waiting_time'] = veh_waiting_time_this_episode / veh_unique_ids_this_episode
-        worker_result[i]['ped_avg_waiting_time'] = ped_waiting_time_this_episode / ped_unique_ids_this_episode
-        worker_result[i]['total_conflicts'] = env.total_conflicts
-        worker_result[i]['total_switches'] = env.total_switches
+                    veh_unique_ids_this_episode, ped_unique_ids_this_episode = env.total_unique_ids()
+                    
+                    if done or truncated:
+                        break # Exit inner loop if episode ends early
 
-    # After all iterations are complete. 
-    env.close()
-    time.sleep(10) # Essential
-    del env
-    eval_queue.put((worker_demand_scale, worker_result))
+            # gather performance metrics
+            worker_result[i]['total_veh_waiting_time'] = veh_waiting_time_this_episode
+            worker_result[i]['total_ped_waiting_time'] = ped_waiting_time_this_episode
+            # Add safety check for division by zero
+            worker_result[i]['veh_avg_waiting_time'] = (veh_waiting_time_this_episode / veh_unique_ids_this_episode) if veh_unique_ids_this_episode > 0 else 0
+            worker_result[i]['ped_avg_waiting_time'] = (ped_waiting_time_this_episode / ped_unique_ids_this_episode) if ped_unique_ids_this_episode > 0 else 0
+            worker_result[i]['total_conflicts'] = env.total_conflicts
+            worker_result[i]['total_switches'] = env.total_switches
+
+    except Exception as e:
+        print(f"Error in parallel_eval_worker {rank} for demand {worker_demand_scale}: {e}")
+        # worker_result remains None or whatever partial result was collected
+        # Depending on needs, you could set worker_result = {'error': str(e)} 
+        worker_result = {'error': str(e)} # Let's explicitly mark it as an error
+        
+    finally:
+        # Ensure the environment is closed if it was created
+        if env is not None:
+            try:
+                env.close()
+            except Exception as e:
+                print(f"Error closing environment in worker {rank}: {e}")
+            # time.sleep(10) # Consider if this sleep is truly essential or was for debugging
+            del env
+        
+        # Always put a result (or error indicator) onto the queue
+        try:
+            eval_queue.put((worker_demand_scale, worker_result))
+            print(f"Worker {rank} (Demand: {worker_demand_scale}) finished and put result on queue.")
+        except Exception as e:
+            print(f"Error putting result onto queue from worker {rank}: {e}")
+            # If putting to queue fails, there's little else the worker can do.

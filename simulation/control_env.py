@@ -59,7 +59,6 @@ class ControlEnv(gym.Env):
         # Number of simulation steps that should occur for each action. 
         self.steps_per_action = int(self.action_duration / self.step_length) # This is also one of the dimensions of the size of the observation buffer
         self.per_timestep_state_dim = control_args['per_timestep_state_dim']
-        print(f"Steps per action: {self.steps_per_action}")
 
         self.current_action_step = 0 # To track where we are within the curret action's duration
         self.int_tl_phase_groups, self.int_crosswalk_phase_groups = get_intersection_phase_groups()
@@ -593,18 +592,12 @@ class ControlEnv(gym.Env):
             - We only enfore a mandatory yellow phase if there is a 1 to 0 transition i.e., only consider this as a switch.
         """
 
-        print(f"TL ids: {self.tl_ids}, length: {len(self.tl_ids)}")
-        print(f"Num proposals: {self.num_proposals}")
-        
         current_action = ''.join(map(str, current_action))
         previous_action = ''.join(map(str, previous_action))
         current_intersection_action = current_action[0:1]
         current_mid_block_action = current_action[1:]  
         previous_intersection_action = previous_action[0:1]
         previous_mid_block_action = previous_action[1:]
-        
-        print(f"Previous actions: Intersection: {previous_intersection_action}, Midblock: {previous_mid_block_action}")
-        print(f"Current actions: Intersection: {current_intersection_action}, Midblock: {current_mid_block_action}")
         
         switch_state = []
         intersection_switch = [int(c1 == '0' and c2 == '1') or int(c1 == '1' and c2 == '0') or int(c1 == '2' and c2 == '0') for c1, c2 in zip(previous_intersection_action, current_intersection_action)]
@@ -784,12 +777,7 @@ class ControlEnv(gym.Env):
         traci.trafficlight.setRedYellowGreenState(self.tl_ids[0], int_state)
         
         # Midblock
-        print(f"\nSwitch state: {switch_state}\n")
         for i in range(1, len(self.tl_ids)):
-            print(f"i: {i}")
-            print(f"TL: {self.tl_ids[i]}")
-            print(f"Switch state: {switch_state[i]}")
-            
             tl_id = self.tl_ids[i]
             mb_switch_state = switch_state[i]
 
@@ -1279,7 +1267,7 @@ class ControlEnv(gym.Env):
                     # No reward calculation
                     # self.step_count += 1 # We are not counting the warmup steps in the total simulation steps
 
-        print(f"\n{warmup} steps of warmup ended.\n")
+        print(f"\n{warmup} steps of warmup ended.")
         observation_buffer = observation_buffer[-self.steps_per_action:] # Only keep the observation of thelast action
         observation = np.asarray(observation_buffer, dtype=np.float32)
         #print(f"\nObservation (in reset): {observation.shape}")

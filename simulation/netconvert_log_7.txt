@@ -1,20 +1,17 @@
 Parsing types from './simulation/components/iteration_7.typ.xml' ... done.
 Parsing nodes from './simulation/components/iteration_7.nod.xml' ... done.
 Parsing edges from './simulation/components/iteration_7.edg.xml' ...
-Duplicate edge id occurred ('1060131404#2'); assuming overwriting is wished.
-Warning: Edge's 'edge_iter7_2_top_iter7_3_top' from- and to-node are at the same position.
-Warning: Edge's 'edge_iter7_2_bottom_iter7_3_bottom' from- and to-node are at the same position.
+Duplicate edge id occurred ('1060131411#1'); assuming overwriting is wished.
  done.
 Parsing connections from './simulation/components/iteration_7.con.xml' ... done.
-Parsing traffic lights from './simulation/components/iteration_7.tll.xml' ... done.
  Import done:
-   196 nodes loaded.
+   193 nodes loaded.
    4 types loaded.
-   302 edges loaded.
+   300 edges loaded.
 Removing self-loops ... done (0ms).
 Removing empty nodes ... done (0ms).
    0 nodes removed.
-Moving network to origin ... done (0ms).
+Moving network to origin ... done (1ms).
 Computing turning directions ... done (0ms).
 Assigning nodes to traffic lights ... done (0ms).
 Sorting nodes' edges ... done (0ms).
@@ -25,7 +22,7 @@ Computing priorities ... done (0ms).
 Computing approached edges ... done (0ms).
 Guessing and setting roundabouts ... done (0ms).
 Computing approaching lanes ... done (0ms).
-Dividing of lanes on approached lanes ... done (1ms).
+Dividing of lanes on approached lanes ... done (0ms).
 Processing turnarounds ... done (0ms).
 Rechecking of lane endings ...
 Warning: Lane '-357518696#6_0' is not connected from any incoming edge at junction '9655154879'.
@@ -34,18 +31,15 @@ Warning: Edge '357518696#6' is not connected to outgoing edges at junction '9655
 Warning: Lane '773672647#17_0' is not connected from any incoming edge at junction '9666242293'.
  done (0ms).
 Computing traffic light control information ... done (0ms).
-Computing node logics ... done (1ms).
-Computing traffic light logics ...
-Warning: The traffic light 'iter7_2_mid' does not control any links; it will not be build.
-Warning: Could not build program '0' for traffic light 'iter7_2_mid'
- done (0ms).
+Computing node logics ... done (0ms).
+Computing traffic light logics ... done (0ms).
  6 traffic light(s) computed.
-Building inner edges ... done (0ms).
+Building inner edges ... done (1ms).
 -----------------------------------------------------
 Summary:
  Node type statistics:
   Unregulated junctions       : 0
-  Dead-end junctions          : 157
+  Dead-end junctions          : 154
   Priority junctions          : 31
   Right-before-left junctions : 2
   Traffic light junctions      : 6
@@ -54,8 +48,4 @@ Summary:
   Applied offset     : -2030.74,-2510.12
   Converted boundary : 0.00,0.00,917.27,219.84
 -----------------------------------------------------
-Writing network ...
-Warning: Unused state in tlLogic 'cluster_172228464_482708521_9687148201_9687148202_#5more', program '0' at tl-index 17
-Warning: Unused state in tlLogic 'iter7_3_mid', program '0' at tl-index 2
-Warning: Unused state in tlLogic 'iter7_4_mid', program '0' at tl-index 2
- done (4ms).
+Writing network ... done (6ms).

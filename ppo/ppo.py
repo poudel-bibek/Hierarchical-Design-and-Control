@@ -98,7 +98,7 @@ class PPO:
             #print(f"Next value: {next_value}")
         return torch.tensor(advantages, dtype=torch.float32)
 
-    def update(self, memories):
+    def update(self, memories, num_proposals = None):
         """
         Update the policy and value networks using the collected experiences.
         memories = combined memories from all processes. 
@@ -106,9 +106,10 @@ class PPO:
         - For the choice between KL divergence vs. clipping, we use clipping.
     
         The paper expresses the loss as maximization objective. We convert it to minimization by changing the sign.
+        num_proposals used for lower level agent during evaluate.
         """
 
-        print(f"\nMemories.states: {memories.states}, type: {type(memories.states)}")
+        # print(f"\nMemories.states: {memories.states}, type: {type(memories.states)}")
         # print(f"\nMemories.actions: {memories.actions}")
         # print(f"\nMemories.values: {memories.values}")
         # print(f"\nMemories.logprobs: {memories.logprobs}")
@@ -178,13 +179,8 @@ class PPO:
         # Optimize policy for K epochs (terminology used in PPO paper)
         for _ in range(self.K_epochs):
             for batch_data in dataloader:
-                # Unpack batch data correctly based on agent type
-                if self.agent_type == 'lower':
-                    states_batch, actions_batch, old_logprobs_batch, advantages_batch, returns_batch, old_values_batch = batch_data
-                else: # higher agent (GraphDataset)
-                    # Assuming collate_fn returns a tuple: (states_batch, actions_batch, old_logprobs_batch, ...)
-                    states_batch, actions_batch, old_logprobs_batch, advantages_batch, returns_batch, old_values_batch = batch_data
-                
+
+                states_batch, actions_batch, old_logprobs_batch, advantages_batch, returns_batch, old_values_batch = batch_data
                 states_batch = states_batch.to(self.device) # Move DataBatch to device
                 actions_batch = actions_batch.to(self.device)
                 old_logprobs_batch = old_logprobs_batch.to(self.device)
@@ -198,7 +194,11 @@ class PPO:
                 # print(f"\nOld values batch shape: {old_values_batch.shape}")
 
                 # Evaluating old actions and values using current policy network
-                logprobs, state_values, dist_entropy = self.policy.evaluate(states_batch, actions_batch, device = self.device) # Removed .to(self.device) for states_batch and actions_batch as they are moved above
+                if self.agent_type == 'lower':
+                    logprobs, state_values, dist_entropy = self.policy.evaluate(states_batch, actions_batch, num_proposals, device = self.device) # Removed .to(self.device) for states_batch and actions_batch as they are moved above
+                else: # higher agent
+                    logprobs, state_values, dist_entropy = self.policy.evaluate(states_batch, actions_batch, device = self.device) 
+
                 # state_values should already be squeezed by the critic
                 # state_values = state_values.squeeze(-1) 
 
