@@ -1,2 +1,3 @@
 Warning: Missing green phase in tlLogic 'cluster_172228464_482708521_9687148201_9687148202_#5more', program '0' for tl-index 20.
-Warning: Vehicle '19' performs emergency braking on lane ':cluster_172228464_482708521_9687148201_9687148202_#5more_9_0' with decel=9.00, wished=4.50, severity=1.00, time=210.00.
+Warning: Unused states in tlLogic 'iter3_0_mid', program '0' in phase 0 after tl-index 2
+Warning: Unused states in tlLogic 'iter3_2_mid', program '0' in phase 0 after tl-index 2

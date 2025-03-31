@@ -1,31 +1,30 @@
-***Starting server on port 55213 ***
-Loading net-file from './simulation/network_iterations/network_iteration_7.net.xml' ... done (15ms).
+***Starting server on port 58223 ***
+Loading net-file from './simulation/network_iterations/network_iteration_3.net.xml' ... done (14ms).
 Warning: Missing green phase in tlLogic 'cluster_172228464_482708521_9687148201_9687148202_#5more', program '0' for tl-index 20.
-Loading route-files incrementally from './simulation/scaled_trips/scaled_vehtrips_2.xml'
-Loading route-files incrementally from './simulation/scaled_trips/scaled_pedtrips_2.xml'
+Warning: Unused states in tlLogic 'iter3_0_mid', program '0' in phase 0 after tl-index 2
+Warning: Unused states in tlLogic 'iter3_2_mid', program '0' in phase 0 after tl-index 2
+Loading route-files incrementally from './simulation/scaled_trips/scaled_vehtrips_1.xml'
+Loading route-files incrementally from './simulation/scaled_trips/scaled_pedtrips_1.xml'
 Loading done.
 Simulation started with time: 0.00.
-Simulation ended at time: 290.00.
+Simulation ended at time: 270.00.
 Reason: TraCI requested termination.
 Performance:
- Duration: 45.79s
- TraCI-Duration: 41.10s
- Real time factor: 6.33395
- UPS: 113.880092
- UPS-Persons: 1116.042372
+ Duration: 28.25s
+ TraCI-Duration: 25.18s
+ Real time factor: 9.55752
+ UPS: 176.070796
+ UPS-Persons: 1444.601770
 Vehicles:
- Inserted: 38 (Loaded: 54)
- Running: 26
+ Inserted: 40 (Loaded: 59)
+ Running: 32
  Waiting: 0
 Persons:
- Inserted: 540
- Running: 327
-DijkstraRouter answered 3045 queries and explored 4.56 edges on average.
+ Inserted: 491
+ Running: 295
+DijkstraRouter answered 2238 queries and explored 4.45 edges on average.
 DijkstraRouter spent 0.00s answering queries (0.00ms on average).
-DijkstraRouter answered 380 queries and explored 576.26 edges on average.
-DijkstraRouter spent 0.04s answering queries (0.09ms on average).
-DijkstraRouter answered 38 queries and explored 56.18 edges on average.
-DijkstraRouter spent 0.00s answering queries (0.05ms on average).
-traRouter spent 0.02s answering queries (0.11ms on average).
-DijkstraRouter answered 18 queries and explored 56.94 edges on average.
-DijkstraRouter spent 0.00s answering queries (0.00ms on average).
+DijkstraRouter answered 334 queries and explored 558.94 edges on average.
+DijkstraRouter spent 0.02s answering queries (0.07ms on average).
+DijkstraRouter answered 40 queries and explored 53.90 edges on average.
+DijkstraRouter spent 0.00s answering queries (0.03ms on average).

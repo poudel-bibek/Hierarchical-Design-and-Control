@@ -282,6 +282,7 @@ class DesignEnv(gym.Env):
             active_lower_workers.append(rank)
              
         all_memories = Memory()
+        avg_eval = 200.0 # arbitrary large number
         while active_lower_workers:
             print(f"Active workers: {active_lower_workers}")
             rank, memory = lower_queue.get(timeout=60)
@@ -1189,16 +1190,17 @@ class DesignEnv(gym.Env):
         # They have the edges attribute (which are edges to the right) and outlineShape attribute (the shape of the crossing): 
         
         # outlineShape seems hard to specify, lets not specify and see what it does. They mention it as optional here: https://github.com/eclipse-sumo/sumo/issues/11668
-        # TODO: same node contains right and left components which creates two crossings instead of one. Find a way to avoid this (Only add the right part of the crossing).
-        for e1, e1_data in new_veh_edges_to_add['top'].items(): # Just looking at one direction (top) is enough.
-            if 'right' in e1.split('_')[-1]: # Add only the right part: 
-                e2 = e1.replace('-', '') # To get the bottom edge id.
-                # print(f"e1: {e1}, e2: {e2}")
+        # Lets look at unique middle nodes and add connections for all unique middle nodes.
+        crossings_from_middle_nodes = set()
+        for edge_id, edge_data in new_veh_edges_to_add['top'].items(): # Just looking at one direction (top) is enough.
 
-                # Then, a crossing element should be added with those edges.
-                middle_node = e1_data.get('new_node')
+            middle_node = edge_data.get('new_node')
+            if middle_node not in crossings_from_middle_nodes:
+                crossings_from_middle_nodes.add(middle_node)
+
+                another_edge_id = edge_id.replace('-', '')
                 width = networkx_graph.nodes[middle_node].get('width')
-                crossing_attribs = {'node': middle_node, 'edges': e1 + ' ' + e2, 'priority': '1', 'width': str(width), 'linkIndex': '2' } # Width/ Thickness needs to come from the model.
+                crossing_attribs = {'node': middle_node, 'edges': edge_id + ' ' + another_edge_id, 'priority': '1', 'width': str(width), 'linkIndex': '2' } # Width/ Thickness needs to come from the model.
                 crossing_element = ET.Element('crossing', crossing_attribs)
                 crossing_element.text = None  # Ensure there's no text content
                 crossing_element.tail = "\n\t\t"
