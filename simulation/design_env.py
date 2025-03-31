@@ -15,6 +15,7 @@ from .env_utils import *
 from .sim_setup import CONTROLLED_CROSSWALKS_DICT, return_horizontal_nodes
 from .worker import parallel_train_worker
 from utils import save_policy, get_averages
+from main import eval
 
 class DesignEnv(gym.Env):
     """
@@ -280,15 +281,20 @@ class DesignEnv(gym.Env):
             p.start()
             lower_processes.append(p)
             active_lower_workers.append(rank)
-             
+        
         all_memories = Memory()
         avg_eval = 200.0 # arbitrary large number
+        eval_veh_avg_wait = 200.0
+        eval_ped_avg_wait = 200.0
+        design_rewards = []
+
         while active_lower_workers:
             print(f"Active workers: {active_lower_workers}")
-            rank, memory = lower_queue.get(timeout=60)
+            rank, memory, design_reward = lower_queue.get(timeout=60)
 
             if memory is None:
                 print(f"Worker {rank} None received\n")
+                design_rewards.append(design_reward)
                 active_lower_workers.remove(rank)
             else:
                 current_action_timesteps = len(memory.states)
@@ -326,19 +332,20 @@ class DesignEnv(gym.Env):
                     self.action_timesteps = 0
                     print(f"Size of all memories after update: {len(all_memories.actions)}")
 
+                    # TODO: Eval disabled for now.
                     # Save (and evaluate the latest policy) every save_freq updates
-                    if self.lower_update_count % self.control_args['lower_save_freq'] == 0:
-                        latest_policy_path = os.path.join(self.control_args['save_dir'], f'lower_policy_at_step_{self.global_step}.pth')
-                        save_policy(self.lower_ppo.policy, shared_state_normalizer, latest_policy_path)
+                    # if self.lower_update_count % self.control_args['lower_save_freq'] == 0:
+                    #     latest_policy_path = os.path.join(self.control_args['save_dir'], f'lower_policy_at_step_{self.global_step}.pth')
+                    #     save_policy(self.lower_ppo.policy, shared_state_normalizer, latest_policy_path)
 
-                        # Evaluate the latest policy
-                        print(f"Evaluating policy: {latest_policy_path} at step {self.global_step}")
-                        eval_json = eval(self.control_args_worker, self.lower_ppo_args, eval_args, policy_path=latest_policy_path, tl= False) # which policy to evaluate?
-                        _, eval_veh_avg_wait, eval_ped_avg_wait, _, _ = get_averages(eval_json)
-                        eval_veh_avg_wait = np.mean(eval_veh_avg_wait)
-                        eval_ped_avg_wait = np.mean(eval_ped_avg_wait)
-                        avg_eval = ((eval_veh_avg_wait + eval_ped_avg_wait) / 2)
-                        print(f"Eval veh avg wait: {eval_veh_avg_wait}, eval ped avg wait: {eval_ped_avg_wait}, avg eval: {avg_eval}")
+                    #     # Evaluate the latest policy
+                    #     print(f"Evaluating policy: {latest_policy_path} at step {self.global_step}")
+                    #     eval_json = eval(self.control_args_worker, self.lower_ppo_args, eval_args, policy_path=latest_policy_path, tl= False) # which policy to evaluate?
+                    #     _, eval_veh_avg_wait, eval_ped_avg_wait, _, _ = get_averages(eval_json)
+                    #     eval_veh_avg_wait = np.mean(eval_veh_avg_wait)
+                    #     eval_ped_avg_wait = np.mean(eval_ped_avg_wait)
+                    #     avg_eval = ((eval_veh_avg_wait + eval_ped_avg_wait) / 2)
+                    #     print(f"Eval veh avg wait: {eval_veh_avg_wait}, eval ped avg wait: {eval_ped_avg_wait}, avg eval: {avg_eval}")
 
                     # Save best policies using instance variables
                     if avg_reward > self.best_lower_reward:
@@ -393,14 +400,15 @@ class DesignEnv(gym.Env):
 
         # Higher level agent's reward can only be obtained after the lower level workers have finished
         # It is also averaged across the various lower level workers.
-        average_higher_reward = self._get_reward(iteration)
+        average_design_reward = np.mean(design_rewards)
+        print(f"\nAverage design reward: {average_design_reward}\n")
 
         iterative_torch_graph = self._convert_to_torch_geometric(self.iterative_networkx_graph)
         next_state = Data(x=iterative_torch_graph.x,
                            edge_index=iterative_torch_graph.edge_index,
                            edge_attr=iterative_torch_graph.edge_attr)
                       
-        return next_state, average_higher_reward, done, info
+        return next_state, average_design_reward, done, info
 
     def _apply_action(self, proposals, iteration):
         """
@@ -595,15 +603,6 @@ class DesignEnv(gym.Env):
             plt.close()
         
         return horizontal_segment
-
-    def _get_reward(self, iteration):
-        """
-        Design reward based on:
-        - Pedestrians: how much time (on average) did it take for pedestrians to reach the nearest crosswalk
-
-        """
-        return 0
-
 
     def reset(self, start_from_base=False):
         """
@@ -1191,12 +1190,12 @@ class DesignEnv(gym.Env):
         
         # outlineShape seems hard to specify, lets not specify and see what it does. They mention it as optional here: https://github.com/eclipse-sumo/sumo/issues/11668
         # Lets look at unique middle nodes and add connections for all unique middle nodes.
-        crossings_from_middle_nodes = set()
+        crossings_from_middle_nodes = []
         for edge_id, edge_data in new_veh_edges_to_add['top'].items(): # Just looking at one direction (top) is enough.
 
             middle_node = edge_data.get('new_node')
             if middle_node not in crossings_from_middle_nodes:
-                crossings_from_middle_nodes.add(middle_node)
+                crossings_from_middle_nodes.append(middle_node)
 
                 another_edge_id = edge_id.replace('-', '')
                 width = networkx_graph.nodes[middle_node].get('width')

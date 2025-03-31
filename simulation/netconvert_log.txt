@@ -1,13 +1,13 @@
-Parsing types from './simulation/components/iteration_6.typ.xml' ... done.
-Parsing nodes from './simulation/components/iteration_6.nod.xml' ... done.
-Parsing edges from './simulation/components/iteration_6.edg.xml' ...
-Duplicate edge id occurred ('1060131388#2'); assuming overwriting is wished.
+Parsing types from './simulation/components/iteration_13.typ.xml' ... done.
+Parsing nodes from './simulation/components/iteration_13.nod.xml' ... done.
+Parsing edges from './simulation/components/iteration_13.edg.xml' ...
+Duplicate edge id occurred ('1060131358#7'); assuming overwriting is wished.
  done.
-Parsing connections from './simulation/components/iteration_6.con.xml' ... done.
+Parsing connections from './simulation/components/iteration_13.con.xml' ... done.
  Import done:
-   193 nodes loaded.
+   202 nodes loaded.
    4 types loaded.
-   302 edges loaded.
+   321 edges loaded.
 Removing self-loops ... done (0ms).
 Removing empty nodes ... done (0ms).
    0 nodes removed.
@@ -32,20 +32,20 @@ Warning: Lane '773672647#17_0' is not connected from any incoming edge at juncti
  done (0ms).
 Computing traffic light control information ... done (0ms).
 Computing node logics ... done (0ms).
-Computing traffic light logics ... done (0ms).
- 6 traffic light(s) computed.
-Building inner edges ... done (1ms).
+Computing traffic light logics ... done (1ms).
+ 9 traffic light(s) computed.
+Building inner edges ... done (0ms).
 -----------------------------------------------------
 Summary:
  Node type statistics:
   Unregulated junctions       : 0
-  Dead-end junctions          : 154
+  Dead-end junctions          : 160
   Priority junctions          : 31
   Right-before-left junctions : 2
-  Traffic light junctions      : 6
+  Traffic light junctions      : 9
  Network boundaries:
   Original boundary  : 2030.74,2510.12,2948.01,2731.20
   Applied offset     : -2030.74,-2510.12
   Converted boundary : 0.00,0.00,917.27,219.84
 -----------------------------------------------------
-Writing network ... done (4ms).
+Writing network ... done (5ms).

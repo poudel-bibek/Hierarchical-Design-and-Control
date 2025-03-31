@@ -140,22 +140,23 @@ class MLP_ActorCritic(nn.Module):
         
         TODO: Remove the bias due to number of proposals.
         """
-        # print("Evaluating...")
+        print("Evaluating... with num_proposals: ", num_proposals)
         action_logits = self.actor(states)
         intersection_logits = action_logits[:, :4]
-        midblock_logits = action_logits[:, 4:num_proposals]
+        midblock_logits = action_logits[:, 4: 4 + num_proposals]
 
         # Distributions
         # intersection_probs = torch.softmax(intersection_logits, dim=1)
         intersection_dist = Categorical(logits=intersection_logits)
         # midblock_probs = torch.sigmoid(midblock_logits)
         midblock_dist = Bernoulli(logits=midblock_logits)
+        print(f"\nMidblock dist: {midblock_dist}\n")
 
         # Actions in shape (B,1) for intersection, (B,num_proposals) for midblock
         intersection_action = actions[:, :1].squeeze(1).long() # Categorical expects long
-        midblock_actions = actions[:, 1:num_proposals].float()
+        midblock_actions = actions[:, 1: 1 + num_proposals].float()
 
-        # print(f"\nMidblock logits: {midblock_logits}, midblock actions: {midblock_actions}\n")
+        print(f"\nMidblock logits: {midblock_logits}, midblock actions: {midblock_actions.shape}\n")
 
         intersection_log_probs = intersection_dist.log_prob(intersection_action)
         # print(f"\nIntersection log probs: {intersection_log_probs}, shape: {intersection_log_probs.shape}")

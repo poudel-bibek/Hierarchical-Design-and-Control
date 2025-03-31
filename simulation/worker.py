@@ -66,20 +66,23 @@ def parallel_train_worker(rank,
 
         if steps_since_update >= memory_transfer_freq or done or truncated:
             # Put local memory in the queue for the main process to collect
-            train_queue.put((rank, local_memory))
+            train_queue.put((rank, local_memory, None))
             local_memory = Memory()  # Reset local memory
             steps_since_update = 0
 
         state = next_state
         if done or truncated:
             break
+    
+    # Higher level agent's reward can only be obtained after the lower level workers have finished
+    design_reward = worker_env._get_design_reward()
 
     # In PPO, we do not make use of the total reward. We only use the rewards collected in the memory.
     worker_env.close()
     time.sleep(5) # Essential
     del worker_env
-    print(f"Worker {rank} finished. Reward: {ep_reward}. Worker puts None in queue.")
-    train_queue.put((rank, None))  # Signal that this worker is done 
+    print(f"Worker {rank} finished. Control Episode Reward: {round(ep_reward, 2)}. Design Reward: {round(design_reward, 2)}. Worker puts None in queue.")
+    train_queue.put((rank, None, design_reward))  # Signal that this worker is done 
     
 
 

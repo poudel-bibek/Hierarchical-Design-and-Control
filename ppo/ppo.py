@@ -287,7 +287,7 @@ class PPO:
         # Copy new weights into old policy
         # self.policy_old = deepcopy(self.policy)
         self.policy_old.load_state_dict(self.policy.state_dict())
-        print(f"\nPolicy updated with avg_policy_loss: {avg_policy_loss}\n") 
+        print(f"\n{self.agent_type} policy updated with avg_policy_loss: {avg_policy_loss}\n") 
 
         # Return the average batch loss per epoch
         return {

@@ -494,7 +494,7 @@ class ControlEnv(gym.Env):
         # Do before reward calculation
         # pressure_dict = self._get_pressure_dict(self.corrected_occupancy_map)
         # Reward outside the loop (only once per duration)
-        reward = self._get_reward(self.corrected_occupancy_map, switch_state, pressure_dict = None) # pressure dict used only in pressure-based reward
+        reward = self._get_control_reward(self.corrected_occupancy_map, switch_state, pressure_dict = None) # pressure dict used only in pressure-based reward
         self.previous_action = action
 
         # Check if episode is done (outside the for loop, otherwise it would create a broken observation)
@@ -563,7 +563,7 @@ class ControlEnv(gym.Env):
         # Outside the loop, before reward calculation
         # pressure_dict = self._get_pressure_dict(self.corrected_occupancy_map)
         # Reward outside the loop (only once per duration)
-        reward = self._get_reward(self.corrected_occupancy_map, switch_state, pressure_dict = None) # pressure dict used only in pressure-based reward
+        reward = self._get_control_reward(self.corrected_occupancy_map, switch_state, pressure_dict = None) # pressure dict used only in pressure-based reward
         self.previous_action = action
 
         # Check if episode is done (outside the for loop, otherwise it would create a broken observation)
@@ -802,7 +802,28 @@ class ControlEnv(gym.Env):
 
         return current_phase
     
-    def _get_reward(self, corrected_occupancy_map, switch_state, pressure_dict):
+    def _get_design_reward(self,):
+        """
+        Design reward:
+        - Design reward is obtained at the end of the lower agent's episode. i.e., it is obtained from each parallel worker.
+        - Pedestrians: 
+            - How much time "on average per pedestrian" did it take to "arrive" at the crossing
+            - The "on average per pedestrian" part normalizes the demand scaling 
+            - Due to SUMO's routing logic, pedestrians will always take the shortest path (to arrive at the nearest crosswalk).
+            - This will be averaged across all parallel workers in the main process. 
+        - Vehicles: 
+            - Vehicle delay is strongly correlated with the number of crosswalks (proposals)
+            - i.e., num_proposals itself is a proxy for delay
+            - Penalize high num_proposals. Which is also not dependent on the demand scaling.
+
+        - General (# TODO): 
+            - Penalty for pedestrian jams
+            - Be careful: this jam has to be caused by design, not control.
+        """
+
+        return 0
+    
+    def _get_control_reward(self, corrected_occupancy_map, switch_state, pressure_dict):
         """ 
         wrapper
         """
