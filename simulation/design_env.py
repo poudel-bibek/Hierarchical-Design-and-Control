@@ -590,7 +590,7 @@ class DesignEnv(gym.Env):
 
             ax.set_ylim(-1, 11)
             ax.set_xlabel('X-coordinate')
-            plt.savefig('./horizontal_segments.png')
+            plt.savefig('./simulation/horizontal_segments.png')
             #plt.show()
             plt.close()
         

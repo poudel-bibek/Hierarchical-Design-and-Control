@@ -1365,7 +1365,7 @@ class ControlEnv(gym.Env):
             # print(f"    Incoming (North/Main): {self.tl_lane_dict[tl_id]['pedestrian']['incoming']['north']['main']}")
             # print(f"    Outgoing (North/Main): {self.tl_lane_dict[tl_id]['pedestrian']['outgoing']['north']['main']}\n")
 
-        print(f"Updated traffic light lane dictionary with {len(self.tl_ids)} traffic lights")
+        # print(f"Updated traffic light lane dictionary with {len(self.tl_ids)} traffic lights")
 
     def close(self):
         if self.sumo_running:
