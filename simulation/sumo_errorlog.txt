@@ -1,7 +1,2 @@
 Warning: Missing green phase in tlLogic 'cluster_172228464_482708521_9687148201_9687148202_#5more', program '0' for tl-index 20.
-Warning: Unused states in tlLogic 'iter13_0_mid', program '0' in phase 0 after tl-index 2
-Warning: Unused states in tlLogic 'iter13_4_mid', program '0' in phase 0 after tl-index 2
-Warning: Person '2041' is jammed on edge ':iter13_5_mid_c0', time=289.00.
-Warning: Person '5' is jammed on edge ':iter13_6_mid_c0', time=220.00.
-4.50, severity=1.00, time=200.00.
-Warning: Person '5' is jammed on edge ':iter13_6_mid_c0', time=239.00.
+Warning: Unused states in tlLogic 'iter29_3_mid', program '0' in phase 0 after tl-index 2

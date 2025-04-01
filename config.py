@@ -81,7 +81,7 @@ def get_config():
         "lower_activation": "tanh",  # Policy activation function
         "lower_max_timesteps": 200,  # Maximum number of steps in one episode (make this multiple of 16*10)
         "lower_memory_transfer_freq": 16,  # Frequency of memory transfer from worker to main process 
-        "lower_per_timestep_state_dim": 8 + 32 + 8 * 10,  # Number of features per timestep (corresponding to max_proposals = 10), calculation in _get_observation function.
+        "lower_per_timestep_state_dim": 11 + 32 + 8 * 10,  # Number of features per timestep (corresponding to max_proposals = 10), calculation in _get_observation function.
         "lower_step_length": 1.0,  # Real-world time in seconds per simulation timestep (default: 1.0). 
         "lower_action_duration": 10,  # Number of simulation timesteps for each action (default: 10)
         "lower_warmup_steps": [50, 100],  # Number of steps to run before collecting data

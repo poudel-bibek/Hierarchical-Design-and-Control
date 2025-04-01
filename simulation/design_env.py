@@ -15,7 +15,7 @@ from .env_utils import *
 from .sim_setup import CONTROLLED_CROSSWALKS_DICT, return_horizontal_nodes
 from .worker import parallel_train_worker
 from utils import save_policy, get_averages
-from main import eval
+# from main import eval # Circular import.
 
 class DesignEnv(gym.Env):
     """
@@ -1183,27 +1183,23 @@ class DesignEnv(gym.Env):
                         # Then, it can be updated in crossing.
                         crossing.set('edges', f'-{new_edge} {new_edge}')
 
-        
+        # print(f"M node mapping: {m_node_mapping}\n")
         # Add new connections (between top and bottom edges) and crossings (making use of new_veh_edges_to_add).
         # All tags that refer to the old edges should now refer to the new edges (if the refering edges fall to the left, they will refer to the new left edge and vice versa) 
         # They have the edges attribute (which are edges to the right) and outlineShape attribute (the shape of the crossing): 
-        
         # outlineShape seems hard to specify, lets not specify and see what it does. They mention it as optional here: https://github.com/eclipse-sumo/sumo/issues/11668
-        # Lets look at unique middle nodes and add connections for all unique middle nodes.
-        crossings_from_middle_nodes = []
-        for edge_id, edge_data in new_veh_edges_to_add['top'].items(): # Just looking at one direction (top) is enough.
-
-            middle_node = edge_data.get('new_node')
-            if middle_node not in crossings_from_middle_nodes:
-                crossings_from_middle_nodes.append(middle_node)
-
-                another_edge_id = edge_id.replace('-', '')
-                width = networkx_graph.nodes[middle_node].get('width')
-                crossing_attribs = {'node': middle_node, 'edges': edge_id + ' ' + another_edge_id, 'priority': '1', 'width': str(width), 'linkIndex': '2' } # Width/ Thickness needs to come from the model.
-                crossing_element = ET.Element('crossing', crossing_attribs)
-                crossing_element.text = None  # Ensure there's no text content
-                crossing_element.tail = "\n\t\t"
-                updated_conn_root.append(crossing_element)
+        for m_node in m_node_mapping:
+            e1 = m_node_mapping[m_node]['top']['from']
+            if '-' in e1:
+                e2 = e1.replace('-', '')
+            else:
+                e2 = '-' + e1
+            width = networkx_graph.nodes[m_node].get('width')
+            crossing_attribs = {'node': m_node, 'edges': e1 + ' ' + e2, 'priority': '1', 'width': str(width), 'linkIndex': '2' } # Width/ Thickness needs to come from the model.
+            crossing_element = ET.Element('crossing', crossing_attribs)
+            crossing_element.text = None  # Ensure there's no text content
+            crossing_element.tail = "\n\t\t"
+            updated_conn_root.append(crossing_element)
 
         # Delete the old edges from the edg file i.e., just remove the tags with old edge ids.
         for edge in edge_root.findall('edge'):

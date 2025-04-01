@@ -7,6 +7,7 @@ import networkx as nx
 import numpy as np
 import random
 import xml.etree.ElementTree as ET
+from copy import deepcopy
 
 def create_new_sumocfg(network_iteration):
     """
@@ -348,12 +349,12 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
 
     edges_to_remove = []
     edges_to_add = {'top': {}, 'bottom': {}}
-    
+
     # For left-right connections with middle nodes. Each middle node will have an edge to the left and right of it.
     m_node_mapping = {
         m_node: {
             'top': {'from': None, 'to': None},
-            'bottom': {'from': None, 'to': None}
+            'bottom': {'from': None, 'to': None},
         } for m_node in middle_nodes_to_add
     }
 
@@ -363,7 +364,7 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
     for i in range(len(middle_nodes_to_add)):
         m_node = middle_nodes_to_add[i]
         x_coord = round(networkx_graph.nodes[m_node]['pos'][0], 2)
-        
+
         # Handle top edges and top connection
         for edge_id, edge_data in list(iterative_edges['top'].items()): # convert to list first 
             # The directions are reversed in top and bottom. For top, greater than `to` and less than `from`.
@@ -373,8 +374,8 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
                 edges_to_remove.append(edge_id)
     
                 # Add new edges to edges_to_add
-                # Right part of split (from original from to middle)
-                right_edge_id_top = f"{edge_id}_right{i}" # The same edge can be split multiple times. Value of i not neceaasrily corresponding to number of times split.
+                # Right part of split (from original to middle)
+                right_edge_id_top = f"{edge_id}_right{i}" # The same edge can be split multiple times. Value of i not necessarily corresponding to number of times split.
                 right_edge_data = {
                     'new_node': m_node,
                     'from': edge_data['from'],
@@ -387,7 +388,7 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
                 iterative_edges['top'][right_edge_id_top] = right_edge_data # new_node attribute is extra here.
                 all_edges[right_edge_id_top] = right_edge_data # only from_x and to_x are used.
 
-                # Left part of split (from middle to original to)
+                # Left part of split (from middle to original)
                 left_edge_id_top = f"{edge_id}_left{i}" # The same edge can be split multiple times.
                 left_edge_data = {
                     'new_node': m_node,
@@ -504,6 +505,7 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
         if from_edge in edges_to_remove or to_edge in edges_to_remove:
             conn_root.remove(connection)
 
+    # Previous mechanism
     # If the edges are present in edges_to_remove, then they should not be present in edges_to_add (they may be because of a split of a split).
     for edge_id in edges_to_remove:
         if edge_id in edges_to_add['top']:

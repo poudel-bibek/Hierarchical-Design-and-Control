@@ -462,7 +462,11 @@ class ControlEnv(gym.Env):
         """
         * Observation space is defined per action step (i.e. accumulated over action duration)
         """
-        return gym.spaces.Box(low=0, high=1, shape=(self.steps_per_action, self.per_timestep_state_dim), dtype=np.float32)
+        return gym.spaces.Box(low=0, 
+                              high=1, 
+                              shape=(self.steps_per_action, 
+                                     self.per_timestep_state_dim), 
+                                     dtype=np.float32)
 
     def train_step(self, action):
         """
@@ -620,7 +624,7 @@ class ControlEnv(gym.Env):
         * Per step observation size = 120
         * Assume max_proposals = 10
         * Composed of: 
-            - Current phase information (8 elements that transitions throughout the action duration)
+            - Current phase information (1 + 10 elements that transitions throughout the action duration)
             - Intersection (32 elements):
                 - Vehicles: 
                     - Incoming (12 directions)
@@ -637,7 +641,7 @@ class ControlEnv(gym.Env):
                 - Pedestrians
                     - Incoming (1 direction)
                     - Outgoing (1 direction)
-            - 8 + 32 + 80 = 120
+            - 11 + 32 + 80 = 123
 
         * Each action persists for a number of timesteps (transitioning though phases); observation is collected at each timestep.
         * Pressure itself is not a part of the observation (only used for reward calculation).
@@ -713,16 +717,15 @@ class ControlEnv(gym.Env):
 
             # - pedestrians
             # Incoming, 1 direction
-            observation[length:length + len(self.corrected_occupancy_map[tl_id]["pedestrian"]["incoming"]["north"]["main"])] = \
-                np.array(len(self.corrected_occupancy_map[tl_id]["pedestrian"]["incoming"]["north"]["main"]), dtype=np.float32)
-            length += len(self.corrected_occupancy_map[tl_id]["pedestrian"]["incoming"]["north"]["main"])
+            mb_incoming_ped_count = len(self.corrected_occupancy_map[tl_id]["pedestrian"]["incoming"]["north"]["main"])
+            observation[length] = np.float32(mb_incoming_ped_count) 
+            length += 1 # Increment by 1
 
             # Outgoing, 1 direction
-            observation[length:length + len(self.corrected_occupancy_map[tl_id]["pedestrian"]["outgoing"]["north"]["main"])] = \
-                np.array(len(self.corrected_occupancy_map[tl_id]["pedestrian"]["outgoing"]["north"]["main"]), dtype=np.float32)
-            length += len(self.corrected_occupancy_map[tl_id]["pedestrian"]["outgoing"]["north"]["main"])
-        # print(f"\nObservation before normalization: {observation}")
-
+            mb_outgoing_ped_count = len(self.corrected_occupancy_map[tl_id]["pedestrian"]["outgoing"]["north"]["main"])
+            observation[length] = np.float32(mb_outgoing_ped_count) 
+            length += 1 # 
+        
         # Normalize with running mean and std
         observation = np.asarray(observation, dtype=np.float32)
         # print(f"\nObservation: shape: {observation.shape}") 
