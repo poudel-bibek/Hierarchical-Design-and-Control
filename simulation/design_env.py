@@ -231,8 +231,9 @@ class DesignEnv(gym.Env):
              num_proposals, 
              iteration, 
              SEED, 
-             shared_state_normalizer,
-             shared_reward_normalizer,
+             lower_state_normalizer,
+             lower_reward_normalizer,
+             higher_reward_normalizer,
              eval_args,
              is_sweep):
         
@@ -272,8 +273,9 @@ class DesignEnv(gym.Env):
                     lower_queue,
                     worker_seed,
                     num_proposals,
-                    shared_state_normalizer,
-                    shared_reward_normalizer,
+                    lower_state_normalizer,
+                    lower_reward_normalizer,
+                    higher_reward_normalizer,
                     self.extreme_edge_dict,
                     self.lower_ppo_args['device'],
                     iteration)
@@ -349,13 +351,13 @@ class DesignEnv(gym.Env):
 
                     # Save best policies using instance variables
                     if avg_reward > self.best_lower_reward:
-                        save_policy(self.lower_ppo.policy, shared_state_normalizer, os.path.join(self.control_args['save_dir'], 'best_reward_policy.pth'))
+                        save_policy(self.lower_ppo.policy, lower_state_normalizer, os.path.join(self.control_args['save_dir'], 'best_reward_policy.pth'))
                         self.best_lower_reward = avg_reward
                     if loss['total_loss'] < self.best_lower_loss:
-                        save_policy(self.lower_ppo.policy, shared_state_normalizer, os.path.join(self.control_args['save_dir'], 'best_loss_policy.pth'))
+                        save_policy(self.lower_ppo.policy, lower_state_normalizer, os.path.join(self.control_args['save_dir'], 'best_loss_policy.pth'))
                         self.best_lower_loss = loss['total_loss']
                     if avg_eval < self.best_lower_eval:
-                        save_policy(self.lower_ppo.policy, shared_state_normalizer, os.path.join(self.control_args['save_dir'], 'best_eval_policy.pth'))
+                        save_policy(self.lower_ppo.policy, lower_state_normalizer, os.path.join(self.control_args['save_dir'], 'best_eval_policy.pth'))
                         self.best_lower_eval = avg_eval
 
                     # logging
