@@ -482,6 +482,20 @@ class GAT_v2_ActorCritic(nn.Module):
             gmms_batch.append(gmm)
         return gmms_batch, num_proposals_probs_batch
     
+    def _sample_gmm(self, gmm_single, num_proposals, device):
+        """
+        Sampling from GMM can be done in multiple ways.
+        - Make use of the implicit stochasticity
+        - Greedily sample at highest probability (modes)
+
+        Divide the GMM into 10 x 10 grid.
+        Calculate the probability at each grid cell
+        select grid centers with num_proposals top probability cells 
+        they may not be the ones with multiple modes
+        
+        """
+        pass
+
     def act(self, states_batch, iteration, clamp_min, clamp_max, device, training = True, visualize=False):
         """
         Sample actions from the GMM (propose upto max_proposals number of crosswalks).

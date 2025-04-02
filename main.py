@@ -128,6 +128,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
                                                                                      SEED,
                                                                                      lower_state_normalizer,
                                                                                      lower_reward_normalizer,
+                                                                                     higher_reward_normalizer,
                                                                                      eval_args,
                                                                                      is_sweep)
         

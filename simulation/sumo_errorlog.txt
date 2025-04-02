@@ -1,8 +1,0 @@
-Warning: Missing green phase in tlLogic 'cluster_172228464_482708521_9687148201_9687148202_#5more', program '0' for tl-index 20.
-Warning: Unused states in tlLogic 'iter59_0_mid', program '0' in phase 0 after tl-index 2
-Warning: Person '1977' is jammed on edge ':iter59_6_mid_c0', time=199.00.
-Warning: Person '1913' is jammed on edge ':iter59_6_mid_c0', time=239.00.
-Warning: Person '5' is jammed on edge 'edge_iter59_6_top_iter59_6_mid', time=246.00.
-Warning: Person '5' is jammed on edge ':iter59_6_mid_c0', time=279.00.
-Error: tcpip::Socket::recvAndCheck @ recv: peer shutdown
-Quitting (on error).

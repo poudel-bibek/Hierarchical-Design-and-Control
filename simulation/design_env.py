@@ -363,14 +363,14 @@ class DesignEnv(gym.Env):
                     # logging
                     if is_sweep: # Wandb for hyperparameter tuning
                         wandb.log({ "iteration": iteration,
-                                        "avg_reward": avg_reward, # Set as maximize in the sweep config
-                                        "update_count": self.lower_update_count,
-                                        "policy_loss": loss['policy_loss'],
-                                        "value_loss": loss['value_loss'], 
-                                        "entropy_loss": loss['entropy_loss'],
-                                        "total_loss": loss['total_loss'],
-                                        "current_lr": current_lr_lower if self.control_args['lower_anneal_lr'] else self.lower_ppo_args['lr'],
-                                        "approx_kl": loss['approx_kl'],
+                                        "lower_avg_reward": avg_reward, # Set as maximize in the sweep config
+                                        "lower_update_count": self.lower_update_count,
+                                        "lower_policy_loss": loss['policy_loss'],
+                                        "lower_value_loss": loss['value_loss'], 
+                                        "lower_entropy_loss": loss['entropy_loss'],
+                                        "lower_total_loss": loss['total_loss'],
+                                        "lower_current_lr": current_lr_lower if self.control_args['lower_anneal_lr'] else self.lower_ppo_args['lr'],
+                                        "lower_approx_kl": loss['approx_kl'],
                                         "eval_veh_avg_wait": eval_veh_avg_wait,
                                         "eval_ped_avg_wait": eval_ped_avg_wait,
                                         "avg_eval": avg_eval,
@@ -405,6 +405,13 @@ class DesignEnv(gym.Env):
         average_design_reward = np.mean(design_rewards)
         print(f"\nAverage design reward: {average_design_reward}\n")
 
+        if is_sweep:
+            wandb.log({ "iteration": iteration,
+                        "higher_avg_reward": average_design_reward })
+        else: 
+            self.writer.add_scalar('Higher/Average_Reward', average_design_reward, self.global_step)
+
+            
         iterative_torch_graph = self._convert_to_torch_geometric(self.iterative_networkx_graph)
         next_state = Data(x=iterative_torch_graph.x,
                            edge_index=iterative_torch_graph.edge_index,

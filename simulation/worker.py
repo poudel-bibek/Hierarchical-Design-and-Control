@@ -57,12 +57,12 @@ def parallel_train_worker(rank,
 
         # Perform action
         # These reward and next_state are for the action_duration timesteps.
-        next_state, reward, done, truncated, _ = worker_env.train_step(action) # need the returned state to be 2D
-        reward = lower_reward_normalizer.normalize(reward).item()
-        ep_reward += reward
+        next_state, control_reward, done, truncated, _ = worker_env.train_step(action) # need the returned state to be 2D
+        control_reward = lower_reward_normalizer.normalize(control_reward).item()
+        ep_reward += control_reward
 
         # Store data in memory
-        local_memory.append(state, action, value, logprob, reward, done) 
+        local_memory.append(state, action, value, logprob, control_reward, done) 
         steps_since_update += 1
 
         if steps_since_update >= memory_transfer_freq or done or truncated:
@@ -76,7 +76,9 @@ def parallel_train_worker(rank,
             break
     
     # Higher level agent's reward can only be obtained after the lower level workers have finished
-    design_reward = higher_reward_normalizer.normalize(worker_env._get_design_reward(num_proposals)).item()
+    design_reward_tensor = worker_env._get_design_reward(num_proposals).clone().detach().to(dtype=torch.float32, device='cpu')
+    design_reward = higher_reward_normalizer.normalize(design_reward_tensor).item()
+    print(f"Design reward: {design_reward}")
 
     # In PPO, we do not make use of the total reward. We only use the rewards collected in the memory.
     worker_env.close()
