@@ -44,9 +44,6 @@ class ControlEnv(gym.Env):
         self.unique_suffix = f"_{worker_id}" if worker_id is not None else ""
         self.total_unique_ids_veh = []
         self.total_unique_ids_ped = []
-        # dictionaries to store the last waiting time for each entity
-        self.prev_vehicle_waiting_time = {}
-        self.prev_ped_waiting_time = {}
 
         self.vehicle_output_trips = self.vehicle_output_trips.replace('.xml', f'{self.unique_suffix}.xml')
         self.pedestrian_output_trips = self.pedestrian_output_trips.replace('.xml', f'{self.unique_suffix}.xml')
@@ -66,6 +63,12 @@ class ControlEnv(gym.Env):
         self.tl_lane_dict = get_related_lanes_edges()
         self.tl_pedestrian_status = {} # For pedestrians related to crosswalks attached to TLS.
         self.corrected_occupancy_map = None
+
+        self.pedestrian_existence_times = {}
+        self.pedestrian_arrival_times = {}
+        self.prev_ped_waiting_time = {}
+        self.prev_vehicle_waiting_time = {}
+        self.mb_ped_incoming_edges_all = []
 
         # Create a reverse lookup dict
         self.edge_to_direction = {}
@@ -485,6 +488,8 @@ class ControlEnv(gym.Env):
         switch_state, _ = self._detect_switch(action, self.previous_action)
  
         for i in range(self.steps_per_action): # Run simulation steps for the duration of the action
+            self._update_pedestrian_existence_times()
+
             # Apply action is called every timestep (return information useful for reward calculation)
             current_phase = self._apply_action(action, i, switch_state)
             traci.simulationStep() # Step length is the simulation time that elapses when each time this is called.
@@ -493,6 +498,7 @@ class ControlEnv(gym.Env):
             observation_buffer.append(obs)
 
             # time.sleep(0.01)
+            self._get_pedestrian_arrival_times()
             
         # outside the loop
         # Do before reward calculation
@@ -805,8 +811,10 @@ class ControlEnv(gym.Env):
 
         return current_phase
     
-    def _get_design_reward(self,):
+    def _get_design_reward(self, num_proposals):
         """
+        Every iteration, only to be called once at the end of the lower agent's episode.
+
         Design reward:
         - Design reward is obtained at the end of the lower agent's episode. i.e., it is obtained from each parallel worker.
         - Pedestrians: 
@@ -823,6 +831,19 @@ class ControlEnv(gym.Env):
             - Penalty for pedestrian jams
             - Be careful: this jam has to be caused by design, not control.
         """
+        design_reward = 0
+
+        # Pedestrian
+        total_ped_arrival_time = sum(self.pedestrian_arrival_times.values())
+        average_arrival_time_per_ped = total_ped_arrival_time / len(self.pedestrian_arrival_times)
+        design_reward -= average_arrival_time_per_ped
+        print(f"Total pedestrian arrival time: {total_ped_arrival_time}")
+        print(f"Average arrival time per pedestrian: {average_arrival_time_per_ped}")
+        
+        # Vehicle
+        design_reward -= num_proposals*5.0
+
+        # General 
 
         return 0
     
@@ -1192,7 +1213,7 @@ class ControlEnv(gym.Env):
         #     time.sleep(5) # Wait until the process really finishes 
         #     traci.close(False) #https://sumo.dlr.de/docs/TraCI/Interfacing_TraCI_from_Python.html
         
-        if self.manual_demand_veh is not None :
+        if self.manual_demand_veh is not None : 
             #scaling = convert_demand_to_scale_factor(self.manual_demand_veh, "vehicle", self.vehicle_input_trips) # Convert the demand to scaling factor first
             scale_demand(self.vehicle_input_trips, self.vehicle_output_trips, self.manual_demand_veh, demand_type="vehicle") # directly scaling factor given
         else: 
@@ -1257,6 +1278,10 @@ class ControlEnv(gym.Env):
         self.num_proposals = num_proposals
         self.dynamically_populate_edges_lanes(extreme_edge_dict)
 
+        temp_mb_ped_incoming_edges_all = [self.tl_lane_dict[tl_id]['pedestrian']['incoming']['north']['main'] \
+                                          for tl_id in self.tl_ids if tl_id != 'cluster_172228464_482708521_9687148201_9687148202_#5more']
+        self.mb_ped_incoming_edges_all = [edge for edges in temp_mb_ped_incoming_edges_all for edge in edges]
+
         # Warmup period
         # How many actions to take during warmup
         warmup = random.randint(self.warmup_steps[0], self.warmup_steps[1])
@@ -1264,6 +1289,8 @@ class ControlEnv(gym.Env):
         #print(f"Number of actions during warmup: {num_actions_warmup}")
         observation_buffer = []
         for i in range(num_actions_warmup):
+            self._update_pedestrian_existence_times()
+
             # Randomly sample actions (1 digit for intersection, the rest of the bits for mid-block crosswalks)
             action = np.concatenate([np.random.randint(4, size=1), np.random.randint(2, size= len(self.tl_ids) - 1)]).astype(np.int32)
             #print(f"\nWarmup action {i}: {action}\n")
@@ -1271,7 +1298,7 @@ class ControlEnv(gym.Env):
                 prev_action = action
             switch_state, _ = self._detect_switch(action, prev_action)
 
-            # TODO: Inefficient do it this way.
+            # TODO: Inefficient to do it this way.
             if tl:
                 for j in range(self.steps_per_action):
                     current_phase = [1]*len(self.tl_ids) # random phase
@@ -1321,7 +1348,6 @@ class ControlEnv(gym.Env):
             if tl_id == 'cluster_172228464_482708521_9687148201_9687148202_#5more':
                 if extreme_edge_dict['rightmost']['new'] is not None: # Just check one (if it has been split)
                     self.tl_lane_dict[tl_id]["vehicle"]["incoming"]["east-straight"] = [f"-{extreme_edge_dict['leftmost']['new']}_0"]
-
                     # counterpart
                     self.tl_lane_dict[tl_id]["vehicle"]["outgoing"]["east"] = [f"{extreme_edge_dict['leftmost']['new']}_0"]
             
@@ -1331,10 +1357,6 @@ class ControlEnv(gym.Env):
                 
             # controlled_lanes = traci.trafficlight.getControlledLanes(tl_id)
             controlled_links = traci.trafficlight.getControlledLinks(tl_id)
-
-            # print(f"Controlled lanes for {tl_id}: {controlled_lanes}")
-            # print(f"Controlled links for {tl_id}: {controlled_links}")
-
             tl_internal = f":{tl_id}"
             self.tl_lane_dict[tl_id] = {
                 "vehicle": {
@@ -1367,35 +1389,45 @@ class ControlEnv(gym.Env):
             
             # TODO: For vehicle incoming + outgoing, keep adding until the total length is near cutoff distance or we encounter another TL. 
             # Do this for east-straight of the intersection as well.
-            
             # For pedestrians, add just one immediate lane on each side of the crossing. 
             top_edge = f"edge_{tl_id.split('mid')[0]}top_{tl_id}"
             bottom_edge = f"edge_{tl_id.split('mid')[0]}bottom_{tl_id}"
             self.tl_lane_dict[tl_id]["pedestrian"]["incoming"]["north"]["main"].append(top_edge)
             self.tl_lane_dict[tl_id]["pedestrian"]["incoming"]["north"]["main"].append(bottom_edge)
 
-            # print(f"\nUpdated dictionary for {tl_id}:")
-            # print(f"  Vehicle lanes:")
-            # print(f"    Incoming:")
-            # print(f"      West-straight: {self.tl_lane_dict[tl_id]['vehicle']['incoming']['west-straight']}")
-            # print(f"      East-straight: {self.tl_lane_dict[tl_id]['vehicle']['incoming']['east-straight']}")
-            # print(f"    Inside:")
-            # print(f"      West-straight: {self.tl_lane_dict[tl_id]['vehicle']['inside']['west-straight']}")
-            # print(f"      East-straight: {self.tl_lane_dict[tl_id]['vehicle']['inside']['east-straight']}")
-            # print(f"    Outgoing:")
-            # print(f"      West-straight: {self.tl_lane_dict[tl_id]['vehicle']['outgoing']['west-straight']}")
-            # print(f"      East-straight: {self.tl_lane_dict[tl_id]['vehicle']['outgoing']['east-straight']}")
-            # print(f"  Pedestrian areas:")
-            # print(f"    Incoming (North/Main): {self.tl_lane_dict[tl_id]['pedestrian']['incoming']['north']['main']}")
-            # print(f"    Outgoing (North/Main): {self.tl_lane_dict[tl_id]['pedestrian']['outgoing']['north']['main']}\n")
-
-        # print(f"Updated traffic light lane dictionary with {len(self.tl_ids)} traffic lights")
-
     def close(self):
         if self.sumo_running:
             traci.close(False) #https://sumo.dlr.de/docs/TraCI/Interfacing_TraCI_from_Python.html
             self.sumo_running = False
 
+    def _get_pedestrian_arrival_times(self):
+        """
+        Each pedestrian has a unique id and also a unique arrival time (for the first arrival at the crosswalk).
+        A lot of pedestrians can be accomodated in walking areas (w0, w1).
+        As this is part of the design agent, this tracking also needs to be done during warmup.
+        """
+
+        # print(f"\nPedestrian incoming edges: {self.mb_ped_incoming_edges_all}\n")
+        for ped_id in traci.person.getIDList():
+            edge_id = '_'.join(traci.person.getLaneID(ped_id).split('_')[:-1])
+            # print(f"Pedestrian {ped_id} is on edge: {edge_id}")
+            if edge_id in self.mb_ped_incoming_edges_all: 
+                # only log the first arrival time
+                if ped_id not in self.pedestrian_arrival_times:
+                    existed_time = self.pedestrian_existence_times[ped_id]
+                    # print(f"Pedestrian {ped_id} has arrived to crosswalk at {existed_time} seconds")
+                    self.pedestrian_arrival_times[ped_id] = existed_time
+
+    def _update_pedestrian_existence_times(self):
+        """
+        Get the existence time (measured in number of seconds) of a pedestrian.
+        """
+        for ped_id in traci.person.getIDList():
+            if ped_id not in self.pedestrian_existence_times:
+                self.pedestrian_existence_times[ped_id] = 1 * self.step_length
+            else:
+                self.pedestrian_existence_times[ped_id] += 1 * self.step_length
+    
     # Eval specific methods
     def get_vehicle_waiting_time(self,):
         """

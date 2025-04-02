@@ -1,30 +1,35 @@
-***Starting server on port 48825 ***
-Loading net-file from './simulation/network_iterations/network_iteration_29.net.xml' ... done (14ms).
+***Starting server on port 37425 ***
+Loading net-file from './simulation/network_iterations/network_iteration_59.net.xml' ... done (15ms).
 Warning: Missing green phase in tlLogic 'cluster_172228464_482708521_9687148201_9687148202_#5more', program '0' for tl-index 20.
-Warning: Unused states in tlLogic 'iter29_3_mid', program '0' in phase 0 after tl-index 2
-Loading route-files incrementally from './simulation/scaled_trips/scaled_vehtrips_7.xml'
-Loading route-files incrementally from './simulation/scaled_trips/scaled_pedtrips_7.xml'
+Warning: Unused states in tlLogic 'iter59_0_mid', program '0' in phase 0 after tl-index 2
+Loading route-files incrementally from './simulation/scaled_trips/scaled_vehtrips_0.xml'
+Loading route-files incrementally from './simulation/scaled_trips/scaled_pedtrips_0.xml'
 Loading done.
 Simulation started with time: 0.00.
-Simulation ended at time: 290.00.
-Reason: TraCI requested termination.
+Warning: Person '1977' is jammed on edge ':iter59_6_mid_c0', time=199.00.
+Warning: Person '1913' is jammed on edge ':iter59_6_mid_c0', time=239.00.
+Warning: Person '5' is jammed on edge 'edge_iter59_6_top_iter59_6_mid', time=246.00.
+Warning: Person '5' is jammed on edge ':iter59_6_mid_c0', time=279.00.
+Error: tcpip::Socket::recvAndCheck @ recv: peer shutdown
+Quitting (on error).
+Simulation ended at time: 280.00.
 Performance:
- Duration: 33.28s
- TraCI-Duration: 29.74s
- Real time factor: 8.71473
- UPS: 74.345644
- UPS-Persons: 1263.034528
+ Duration: 29.81s
+ TraCI-Duration: 26.37s
+ Real time factor: 9.39377
+ UPS: 145.334988
+ UPS-Persons: 1425.940215
 Vehicles:
- Inserted: 22 (Loaded: 35)
- Running: 13
+ Inserted: 34 (Loaded: 42)
+ Running: 31
  Waiting: 0
 Persons:
- Inserted: 452
- Running: 287
-DijkstraRouter answered 2590 queries and explored 4.85 edges on average.
+ Inserted: 486
+ Running: 292
+ Jammed: 4
+DijkstraRouter answered 2719 queries and explored 4.71 edges on average.
 DijkstraRouter spent 0.00s answering queries (0.00ms on average).
-DijkstraRouter answered 327 queries and explored 587.87 edges on average.
-DijkstraRouter spent 0.02s answering queries (0.07ms on average).
-DijkstraRouter answered 22 queries and explored 57.18 edges on average.
+DijkstraRouter answered 335 queries and explored 571.57 edges on average.
+DijkstraRouter spent 0.02s answering queries (0.05ms on average).
+DijkstraRouter answered 34 queries and explored 63.35 edges on average.
 DijkstraRouter spent 0.00s answering queries (0.00ms on average).
-

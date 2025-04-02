@@ -13,8 +13,9 @@ def parallel_train_worker(rank,
                          train_queue, 
                          worker_seed,
                          num_proposals,
-                         shared_state_normalizer, 
-                         shared_reward_normalizer, 
+                         lower_state_normalizer, 
+                         lower_reward_normalizer,
+                         higher_reward_normalizer,
                          extreme_edge_dict,
                          worker_device, 
                          network_iteration):
@@ -44,7 +45,7 @@ def parallel_train_worker(rank,
         state = torch.FloatTensor(state)
         # Select action
         with torch.no_grad():
-            state = shared_state_normalizer.normalize(state)
+            state = lower_state_normalizer.normalize(state)
             state = state.to(worker_device)
             action, logprob = shared_policy_old.act(state, num_proposals) # sim runs in CPU, state will initially always be in CPU.
             value = shared_policy_old.critic(state.unsqueeze(0)) # add a batch dimension
@@ -57,7 +58,7 @@ def parallel_train_worker(rank,
         # Perform action
         # These reward and next_state are for the action_duration timesteps.
         next_state, reward, done, truncated, _ = worker_env.train_step(action) # need the returned state to be 2D
-        reward = shared_reward_normalizer.normalize(reward).item()
+        reward = lower_reward_normalizer.normalize(reward).item()
         ep_reward += reward
 
         # Store data in memory
@@ -75,7 +76,7 @@ def parallel_train_worker(rank,
             break
     
     # Higher level agent's reward can only be obtained after the lower level workers have finished
-    design_reward = worker_env._get_design_reward()
+    design_reward = higher_reward_normalizer.normalize(worker_env._get_design_reward(num_proposals)).item()
 
     # In PPO, we do not make use of the total reward. We only use the rewards collected in the memory.
     worker_env.close()
