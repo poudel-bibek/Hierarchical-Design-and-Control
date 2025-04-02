@@ -827,9 +827,9 @@ class ControlEnv(gym.Env):
             - i.e., num_proposals itself is a proxy for delay
             - Penalize high num_proposals. Which is also not dependent on the demand scaling.
 
-        - General (# TODO): 
-            - Penalty for pedestrian jams
-            - Be careful: this jam has to be caused by design, not control.
+        - General: 
+            - TODO: If a proposed crosswalk is not used (does not get foot traffic), penalize. (This only makes sense in case of deterministic sampling)
+            - TODO: Penalty for pedestrian jams. Be careful: this jam has to be caused by design, not control.
         """
         design_reward = 0
 
@@ -844,6 +844,7 @@ class ControlEnv(gym.Env):
         design_reward -= num_proposals*5.0
 
         # General 
+
 
         return design_reward
     

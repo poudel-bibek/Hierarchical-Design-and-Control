@@ -417,8 +417,11 @@ class GAT_v2_ActorCritic(nn.Module):
         means = torch.sigmoid(self.actor_means(self.actor_means_layers(shared_y)))  # Constrain means to [0,1]
         
         # Scale and shift tanh to get log_stds in [-2.30, 0] range
-        # tanh outputs [-1, 1], so we scale by 1.15 and shift by -1.15 to get [-2.30, 0], exp(-2.30) ≈ 0.1, exp(0) = 1.
-        log_stds = torch.tanh(self.actor_log_std(self.actor_log_std_layers(shared_y))) * 1.15 - 1.15  # Results in std range [0.1, 1.0]
+        # tanh outputs [-1, 1], so we scale by 0.693 and shift by -2.303 to get [-3.0, -0.693], exp(-3.0) ≈ 0.05, exp(-0.693) ≈ 0.5
+        log_stds = torch.tanh(self.actor_log_std(self.actor_log_std_layers(shared_y))) * 0.693 - 2.303  # Results in std range [0.05, 0.5]
+
+        # # tanh outputs [-1, 1], so we scale by 1.15 and shift by -1.15 to get [-2.30, 0], exp(-2.30) ≈ 0.1, exp(0) = 1.
+        # log_stds = torch.tanh(self.actor_log_std(self.actor_log_std_layers(shared_y))) * 1.15 - 1.15  # Results in std range [0.1, 1.0]
 
         mix_logits = self.actor_mix_logits(self.actor_mix_logits_layers(shared_y))
         num_proposal_logits = self.actor_num_proposals(self.actor_sample_layers(y)) # probabilites obtained later.
@@ -482,19 +485,42 @@ class GAT_v2_ActorCritic(nn.Module):
             gmms_batch.append(gmm)
         return gmms_batch, num_proposals_probs_batch
     
-    def _sample_gmm(self, gmm_single, num_proposals, device):
+    def _sample_gmm(self, gmm_single, num_proposals, naive_stochastic = False, training = True, device = None):
         """
-        Sampling from GMM can be done in multiple ways.
-        - Make use of the implicit stochasticity
-        - Greedily sample at highest probability (modes)
 
-        Divide the GMM into 10 x 10 grid.
-        Calculate the probability at each grid cell
-        select grid centers with num_proposals top probability cells 
-        they may not be the ones with multiple modes
-        
+        Sampling from GMM has several issues of discussion.
+        1. During training: Stochastic vs Deterministic sampling:
+        * Make use of the implicit stochasticity (set naive_stochastic = True)
+          Justification: PG methods rely heavily on action space exploration (to get diverse experiences) within the distribution defined by the policy parameters.
+          Algorithms like PPO are foundationally built around optimizing a stochastic policy.
+
+        * Greedily sample at highest probability (modes), deterministic action selection.
+          Justification: The policy can do exploration in its parameter space. The sampling does not need to introduce additional stochasticity.
+
+            - Discretize: Divide the GMM into 10 x 10 grid.
+            - Evaluate: Calculate the probability at each grid cell
+            - Rank and select: Find the top num_proposals number of cells with highest probability.
+            - Sample: Use the center of the cell to get a sample.
+
+            The problem here is that: the selected cells may always be near the model with highest probability.
+            When the GMM is multi-modal, we would instead want the selected cells to be spread out across multiple modes.
+
+        2. Sample stochastically at train vs deterministically at test time?
+        * Making the design agent stochastic at test time does make sense for this problem.
+          Justification: The design actions are more like "one-shot" generation unlike the control actions (which are continouus and episodic). 
+          The design policy finishes training and we are supposed to get the best design at the end.
+          It is kind of doing one round of expectation minimization.
+
         """
-        pass
+        if training:
+            if naive_stochastic:
+                return gmm_single.sample((num_proposals,))
+            
+            else:
+                pass
+
+        else: # Test time
+            pass
 
     def act(self, states_batch, iteration, clamp_min, clamp_max, device, training = True, visualize=False):
         """
@@ -525,12 +551,7 @@ class GAT_v2_ActorCritic(nn.Module):
         
         for b in range(batch_size):
             # Sample proposals for this batch element
-            if training: 
-                samples = gmm_batch[b].sample((num_proposals[b].item(),))
-            else: 
-                # TODO: At test, sample greedily at each mode.
-                # Is the number of mixture components = number of modes?
-                samples = gmm_batch[b].sample((1,))
+            samples = self._sample_gmm(gmm_batch[b], num_proposals[b].item(), naive_stochastic = True, training = training, device = device)
 
             locations, thicknesses = samples.split(1, dim=-1)
             # print(f"\nBefore clamping: Locations: {locations}, Thicknesses: {thicknesses}")

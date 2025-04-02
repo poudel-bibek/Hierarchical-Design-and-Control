@@ -1,13 +1,13 @@
 Parsing types from './simulation/components/iteration_12.typ.xml' ... done.
 Parsing nodes from './simulation/components/iteration_12.nod.xml' ... done.
 Parsing edges from './simulation/components/iteration_12.edg.xml' ...
-Duplicate edge id occurred ('1050677005#7'); assuming overwriting is wished.
+Duplicate edge id occurred ('1060131394#2'); assuming overwriting is wished.
  done.
 Parsing connections from './simulation/components/iteration_12.con.xml' ... done.
  Import done:
    208 nodes loaded.
    4 types loaded.
-   335 edges loaded.
+   333 edges loaded.
 Removing self-loops ... done (0ms).
 Removing empty nodes ... done (0ms).
    0 nodes removed.
@@ -32,9 +32,9 @@ Warning: Lane '773672647#17_0' is not connected from any incoming edge at juncti
  done (0ms).
 Computing traffic light control information ... done (0ms).
 Computing node logics ... done (0ms).
-Computing traffic light logics ... done (1ms).
+Computing traffic light logics ... done (0ms).
  11 traffic light(s) computed.
-Building inner edges ... done (0ms).
+Building inner edges ... done (1ms).
 -----------------------------------------------------
 Summary:
  Node type statistics:
