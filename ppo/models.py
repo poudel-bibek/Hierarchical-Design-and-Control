@@ -497,13 +497,19 @@ class GAT_v2_ActorCritic(nn.Module):
         * Greedily sample at highest probability (modes), deterministic action selection.
           Justification: The policy can do exploration in its parameter space. The sampling does not need to introduce additional stochasticity.
 
-            - Discretize: Divide the GMM into 10 x 10 grid.
+            - Discretize: Divide the GMM into 20 x 20 grid.
             - Evaluate: Calculate the probability at each grid cell
-            - Rank and select: Find the top num_proposals number of cells with highest probability.
-            - Sample: Use the center of the cell to get a sample.
+            - Find modes: Find the number of modes in the GMM (cells in which probabilities are lower in all 4 directions)
+            - Calculate num_sampled = min(num_proposals, number of modes)
+            - Add constraints: If there are two samples with same location, instead add their width and make a single sample.
+            - Sample: Sample num_sampled cells.
 
-            The problem here is that: the selected cells may always be near the model with highest probability.
-            When the GMM is multi-modal, we would instead want the selected cells to be spread out across multiple modes.
+            ---------- DISCARDED ----------
+            # - Rank and select: Find the top num_proposals number of cells with highest probability.
+            # - Sample: Use the center of the cell to get a sample.
+
+            # The problem here is that: the selected cells may always be near the model with highest probability.
+            # When the GMM is multi-modal, we would instead want the selected cells to be spread out across multiple modes.
 
         2. Sample stochastically at train vs deterministically at test time?
         * Making the design agent stochastic at test time does make sense for this problem.
@@ -517,10 +523,82 @@ class GAT_v2_ActorCritic(nn.Module):
                 return gmm_single.sample((num_proposals,))
             
             else:
+                # TODO: Implement potentially more sophisticated training sampling if needed
                 pass
 
-        else: # Test time
-            pass
+        else: # Test time: Deterministic sampling based on modes
+            grid_size = 20
+            loc_min, loc_max = 0.0, 1.0
+            thick_min, thick_max = 0.0, 1.0
+            
+            # 1. Discretize
+            loc_step = (loc_max - loc_min) / grid_size
+            thick_step = (thick_max - thick_min) / grid_size
+            
+            loc_centers = torch.linspace(loc_min + loc_step / 2, loc_max - loc_step / 2, grid_size, device=device)
+            thick_centers = torch.linspace(thick_min + thick_step / 2, thick_max - thick_step / 2, grid_size, device=device)
+            
+            grid_loc, grid_thick = torch.meshgrid(loc_centers, thick_centers, indexing='ij')
+            grid_points = torch.stack([grid_loc.ravel(), grid_thick.ravel()], dim=-1) # Shape: (grid_size*grid_size, 2)
+
+            # 2. Evaluate
+            with torch.no_grad():
+                log_probs = gmm_single.log_prob(grid_points)
+                probs = torch.exp(log_probs).reshape(grid_size, grid_size) # Shape: (grid_size, grid_size)
+
+            # 3. Find modes
+            # Pad probabilities to handle boundary conditions easily
+            padded_probs = F.pad(probs, (1, 1, 1, 1), mode='constant', value=0) 
+            
+            is_mode = (
+                (probs > padded_probs[1:-1, :-2]) &  # Compare with left neighbor
+                (probs > padded_probs[1:-1, 2:]) &   # Compare with right neighbor
+                (probs > padded_probs[:-2, 1:-1]) &  # Compare with top neighbor
+                (probs > padded_probs[2:, 1:-1])     # Compare with bottom neighbor
+            )
+            
+            mode_indices = torch.nonzero(is_mode) # Shape: (num_modes, 2) [row, col] indices
+            num_modes_found = mode_indices.shape[0]
+
+            if num_modes_found == 0:
+                 # If no local modes, sample the single highest probability point
+                 max_prob_idx_flat = torch.argmax(probs)
+                 max_prob_idx = torch.tensor([max_prob_idx_flat // grid_size, max_prob_idx_flat % grid_size], device=device).unsqueeze(0)
+                 mode_indices = max_prob_idx
+                 num_modes_found = 1
+                 
+            # 4. Calculate num_sampled
+            num_sampled = min(num_proposals, num_modes_found)
+
+            # 5. Select top modes
+            mode_probs = probs[mode_indices[:, 0], mode_indices[:, 1]]
+            top_k_indices = torch.topk(mode_probs, k=num_sampled).indices
+            selected_mode_indices = mode_indices[top_k_indices] # Shape: (num_sampled, 2)
+
+            # 6. Get samples (centers of the selected mode cells)
+            # Note: Constraint step ("Add constraints: If there are two samples...") is complex and not implemented. Sampling the distinct mode centers.
+            selected_loc_indices = selected_mode_indices[:, 0]
+            selected_thick_indices = selected_mode_indices[:, 1]
+            
+            sampled_locations = loc_centers[selected_loc_indices]
+            sampled_thicknesses = thick_centers[selected_thick_indices]
+            
+            actual_samples = torch.stack([sampled_locations, sampled_thicknesses], dim=-1) # Shape: (num_sampled, 2)
+
+            # 7. Pad if necessary to ensure output shape is (num_proposals, 2)
+            if num_sampled < num_proposals:
+                padding_needed = num_proposals - num_sampled
+                # Use -1.0 for padding, consistent with initialization in `act`
+                padding_tensor = torch.full((padding_needed, 2), -1.0, dtype=actual_samples.dtype, device=device) 
+                final_samples = torch.cat([actual_samples, padding_tensor], dim=0)
+            else:
+                final_samples = actual_samples
+            
+            # Ensure the final output shape is correct
+            assert final_samples.shape == (num_proposals, 2), f"Output shape mismatch: expected ({num_proposals}, 2), got {final_samples.shape}"
+
+            return final_samples
+
 
     def act(self, states_batch, iteration, clamp_min, clamp_max, device, training = True, visualize=False):
         """
@@ -540,8 +618,13 @@ class GAT_v2_ActorCritic(nn.Module):
         # print(f"\n\nGMMs: {gmm_batch}\n\n")
 
         # Sample one proposal for each batch element (add 1 to ensure at least 1 proposal; default starts from index 0)
-        # Using torch multinomial to sample from discrete distribution.
-        num_proposals = torch.multinomial(num_proposals_probs_batch, 1).squeeze(-1) + 1
+        if training:
+            # Stochastic sampling during training
+            num_proposals = torch.multinomial(num_proposals_probs_batch, 1).squeeze(-1) + 1
+        else:
+            # Deterministic selection during evaluation (choose max probability)
+            num_proposals = torch.argmax(num_proposals_probs_batch, dim=-1) + 1
+        
         # print(f"\nnum_proposals: {num_proposals.shape, num_proposals}\n")
 
         batch_size = states_batch.num_graphs 
@@ -580,10 +663,11 @@ class GAT_v2_ActorCritic(nn.Module):
                 self.visualize_gmm(gmm_batch[b], markers=markers, batch_index=b, thickness_range=(0, 1), location_range=(0, 1), iteration=iteration)
 
             # Store in output tensor
-            padded_proposals[b, :num_proposals[b], 0] = locations.squeeze()
-            padded_proposals[b, :num_proposals[b], 1] = thicknesses.squeeze()
+            num_returned_samples = samples.shape[0] # Number of samples actually returned by _sample_gmm
+            padded_proposals[b, :num_returned_samples, 0] = locations.squeeze(-1) # Assign only num_returned_samples, ensure squeeze removes last dim if size 1
+            padded_proposals[b, :num_returned_samples, 1] = thicknesses.squeeze(-1) # Assign only num_returned_samples, ensure squeeze removes last dim if size 1
             
-            # Compute log probabilities for this batch element
+            # Compute log probabilities for this batch element using the actually returned samples
             # SUM operation is correct for joint log prob of thickness and location.
             log_probs[b] = gmm_batch[b].log_prob(samples).sum() 
 

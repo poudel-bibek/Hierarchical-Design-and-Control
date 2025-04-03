@@ -118,6 +118,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
                                                                                         design_args['clamp_min'], 
                                                                                         design_args['clamp_max'], 
                                                                                         device,
+                                                                                        training=False,
                                                                                         visualize=True) 
         
         # Since the higher agent internally takes a step where a number of parallel lower agents take their own steps, 

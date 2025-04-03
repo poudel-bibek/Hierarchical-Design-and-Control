@@ -1,6 +1,8 @@
 import os
 import shutil
 from itertools import tee
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 import networkx as nx

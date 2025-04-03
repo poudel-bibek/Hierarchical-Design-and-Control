@@ -3,7 +3,7 @@ import torch.nn as nn
 class HyperParameterTuner: 
     def __init__(self, config, train_function):
         self.config = config
-        self.project = "ppo-urban-control"
+        self.project = "urban-design-and-control"
         self.train_function = train_function
         
     def start(self, ):
@@ -18,7 +18,7 @@ class HyperParameterTuner:
         finally:
             wandb.finish() 
 
-    def create_sweep_config(self, method="bayes"): # options: random, grid, bayes
+    def create_sweep_config(self, method='bayes'): # options: random, grid, bayes
         """
         If using random, max and min values are required.
         We do not want to get weird weights such as 0.192 for various params. Hence not using random search.
@@ -36,76 +36,110 @@ class HyperParameterTuner:
             1. Robustness: avg_reward considers the performance across all processes in an iteration, each with potentially different demand scaling factors. 
             2. Consistency: By averaging rewards across processes, we reduce the impact of potential overfitting to a specific demand scaling factor.
         """
-        if method == "random":
-            sweep_config = {
-            'method': 'random', 
+
+        sweep_config = {
+
+            'method': method, 
             'metric': {
-                'name': 'avg_reward',
-                'goal': 'maximize'
+                'name': 'avg_eval', # Using avg_eval like in bayes
+                'goal': 'minimize'  # Minimize average evaluation time
                 },
+
             'parameters': {
-                'gae_lambda': {'values': [0.9, 0.95, 0.99]},
-                'update_freq': {'values': [64, 128, 256, 512]},
-                'lr': {'values': [0.05, 0.01, 0.002, 0.001, 0.0005] }, # starting value of lr
-                'gamma': {'values': [0.90, 0.95, 0.98, 0.999]},
-                'K_epochs': {'values': [2, 4, 8] },
-                'eps_clip': {'values': [0.1, 0.2, 0.3]},
-                'ent_coef': {'values': [0.0001, 0.001, 0.005, 0.01]},
-                'vf_coef': {'values': [0.25, 0.5, 0.75, 1.0]},
-                'batch_size': {'values': [15, 32, 64, 128]},
-                # policy specific
-                'size': {'values': ['small', 'medium']},
-                'kernel_size': {'values': [3, 5]},
-                'dropout_rate': {'values': [0.1, 0.2, 0.3]},
-                }
-            }
-        
-        elif method=="bayes":
-            sweep_config = {
-            'method': 'bayes', 
-            'metric': {
-                'name': 'avg_eval',
-                'goal': 'minimize'
+                # Higher Level Agent (Design)
+                'higher_lr': {
+                    'values': [5e-5, 1e-4, 5e-4, 1e-3]
                 },
-            'parameters': {
-                'lr': {
-                    'values': [1e-4]
+                'higher_gae_lambda': {
+                    'values': [0.95, 0.98, 0.99]
                 },
-                'gae_lambda': {
-                    'values': [0.95, 0.99]
+                'higher_update_freq': {
+                    'values': [8, 16, 32]
                 },
-                'update_freq': {
-                    'values': [512, 1024]
+                'higher_gamma': {
+                    'values': [0.98, 0.99, 0.995]
                 },
-                'gamma': {
-                    'values': [0.98, 0.99]
+                'higher_K_epochs': {
+                    'values': [2, 4, 8]
                 },
-                'K_epochs': {
+                'higher_eps_clip': {
+                    'values': [0.15, 0.2, 0.25]
+                },
+                'higher_ent_coef': {
+                    'values': [0.005, 0.01, 0.02]
+                },
+                'higher_vf_coef': {
+                    'values': [0.4, 0.5, 0.6]
+                },
+                'higher_vf_clip_param': {
+                    'values': [0.4, 0.5, 0.6]
+                },
+                'higher_batch_size': {
+                    'values': [16, 32, 64]
+                },
+                'higher_dropout_rate': {
+                    'values': [0.1, 0.2, 0.3]
+                },
+                'higher_model_size': {
+                    'values': ['medium'] 
+                },
+                'higher_activation': {
+                    'values': ["tanh", "relu"]
+                },
+                'num_mixtures': { 
+                    'values': [4, 6]
+                },
+                'initial_heads': { 
                     'values': [4, 8]
                 },
-                'eps_clip': {
-                    'values': [0.2, 0.25]
+                'higher_hidden_channels': { 
+                    'values': [32, 64, 128]
                 },
-                'ent_coef': {
-                    'values': [0.01, 0.02]
+                'higher_out_channels': { 
+                    'values': [16, 32, 64]
                 },
-                'vf_coef': {
-                    'values': [0.5, 0.75]
+
+                # Lower Level Agent (Control)
+                'lower_lr': {
+                    'values': [5e-5, 1e-4, 2e-4]
                 },
-                'vf_clip_param': {
-                    'values': [0.5, 0.75]
+                'lower_gae_lambda': {
+                    'values': [0.95, 0.98, 0.99]
                 },
-                'batch_size': {
-                    'values': [64, 128]
+                'lower_update_freq': {
+                    'values': [512, 1024, 2048]
                 },
-                # policy:
-                'size': {
+                'lower_gamma': {
+                    'values': [0.98, 0.99, 0.995]
+                },
+                'lower_K_epochs': {
+                    'values': [2, 4, 8]
+                },
+                'lower_eps_clip': {
+                    'values': [0.15, 0.2, 0.25]
+                },
+                'lower_ent_coef': {
+                    'values': [0.005, 0.01, 0.02]
+                },
+                'lower_vf_coef': {
+                    'values': [0.4, 0.5, 0.6]
+                },
+                'lower_vf_clip_param': {
+                    'values': [0.4, 0.5, 0.6]
+                },
+                'lower_batch_size': {
+                    'values': [32, 64, 128]
+                },
+                'lower_dropout_rate': {
+                    'values': [0.1, 0.2, 0.3]
+                },
+                'lower_model_size': {
                     'values': ['medium']
                 },
-                'activation': {
-                    'values': ["tanh"]
+                'lower_activation': {
+                    'values': ["tanh", "relu"]
                 },
-                }
-            }  
-        sweep_id = wandb.sweep(sweep_config, entity="fluidic-city", project=self.project)
-        return sweep_id
+            }
+        }
+        
+        return wandb.sweep(sweep_config, entity="fluidic-city", project=self.project)

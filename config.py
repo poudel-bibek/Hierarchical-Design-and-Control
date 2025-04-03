@@ -1,7 +1,7 @@
 def get_config():
     config = {
         # Simulation
-        "sweep": False,  # Use wandb sweeps for hyperparameter tuning
+        "sweep": True,  # Use wandb sweeps for hyperparameter tuning
         "evaluate": False, 
         "gui": True,  # Use SUMO GUI (default: False)
          
@@ -23,7 +23,7 @@ def get_config():
         # PPO (general params)
         "seed": None,  # Random seed (default: None)
         "gpu": True,  # Use GPU if available (default: use CPU)
-        "total_timesteps": 8000000,  # Total number of timesteps the simulation will run
+        "total_timesteps": 10000000,  # Total number of timesteps the simulation will run
         "save_freq": 5,  # Save policy after every n updates (0 to disable). Also decided how often to evaluate
 
         # PPO Higher level agent params
@@ -31,7 +31,7 @@ def get_config():
         "higher_gae_lambda": 0.95,  # GAE lambda for higher-level agent
         "higher_max_grad_norm": 0.75,  # Maximum gradient norm for gradient clipping
         "higher_vf_clip_param": 0.5,  # Value function clipping parameter
-        "higher_update_freq": 2,  # Number of action timesteps between each policy update
+        "higher_update_freq": 32,  # Number of action timesteps between each policy update. A low value incurs high variance for design agent.
         "higher_lr": 0.001,  # Learning rate for higher-level agent
         "higher_gamma": 0.99,  # Discount factor for higher-level agent
         "higher_K_epochs": 4,  # Number of epochs to update policy for higher-level agent
@@ -73,18 +73,18 @@ def get_config():
         "lower_ent_coef": 0.01,  # Entropy coefficient
         "lower_vf_coef": 0.5,  # Value function coefficient
         "lower_batch_size": 64,  # Batch size
-        "lower_num_processes": 1,  # Number of parallel processes to use (agent has multiple workers)
+        "lower_num_processes": 6,  # Number of parallel processes to use (agent has multiple workers)
         "lower_model_size": "medium",  # Model size for CNN: 'small' or 'medium'
         "lower_dropout_rate": 0.25,  # Dropout rate for CNN
         "lower_action_dim": None, # will be set later
         "lower_in_channels": 1, # in_channels for cnn
         "lower_activation": "tanh",  # Policy activation function
-        "lower_max_timesteps": 200,  # Maximum number of steps in one episode (make this multiple of 16*10)
+        "lower_max_timesteps": 460,  # Maximum number of steps in one episode (make this multiple of 16*10)
         "lower_memory_transfer_freq": 16,  # Frequency of memory transfer from worker to main process 
         "lower_per_timestep_state_dim": 11 + 32 + 8 * 10,  # Number of features per timestep (corresponding to max_proposals = 10), calculation in _get_observation function.
         "lower_step_length": 1.0,  # Real-world time in seconds per simulation timestep (default: 1.0). 
         "lower_action_duration": 10,  # Number of simulation timesteps for each action (default: 10)
-        "lower_warmup_steps": [50, 100],  # Number of steps to run before collecting data
+        "lower_warmup_steps": [100, 240],  # Number of steps to run before collecting data
         "lower_auto_start": True,  # Automatically start the simulation
 
         # Evaluation
