@@ -485,7 +485,7 @@ class GAT_v2_ActorCritic(nn.Module):
             gmms_batch.append(gmm)
         return gmms_batch, num_proposals_probs_batch
     
-    def _sample_gmm(self, gmm_single, num_proposals, naive_stochastic = False, training = True, device = None):
+    def _sample_gmm(self, gmm_single, num_proposals, naive_stochastic = False, training=True, device = None):
         """
 
         Sampling from GMM has several issues of discussion.
@@ -500,7 +500,7 @@ class GAT_v2_ActorCritic(nn.Module):
             - Discretize: Divide the GMM into 20 x 20 grid.
             - Evaluate: Calculate the probability at each grid cell
             - Find modes: Find the number of modes in the GMM (cells in which probabilities are lower in all 4 directions)
-            - Calculate num_sampled = min(num_proposals, number of modes)
+            - TODO: Calculate num_sampled = Either num_samples that collapse into nearby modes within a threshold or min(num_proposals, number of modes)
             - Add constraints: If there are two samples with same location, instead add their width and make a single sample.
             - Sample: Sample num_sampled cells.
 
@@ -582,25 +582,10 @@ class GAT_v2_ActorCritic(nn.Module):
             
             sampled_locations = loc_centers[selected_loc_indices]
             sampled_thicknesses = thick_centers[selected_thick_indices]
-            
-            actual_samples = torch.stack([sampled_locations, sampled_thicknesses], dim=-1) # Shape: (num_sampled, 2)
-
-            # 7. Pad if necessary to ensure output shape is (num_proposals, 2)
-            if num_sampled < num_proposals:
-                padding_needed = num_proposals - num_sampled
-                # Use -1.0 for padding, consistent with initialization in `act`
-                padding_tensor = torch.full((padding_needed, 2), -1.0, dtype=actual_samples.dtype, device=device) 
-                final_samples = torch.cat([actual_samples, padding_tensor], dim=0)
-            else:
-                final_samples = actual_samples
-            
-            # Ensure the final output shape is correct
-            assert final_samples.shape == (num_proposals, 2), f"Output shape mismatch: expected ({num_proposals}, 2), got {final_samples.shape}"
-
-            return final_samples
+            return torch.stack([sampled_locations, sampled_thicknesses], dim=-1) # Shape: (num_sampled, 2)
 
 
-    def act(self, states_batch, iteration, clamp_min, clamp_max, device, training = True, visualize=False):
+    def act(self, states_batch, iteration, clamp_min, clamp_max, device, training=True, visualize=False):
         """
         Sample actions from the GMM (propose upto max_proposals number of crosswalks).
         Policy gradient methods require the log probabilities of the actions to be returned as well.
@@ -629,16 +614,20 @@ class GAT_v2_ActorCritic(nn.Module):
 
         batch_size = states_batch.num_graphs 
         # Initialize output tensors with -1 so that its easier to infer actual proposals in critic.
-        padded_proposals = torch.full((batch_size, self.max_proposals, 2), -1.0, dtype=torch.float32, device=device) 
+        padded_proposals = torch.full((batch_size, self.max_proposals, 2), -1.0, dtype=torch.float32, device=device)
         log_probs = torch.zeros(batch_size, device=device)
         
         for b in range(batch_size):
             # Sample proposals for this batch element
-            samples = self._sample_gmm(gmm_batch[b], num_proposals[b].item(), naive_stochastic = True, training = training, device = device)
+            samples = self._sample_gmm(gmm_batch[b], 
+                                       num_proposals[b].item(), 
+                                       naive_stochastic = True, 
+                                       training = training, 
+                                       device = device)
 
             locations, thicknesses = samples.split(1, dim=-1)
-            # print(f"\nBefore clamping: Locations: {locations}, Thicknesses: {thicknesses}")
-        
+            print(f"\nBefore clamping: Locations: {locations}, Thicknesses: {thicknesses}")
+            
             # Apply a noisy clamp individually to prevent exact overlap at same locations.
             # Although means are constrained to [0,1], log_stds are not.
             # We should be less dependent on clamping here and make sure the GMM itself lies in the desired range.
@@ -651,8 +640,7 @@ class GAT_v2_ActorCritic(nn.Module):
             # locations = torch.clamp(locations, clamp_min, clamp_max)  
             
             thicknesses = torch.clamp(thicknesses, clamp_min, clamp_max) 
-
-            # print(f"\nAfter clamping: Locations: {locations}, Thicknesses: {thicknesses}")
+            print(f"\nAfter clamping: Locations: {locations}, Thicknesses: {thicknesses}")
  
             # Recombine the samples
             samples = torch.cat([locations, thicknesses], dim=-1)
@@ -664,13 +652,14 @@ class GAT_v2_ActorCritic(nn.Module):
 
             # Store in output tensor
             num_returned_samples = samples.shape[0] # Number of samples actually returned by _sample_gmm
-            padded_proposals[b, :num_returned_samples, 0] = locations.squeeze(-1) # Assign only num_returned_samples, ensure squeeze removes last dim if size 1
-            padded_proposals[b, :num_returned_samples, 1] = thicknesses.squeeze(-1) # Assign only num_returned_samples, ensure squeeze removes last dim if size 1
-            
+            padded_proposals[b, :num_returned_samples, 0] = locations.squeeze(-1) # Assign only num_returned_samples
+            padded_proposals[b, :num_returned_samples, 1] = thicknesses.squeeze(-1) # Assign only num_returned_samples
+        
             # Compute log probabilities for this batch element using the actually returned samples
             # SUM operation is correct for joint log prob of thickness and location.
-            log_probs[b] = gmm_batch[b].log_prob(samples).sum() 
+            log_probs[b] = gmm_batch[b].log_prob(samples).sum()
 
+        print(f"\nPadded_proposals: {padded_proposals}")
         return padded_proposals, num_proposals, log_probs
     
     def evaluate(self, states_batch, actions_batch, device = None):
@@ -795,8 +784,9 @@ class GAT_v2_ActorCritic(nn.Module):
         ax.tick_params(axis='both', which='major', labelsize=fs-2)
         
         # Set fixed z-axis limits
-        ax.set_zlim(0, 1.0)
-        ax.set_zticks(np.linspace(0, 1.0, 5))
+        z_max = 3.0
+        ax.set_zlim(0, z_max)
+        ax.set_zticks(np.linspace(0, z_max, 6))
         
         plt.tight_layout()
         # plt.show()

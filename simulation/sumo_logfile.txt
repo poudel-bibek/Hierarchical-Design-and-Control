@@ -1,0 +1,28 @@
+***Starting server on port 54181 ***
+Loading net-file from './simulation/network_iterations/network_iteration_2.net.xml' ... done (13ms).
+Warning: Missing green phase in tlLogic 'cluster_172228464_482708521_9687148201_9687148202_#5more', program '0' for tl-index 20.
+Loading route-files incrementally from './simulation/scaled_trips/scaled_vehtrips_1.xml'
+Loading route-files incrementally from './simulation/scaled_trips/scaled_pedtrips_1.xml'
+Loading done.
+Simulation started with time: 0.00.
+Simulation ended at time: 690.00.
+Reason: TraCI requested termination.
+Performance:
+ Duration: 93.15s
+ TraCI-Duration: 83.75s
+ Real time factor: 7.40741
+ UPS: 161.717660
+ UPS-Persons: 1882.190016
+Vehicles:
+ Inserted: 73 (Loaded: 88)
+ Running: 23
+ Waiting: 0
+Persons:
+ Inserted: 889
+ Running: 360
+DijkstraRouter answered 10877 queries and explored 4.68 edges on average.
+DijkstraRouter spent 0.02s answering queries (0.00ms on average).
+DijkstraRouter answered 762 queries and explored 491.69 edges on average.
+DijkstraRouter spent 0.03s answering queries (0.04ms on average).
+DijkstraRouter answered 73 queries and explored 50.90 edges on average.
+DijkstraRouter spent 0.00s answering queries (0.04ms on average).

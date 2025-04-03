@@ -86,9 +86,6 @@ class HyperParameterTuner:
                 'higher_activation': {
                     'values': ["tanh", "relu"]
                 },
-                'num_mixtures': { 
-                    'values': [4, 6]
-                },
                 'initial_heads': { 
                     'values': [4, 8]
                 },
