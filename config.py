@@ -23,20 +23,21 @@ def get_config():
         # PPO (general params)
         "seed": None,  # Random seed (default: None)
         "gpu": True,  # Use GPU if available (default: use CPU)
-        "total_timesteps": 10000000,  # Total number of timesteps the simulation will run
-        "save_freq": 5,  # Save policy after every n updates (0 to disable). Also decided how often to evaluate
+        "total_timesteps": 15000000,  # Total number of timesteps the simulation will run
+        "eval_freq": 5,  # Evaluate both higher and lower-level policies and their normalizers after every n updates of the higher policy (0 to disable). 
+        # Also decides how often to evaluate
 
         # PPO Higher level agent params
         "higher_anneal_lr": True,  # Anneal learning rate
         "higher_gae_lambda": 0.95,  # GAE lambda for higher-level agent
         "higher_max_grad_norm": 0.75,  # Maximum gradient norm for gradient clipping
         "higher_vf_clip_param": 0.5,  # Value function clipping parameter
-        "higher_update_freq": 32,  # Number of action timesteps between each policy update. A low value incurs high variance for design agent.
+        "higher_update_freq": 64,  # Number of action timesteps between each policy update. A low value incurs high variance for design agent.
         "higher_lr": 0.001,  # Learning rate for higher-level agent
         "higher_gamma": 0.99,  # Discount factor for higher-level agent
         "higher_K_epochs": 4,  # Number of epochs to update policy for higher-level agent
         "higher_eps_clip": 0.2,  # Clip parameter for PPO for higher-level agent
-        "higher_batch_size": 32,  # Batch size for higher-level agent
+        "higher_batch_size": 8,  # Batch size for higher-level agent
         "higher_dropout_rate": 0.25,  # Dropout rate for GATv2
         "higher_model_size": "medium",  # Model size for GATv2: 'small' or 'medium'
         "higher_ent_coef": 0.01,  # Entropy coefficient for higher-level agent
@@ -54,7 +55,7 @@ def get_config():
         "max_proposals": 10,  # Maximum number of proposals to consider for higher-level agent
         "save_graph_images": True, # Save graph image every iteration.
         "save_gmm_plots": True, # Save GMM visualization every iteration.
-        "num_mixtures": 8,  # Number of mixture components in GMM. Having more is fine (they will collapse into each other). Having less is may be a problem.
+        "num_mixtures": 5,  # Number of mixture components in GMM. Having more is ok (means will collapse into each other) but makes it difficult to learn. Having less will make it less representative.
         'initial_heads': 8, # Number of attention heads in first GATv2 layer
         'second_heads': 1, # Number of attention heads in second GATv2 layer
         'edge_dim': 2, # Number of features per edge 
@@ -65,7 +66,6 @@ def get_config():
         "lower_max_grad_norm": 0.75,  # Maximum gradient norm for gradient clipping
         "lower_vf_clip_param": 0.5,  # Value function clipping parameter
         "lower_update_freq": 1024,  # Number of action timesteps between each policy update
-        "lower_save_freq": 2,  # Save lower-level policy after every n updates (0 to disable).
         "lower_lr": 1e-4,  # Learning rate
         "lower_gamma": 0.99,  # Discount factor
         "lower_K_epochs": 4,  # Number of epochs to update policy
@@ -73,7 +73,7 @@ def get_config():
         "lower_ent_coef": 0.01,  # Entropy coefficient
         "lower_vf_coef": 0.5,  # Value function coefficient
         "lower_batch_size": 64,  # Batch size
-        "lower_num_processes": 6,  # Number of parallel processes to use (agent has multiple workers)
+        "lower_num_processes": 10,  # Number of parallel processes to use (agent has multiple workers)
         "lower_model_size": "medium",  # Model size for CNN: 'small' or 'medium'
         "lower_dropout_rate": 0.25,  # Dropout rate for CNN
         "lower_action_dim": None, # will be set later
@@ -106,10 +106,11 @@ def classify_and_return_args(train_config, device):
     design_args = {
         'save_graph_images': train_config['save_graph_images'],
         'save_gmm_plots': train_config['save_gmm_plots'],
+        'save_dir': None, # Will be set later.
         'network_dir': train_config['network_dir'],
         'component_dir': train_config['component_dir'],
         'original_net_file': train_config['original_net_file'],
-        'save_freq': train_config['save_freq'],
+        'eval_freq': train_config['eval_freq'],
         'max_proposals': train_config['max_proposals'],
         'min_thickness': train_config['min_thickness'],
         'max_thickness': train_config['max_thickness'],
@@ -136,14 +137,11 @@ def classify_and_return_args(train_config, device):
         'demand_scale_min': train_config['demand_scale_min'],
         'demand_scale_max': train_config['demand_scale_max'],
         'memory_transfer_freq': train_config['lower_memory_transfer_freq'],
-        'writer': None, # Need dummy values for dummy envs init.
-        'save_dir': None,
         'max_proposals': train_config['max_proposals'],
         'total_action_timesteps_per_episode': None,
         'lower_num_processes': train_config['lower_num_processes'],
         'lower_anneal_lr': train_config['lower_anneal_lr'],
         'lower_update_freq': train_config['lower_update_freq'],
-        'lower_save_freq': train_config['lower_save_freq'],
     }
 
     higher_model_kwargs = { 

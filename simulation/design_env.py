@@ -96,18 +96,20 @@ class DesignEnv(gym.Env):
         self.global_step = 0
         self.action_timesteps = 0 # keep track of how many times action has been taken by all lower level workers
         self.lower_update_count = 0
-
-        self.writer = self.control_args['writer']
         self.total_updates_lower = None
-        self.best_lower_reward = float('-inf')
-        self.best_lower_loss = float('inf')
-        self.best_lower_eval = float('inf')
-
-        # Bugfix: Removing unpicklable object (writer) from control_args
-        self.control_args_worker = {k: v for k, v in self.control_args.items() if k != 'writer'}
         self.model_init_params_worker = {'model_dim': self.lower_ppo_args['model_dim'],
                                      'action_dim': self.lower_ppo_args['action_dim'],
                                      'kwargs': self.lower_ppo_args['model_kwargs']}
+        self.info = {
+            'lower_avg_reward': None,
+            'lower_update_count': None,
+            'lower_policy_loss': None,
+            'lower_value_loss': None,
+            'lower_entropy_loss': None,
+            'lower_total_loss': None,
+            'lower_current_lr': None,
+            'lower_approx_kl': None,
+        }
 
     @property
     def action_space(self):
@@ -253,8 +255,6 @@ class DesignEnv(gym.Env):
         self._apply_action(proposals, iteration)
 
         done = False
-        info = {}
-        
         lower_old_policy = self.lower_ppo.policy_old.to(self.lower_ppo_args['device'])
         lower_old_policy.share_memory() # The same policy is shared among all workers.
         lower_old_policy.eval() # So that dropout, batchnorm, layer norm etc. are not used during inference
@@ -269,7 +269,7 @@ class DesignEnv(gym.Env):
                 args=(
                     rank,
                     lower_old_policy,
-                    self.control_args_worker,
+                    self.control_args,
                     lower_queue,
                     worker_seed,
                     num_proposals,
@@ -284,10 +284,7 @@ class DesignEnv(gym.Env):
             lower_processes.append(p)
             active_lower_workers.append(rank)
         
-        all_memories = Memory()
-        avg_eval = 200.0 # arbitrary large number
-        eval_veh_avg_wait = 200.0
-        eval_ped_avg_wait = 200.0
+        lower_memories = Memory()
         design_rewards = []
 
         while active_lower_workers:
@@ -301,12 +298,12 @@ class DesignEnv(gym.Env):
             else:
                 current_action_timesteps = len(memory.states)
                 print(f"Memory from worker {rank} received. Memory size: {current_action_timesteps}\n")
-                all_memories.actions.extend(torch.from_numpy(np.asarray(memory.actions)))
-                all_memories.states.extend(torch.from_numpy(np.asarray(memory.states)))
-                all_memories.values.extend(memory.values)
-                all_memories.logprobs.extend(memory.logprobs)
-                all_memories.rewards.extend(memory.rewards)
-                all_memories.is_terminals.extend(memory.is_terminals)
+                lower_memories.actions.extend(torch.from_numpy(np.asarray(memory.actions)))
+                lower_memories.states.extend(torch.from_numpy(np.asarray(memory.states)))
+                lower_memories.values.extend(memory.values)
+                lower_memories.logprobs.extend(memory.logprobs)
+                lower_memories.rewards.extend(memory.rewards)
+                lower_memories.is_terminals.extend(memory.is_terminals)
 
                 self.action_timesteps += current_action_timesteps
                 self.global_step += current_action_timesteps * self.control_args['lower_action_duration']
@@ -315,81 +312,34 @@ class DesignEnv(gym.Env):
 
                 # Update PPO every n times (or close to n) action has been taken 
                 if self.action_timesteps >= self.control_args['lower_update_freq']:
-                    print(f"Updating PPO with {len(all_memories.actions)} memories") 
-
+                    print(f"Updating Lower PPO with {len(lower_memories.actions)} memories") 
                     self.lower_update_count += 1
 
                     # Anneal after every update
                     if self.control_args['lower_anneal_lr']:
                         current_lr_lower = self.lower_ppo.update_learning_rate(iteration, self.total_updates_lower)
 
-                    avg_reward = sum(all_memories.rewards) / len(all_memories.rewards)
-                    print(f"\nAverage Reward (across all memories): {avg_reward}\n")
+                    avg_lower_reward = sum(lower_memories.rewards) / len(lower_memories.rewards)
+                    print(f"\nAverage Lower Reward (across all memories): {avg_lower_reward}\n")
 
-                    loss = self.lower_ppo.update(all_memories, num_proposals)
+                    lower_loss = self.lower_ppo.update(lower_memories, num_proposals)
 
                     # Reset all memories
-                    del all_memories
-                    all_memories = Memory() 
+                    del lower_memories
+                    lower_memories = Memory() 
                     self.action_timesteps = 0
-                    print(f"Size of all memories after update: {len(all_memories.actions)}")
+                    print(f"Size of lower memories after update: {len(lower_memories.actions)}")
 
-                    # TODO: Eval disabled for now.
-                    # Save (and evaluate the latest policy) every save_freq updates
-                    # if self.lower_update_count % self.control_args['lower_save_freq'] == 0:
-                    #     latest_policy_path = os.path.join(self.control_args['save_dir'], f'lower_policy_at_step_{self.global_step}.pth')
-                    #     save_policy(self.lower_ppo.policy, shared_state_normalizer, latest_policy_path)
-
-                    #     # Evaluate the latest policy
-                    #     print(f"Evaluating policy: {latest_policy_path} at step {self.global_step}")
-                    #     eval_json = eval(self.control_args_worker, self.lower_ppo_args, eval_args, policy_path=latest_policy_path, tl= False) # which policy to evaluate?
-                    #     _, eval_veh_avg_wait, eval_ped_avg_wait, _, _ = get_averages(eval_json)
-                    #     eval_veh_avg_wait = np.mean(eval_veh_avg_wait)
-                    #     eval_ped_avg_wait = np.mean(eval_ped_avg_wait)
-                    #     avg_eval = ((eval_veh_avg_wait + eval_ped_avg_wait) / 2)
-                    #     print(f"Eval veh avg wait: {eval_veh_avg_wait}, eval ped avg wait: {eval_ped_avg_wait}, avg eval: {avg_eval}")
-
-                    # Save best policies using instance variables
-                    if avg_reward > self.best_lower_reward:
-                        save_policy(self.lower_ppo.policy, lower_state_normalizer, os.path.join(self.control_args['save_dir'], 'best_reward_policy.pth'))
-                        self.best_lower_reward = avg_reward
-                    if loss['total_loss'] < self.best_lower_loss:
-                        save_policy(self.lower_ppo.policy, lower_state_normalizer, os.path.join(self.control_args['save_dir'], 'best_loss_policy.pth'))
-                        self.best_lower_loss = loss['total_loss']
-                    if avg_eval < self.best_lower_eval:
-                        save_policy(self.lower_ppo.policy, lower_state_normalizer, os.path.join(self.control_args['save_dir'], 'best_eval_policy.pth'))
-                        self.best_lower_eval = avg_eval
-
-                    # logging
-                    if is_sweep: # Wandb for hyperparameter tuning
-                        wandb.log({ "iteration": iteration,
-                                        "lower_avg_reward": avg_reward, # Set as maximize in the sweep config
-                                        "lower_update_count": self.lower_update_count,
-                                        "lower_policy_loss": loss['policy_loss'],
-                                        "lower_value_loss": loss['value_loss'], 
-                                        "lower_entropy_loss": loss['entropy_loss'],
-                                        "lower_total_loss": loss['total_loss'],
-                                        "lower_current_lr": current_lr_lower if self.control_args['lower_anneal_lr'] else self.lower_ppo_args['lr'],
-                                        "lower_approx_kl": loss['approx_kl'],
-                                        "eval_veh_avg_wait": eval_veh_avg_wait,
-                                        "eval_ped_avg_wait": eval_ped_avg_wait,
-                                        "avg_eval": avg_eval,
-                                        "global_step": self.global_step })
-                        
-                    else: # Tensorboard for regular training
-                        self.writer.add_scalar('Lower/Average_Reward', avg_reward, self.global_step)
-                        self.writer.add_scalar('Lower/Total_Policy_Updates', self.lower_update_count, self.global_step)
-                        self.writer.add_scalar('Lower/Policy_Loss', loss['policy_loss'], self.global_step)
-                        self.writer.add_scalar('Lower/Value_Loss', loss['value_loss'], self.global_step)
-                        self.writer.add_scalar('Lower/Entropy_Loss', loss['entropy_loss'], self.global_step)
-                        self.writer.add_scalar('Lower/Total_Loss', loss['total_loss'], self.global_step)
-                        self.writer.add_scalar('Lower/Current_LR', current_lr_lower if self.control_args['lower_anneal_lr'] else self.lower_ppo_args['lr'], self.global_step)
-                        self.writer.add_scalar('Lower/Approx_KL', loss['approx_kl'], self.global_step)
-                        self.writer.add_scalar('Evaluation/Veh_Avg_Wait', eval_veh_avg_wait, self.global_step)
-                        self.writer.add_scalar('Evaluation/Ped_Avg_Wait', eval_ped_avg_wait, self.global_step)
-                        self.writer.add_scalar('Evaluation/Avg_Eval', avg_eval, self.global_step)
-                        print(f"Logged lower agent data at step {self.global_step}")
-                        
+                    self.info = {
+                        'lower_avg_reward': avg_lower_reward,
+                        'lower_update_count': self.lower_update_count,
+                        'lower_policy_loss': lower_loss['policy_loss'],
+                        'lower_value_loss': lower_loss['value_loss'],
+                        'lower_entropy_loss': lower_loss['entropy_loss'],
+                        'lower_total_loss': lower_loss['total_loss'],
+                        'lower_current_lr': current_lr_lower if self.control_args['lower_anneal_lr'] else self.lower_ppo_args['lr'],
+                        'lower_approx_kl': lower_loss['approx_kl'],
+                    }      
                         
          # Clean up. The join() method ensures that the main program waits for all processes to complete before continuing.
         for p in lower_processes:
@@ -404,20 +354,12 @@ class DesignEnv(gym.Env):
         # It is also averaged across the various lower level workers.
         average_design_reward = np.mean(design_rewards)
         print(f"\nAverage design reward: {average_design_reward}\n")
-
-        if is_sweep:
-            wandb.log({ "iteration": iteration,
-                        "higher_avg_reward": average_design_reward })
-        else: 
-            self.writer.add_scalar('Higher/Average_Reward', average_design_reward, self.global_step)
-
-            
         iterative_torch_graph = self._convert_to_torch_geometric(self.iterative_networkx_graph)
         next_state = Data(x=iterative_torch_graph.x,
                            edge_index=iterative_torch_graph.edge_index,
                            edge_attr=iterative_torch_graph.edge_attr)
                       
-        return next_state, average_design_reward, done, info
+        return next_state, average_design_reward, done, self.info
 
     def _apply_action(self, proposals, iteration):
         """

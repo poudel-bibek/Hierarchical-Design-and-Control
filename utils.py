@@ -28,28 +28,32 @@ def save_config(config, save_path):
     with open(save_path, 'w') as f:
         json.dump(config_to_save, f, indent=4)
 
-def save_policy(policy, normalizer, save_path):  
+def save_policy(higher_policy, lower_policy, lower_state_normalizer, save_path):  
     """
-    TODO: Save policies independently or save policies together? 
     """
-    torch.save({  
-        'policy_state_dict': policy.state_dict(),  
-        'state_normalizer_mean': normalizer.mean.numpy(),  
-        'state_normalizer_M2': normalizer.M2.numpy(),  
-        'state_normalizer_count': normalizer.count.value  
-    }, save_path)
+    torch.save(
+    {'higher': {
+        'state_dict': higher_policy.state_dict(),  
+    },
+    'lower': {
+        'state_dict': lower_policy.state_dict(),  
+        'state_normalizer_mean': lower_state_normalizer.mean.numpy(),  
+        'state_normalizer_M2': lower_state_normalizer.M2.numpy(),  
+        'state_normalizer_count': lower_state_normalizer.count.value  
+    }}, save_path)
 
-def load_policy(policy, normalizer, load_path):
+def load_policy(higher_policy, lower_policy, lower_state_normalizer, load_path):
     """
     Load policy state dict and welford normalizer stats.
     """
     checkpoint = torch.load(load_path)
     # In place operations
-    policy.load_state_dict(checkpoint['policy_state_dict'])
-    normalizer.manual_load(
-        mean=torch.from_numpy(checkpoint['state_normalizer_mean']),  
-        M2=torch.from_numpy(checkpoint['state_normalizer_M2']),  
-        count=checkpoint['state_normalizer_count']
+    higher_policy.load_state_dict(checkpoint['higher']['state_dict'])
+    lower_policy.load_state_dict(checkpoint['lower']['state_dict'])
+    lower_state_normalizer.manual_load(
+        mean=torch.from_numpy(checkpoint['lower']['state_normalizer_mean']),  
+        M2=torch.from_numpy(checkpoint['lower']['state_normalizer_M2']),  
+        count=checkpoint['lower']['state_normalizer_count']
     )
     
 def convert_demand_to_scale_factor(demand, demand_type, input_file):

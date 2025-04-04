@@ -82,8 +82,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
     os.makedirs(eval_args['eval_save_dir'], exist_ok=True)
     os.makedirs('./results', exist_ok=True)
 
-    control_args.update({'writer': writer})
-    control_args.update({'save_dir': save_dir})
+    design_args.update({'save_dir': save_dir})
     control_args.update({'global_seed': SEED})
     control_args.update({'total_action_timesteps_per_episode': train_config['lower_max_timesteps'] // train_config['lower_action_duration']})
 
@@ -102,9 +101,15 @@ def train(train_config, is_sweep=False, sweep_config=None):
 
     higher_state = Batch.from_data_list([higher_env.reset()]) # Batch the data before sending to the model.
     print(f"\nHigher state at reset: {higher_state}")
-    higher_memory = Memory()
+    higher_memories = Memory()
 
     higher_update_count = 0
+    best_higher_reward = float('-inf') 
+    best_higher_loss = float('inf')
+    best_higher_eval = float('inf')
+    lower_avg_eval = 200.0 # arbitrary large numbers
+    eval_veh_avg_wait = 200.0
+    eval_ped_avg_wait = 200.0
     current_lr_higher = higher_ppo_args['lr']
     
     for iteration in range(1, total_iterations + 1):
@@ -123,7 +128,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
         
         # Since the higher agent internally takes a step where a number of parallel lower agents take their own steps, 
         # We return things relevant to both the higher and lower agents. First, for higher.
-        higher_next_state, higher_reward, higher_done, higher_info = higher_env.step(padded_proposals, 
+        higher_next_state, higher_reward, higher_done, info = higher_env.step(padded_proposals, 
                                                                                      num_proposals, 
                                                                                      iteration,
                                                                                      SEED,
@@ -141,61 +146,151 @@ def train(train_config, is_sweep=False, sweep_config=None):
             # The critic returns a tensor of shape [1], so we can directly call .item()
             higher_value = critic_output.item()
         
-        higher_memory.append(higher_state, padded_proposals, higher_value, higher_logprob, higher_reward, higher_done)
+        higher_memories.append(higher_state, padded_proposals, higher_value, higher_logprob, higher_reward, higher_done)
 
-        if iteration % train_config['higher_update_freq'] == 0:
+        if iteration % design_args['higher_update_freq'] == 0:
+            print(f"Updating Higher PPO with {len(higher_memories.actions)} memories") 
             higher_update_count += 1
-            if train_config['higher_anneal_lr']:
+
+            if design_args['higher_anneal_lr']:
                 current_lr_higher = higher_ppo.update_learning_rate(higher_update_count, total_updates_higher)
 
-            higher_ppo.update(higher_memory)
+            avg_higher_reward = sum(higher_memories.rewards) / len(higher_memories.rewards)
+            print(f"\nAverage Higher Reward (across all memories): {avg_higher_reward}\n")
+
+            higher_loss = higher_ppo.update(higher_memories)
+
             # Reset memory
-            del higher_memory
-            higher_memory = Memory()
+            del higher_memories
+            higher_memories = Memory()
+
+            # eval the policies every now and then. 
+            if higher_update_count % design_args['eval_freq'] == 0:
+                policy_path = os.path.join(design_args['save_dir'], f'policy_at_step_{higher_env.global_step}.pth')
+
+                # Evaluate the latest policies
+                # At the time when higher agent is saved, lower agent is also exposed to designs from the same distribution.
+                print(f"Evaluating policies: {policy_path} at step {higher_env.global_step}")
+                eval_json = eval(design_args, 
+                                 control_args, 
+                                 higher_ppo_args, 
+                                 lower_ppo_args, 
+                                 eval_args, 
+                                 policy_path=policy_path)
+                
+                # calculate metrics for both policies
+                higher_avg_ped_arrival, lower_avg_ped_wait, lower_avg_veh_wait = get_averages(eval_json)
+
+                # Get a single evaluation metric for both agents.
+                eval_veh_avg_wait = np.mean(lower_avg_veh_wait)
+                eval_ped_avg_wait = np.mean(lower_avg_ped_wait)
+                lower_avg_eval = ((eval_veh_avg_wait + eval_ped_avg_wait) / 2)
+                
+                print(f"Evaluation results: \n\tHigher: {higher_avg_ped_arrival} \n\tLower: {lower_avg_eval}")
+
+            # save the policies at every update
+            if avg_higher_reward > best_higher_reward:
+                save_policy(higher_ppo.policy, higher_env.lower_ppo.policy, lower_state_normalizer, os.path.join(design_args['save_dir'], 'best_reward_policy.pth'))
+                best_higher_reward = avg_higher_reward
+
+            if higher_loss['total_loss'] < best_higher_loss:
+                save_policy(higher_ppo.policy, higher_env.lower_ppo.policy, lower_state_normalizer, os.path.join(design_args['save_dir'], 'best_loss_policy.pth'))
+                best_higher_loss = higher_loss['total_loss']
+
+            if higher_avg_ped_arrival < best_higher_eval:
+                save_policy(higher_ppo.policy, higher_env.lower_ppo.policy, lower_state_normalizer, os.path.join(design_args['save_dir'], 'best_eval_policy.pth'))
+                best_higher_eval = higher_avg_ped_arrival
+
+            # logging at every update
+            if is_sweep:
+                wandb.log({
+                    "iteration": iteration,
+                    "global_step": higher_env.global_step,
+                    
+                    "higher/avg_reward": higher_reward,
+                    "higher/update_count": higher_update_count,
+                    "higher/current_lr": current_lr_higher if train_config['higher_anneal_lr'] else higher_ppo_args['lr'],
+                    "higher/losses/policy_loss": higher_loss['policy_loss'],
+                    "higher/losses/value_loss": higher_loss['value_loss'],
+                    "higher/losses/entropy_loss": higher_loss['entropy_loss'],
+                    "higher/losses/total_loss": higher_loss['total_loss'],
+                    "higher/approx_kl": higher_loss['approx_kl'],
+                    "higher/evaluation/avg_ped_arrival": higher_avg_ped_arrival,
+
+                    "lower/avg_reward": info['lower_avg_reward'],
+                    "lower/update_count": info['lower_update_count'],
+                    "lower/current_lr": info['lower_current_lr'],
+                    "lower/losses/policy_loss": info['lower_policy_loss'],
+                    "lower/losses/value_loss": info['lower_value_loss'],
+                    "lower/losses/entropy_loss": info['lower_entropy_loss'],
+                    "lower/losses/total_loss": info['lower_total_loss'],
+                    "lower/approx_kl": info['lower_approx_kl'],
+                    "lower/evaluation/avg_eval": lower_avg_eval,
+                        })
+            else:
+                writer.add_scalar('Iteration', iteration, higher_env.global_step)
+                
+                writer.add_scalar('Higher/Average_Reward', higher_reward, higher_env.global_step)
+                writer.add_scalar('Higher/Update_Count', higher_update_count, higher_env.global_step)
+                writer.add_scalar('Higher/Current_LR', current_lr_higher if train_config['higher_anneal_lr'] else higher_ppo_args['lr'], higher_env.global_step)
+                writer.add_scalar('Higher/Losses/Policy_Loss', higher_loss['policy_loss'], higher_env.global_step)
+                writer.add_scalar('Higher/Losses/Value_Loss', higher_loss['value_loss'], higher_env.global_step)
+                writer.add_scalar('Higher/Losses/Entropy_Loss', higher_loss['entropy_loss'], higher_env.global_step)
+                writer.add_scalar('Higher/Losses/Total_Loss', higher_loss['total_loss'], higher_env.global_step)
+                writer.add_scalar('Higher/Approx_KL', higher_loss['approx_kl'], higher_env.global_step)
+                writer.add_scalar('Higher/Evaluation/Avg_Ped_Arrival', higher_avg_ped_arrival, higher_env.global_step)
+                
+                writer.add_scalar('Lower/Average_Reward', info['lower_avg_reward'], higher_env.global_step)
+                writer.add_scalar('Lower/Update_Count', info['lower_update_count'], higher_env.global_step)
+                writer.add_scalar('Lower/Current_LR', info['lower_current_lr'], higher_env.global_step)
+                writer.add_scalar('Lower/Losses/Policy_Loss', info['lower_policy_loss'], higher_env.global_step)
+                writer.add_scalar('Lower/Losses/Value_Loss', info['lower_value_loss'], higher_env.global_step)
+                writer.add_scalar('Lower/Losses/Entropy_Loss', info['lower_entropy_loss'], higher_env.global_step)
+                writer.add_scalar('Lower/Losses/Total_Loss', info['lower_total_loss'], higher_env.global_step)
+                writer.add_scalar('Lower/Approx_KL', info['lower_approx_kl'], higher_env.global_step)
+                writer.add_scalar('Lower/Evaluation/Avg_Eval', lower_avg_eval, higher_env.global_step)
 
         higher_state = Batch.from_data_list([higher_next_state]) # Convert Data object back to Batch
 
-        # Log higher level agent stuff.
-        if is_sweep:
-            wandb.log({ "higher_avg_reward": higher_reward,
-                        "higher_current_lr": current_lr_higher if train_config['higher_anneal_lr'] else higher_ppo_args['lr'],
-                        "global_step": higher_env.global_step          
-                        })
-        else:
-            writer.add_scalar('Higher/Average_Reward', higher_reward, higher_env.global_step)
-            writer.add_scalar('Higher/Current_LR', current_lr_higher if train_config['higher_anneal_lr'] else higher_ppo_args['lr'], higher_env.global_step)
-    
     if is_sweep:
         wandb.finish()
     else:
         writer.close() # TODO: close writer for both agents?
 
-def eval(control_args, 
-         ppo_args, 
+def eval(design_args, 
+         control_args, 
+         higher_ppo_args, 
+         lower_ppo_args, 
          eval_args, 
          policy_path=None, 
          tl=False, 
          unsignalized=False):
     """
-    Works to evaluate a policy during training as well as stand-alone policy vs real-world TL (tl = True) evaluation.
+    - Evaluate both higher and lower level policies (including benchmarks like TL and unsignalized).
+    - Evaluate during training or stand-alone evaluation.
     - Each demand is run on a different worker
     - Results saved as json dict. 
     """
+
     n_workers = eval_args['eval_n_workers']
     n_iterations = eval_args['eval_n_iterations']
     eval_device = torch.device("cuda") if eval_args['eval_worker_device']=='gpu' and torch.cuda.is_available() else torch.device("cpu")
     eval_demand_scales = eval_args['in_range_demand_scales'] + eval_args['out_of_range_demand_scales']
     all_results = {}
 
-    eval_ppo = PPO(**ppo_args)
-    shared_eval_normalizer = WelfordNormalizer(eval_args['state_dim'])
-    shared_eval_normalizer.eval()
-    if policy_path:
-        load_policy(eval_ppo.policy, shared_eval_normalizer, policy_path)
+    eval_ppo_lower = PPO(**lower_ppo_args)
+    eval_ppo_higher = PPO(**higher_ppo_args)
+    lower_state_normalizer = WelfordNormalizer(eval_args['state_dim'])
 
-    shared_policy = eval_ppo.policy.to(eval_device)
-    shared_policy.share_memory()
-    shared_policy.eval()
+    if policy_path:
+        load_policy(eval_ppo_higher.policy, eval_ppo_lower.policy, lower_state_normalizer, policy_path)
+
+    higher_policy = eval_ppo_higher.policy.to(eval_device)
+    shared_lower_policy = eval_ppo_lower.policy.to(eval_device)
+    shared_lower_policy.share_memory()
+    shared_lower_policy.eval()
+    higher_policy.eval()
+    lower_state_normalizer.eval()
     
     # number of times the n_workers have to be repeated to cover all eval demands
     num_times_workers_recycle = len(eval_demand_scales) if len(eval_demand_scales) < n_workers else (len(eval_demand_scales) // n_workers) + 1
@@ -215,10 +310,10 @@ def eval(control_args,
                 'n_iterations': n_iterations,
                 'total_action_timesteps_per_episode': config['eval_n_timesteps'] // control_args['action_duration'], # Each time
                 'worker_demand_scale': demand_scale,
-                'shared_policy': shared_policy,
+                'lower_policy': shared_lower_policy,
                 'control_args': control_args,
                 'worker_device': eval_device,
-                'shared_eval_normalizer': shared_eval_normalizer,
+                'lower_state_normalizer': lower_state_normalizer,
                 'num_proposals': control_args['max_proposals']
             }
             p = mp.Process(

@@ -97,45 +97,45 @@ class HyperParameterTuner:
                 },
 
                 # Lower Level Agent (Control)
-                'lower_lr': {
-                    'values': [5e-5, 1e-4, 2e-4]
-                },
-                'lower_gae_lambda': {
-                    'values': [0.95, 0.98, 0.99]
-                },
-                'lower_update_freq': {
-                    'values': [512, 1024, 2048]
-                },
-                'lower_gamma': {
-                    'values': [0.98, 0.99, 0.995]
-                },
-                'lower_K_epochs': {
-                    'values': [2, 4, 8]
-                },
-                'lower_eps_clip': {
-                    'values': [0.15, 0.2, 0.25]
-                },
-                'lower_ent_coef': {
-                    'values': [0.005, 0.01, 0.02]
-                },
-                'lower_vf_coef': {
-                    'values': [0.4, 0.5, 0.6]
-                },
-                'lower_vf_clip_param': {
-                    'values': [0.4, 0.5, 0.6]
-                },
-                'lower_batch_size': {
-                    'values': [32, 64, 128]
-                },
-                'lower_dropout_rate': {
-                    'values': [0.1, 0.2, 0.3]
-                },
-                'lower_model_size': {
-                    'values': ['medium']
-                },
-                'lower_activation': {
-                    'values': ["tanh", "relu"]
-                },
+                # 'lower_lr': {
+                #     'values': [5e-5, 1e-4, 2e-4]
+                # },
+                # 'lower_gae_lambda': {
+                #     'values': [0.95, 0.98, 0.99]
+                # },
+                # 'lower_update_freq': {
+                #     'values': [512, 1024, 2048]
+                # },
+                # 'lower_gamma': {
+                #     'values': [0.98, 0.99, 0.995]
+                # },
+                # 'lower_K_epochs': {
+                #     'values': [2, 4, 8]
+                # },
+                # 'lower_eps_clip': {
+                #     'values': [0.15, 0.2, 0.25]
+                # },
+                # 'lower_ent_coef': {
+                #     'values': [0.005, 0.01, 0.02]
+                # },
+                # 'lower_vf_coef': {
+                #     'values': [0.4, 0.5, 0.6]
+                # },
+                # 'lower_vf_clip_param': {
+                #     'values': [0.4, 0.5, 0.6]
+                # },
+                # 'lower_batch_size': {
+                #     'values': [32, 64, 128]
+                # },
+                # 'lower_dropout_rate': {
+                #     'values': [0.1, 0.2, 0.3]
+                # },
+                # 'lower_model_size': {
+                #     'values': ['medium']
+                # },
+                # 'lower_activation': {
+                #     'values': ["tanh", "relu"]
+                # },
             }
         }
         

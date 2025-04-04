@@ -784,7 +784,7 @@ class GAT_v2_ActorCritic(nn.Module):
         ax.tick_params(axis='both', which='major', labelsize=fs-2)
         
         # Set fixed z-axis limits
-        z_max = 3.0
+        z_max = 4.0
         ax.set_zlim(0, z_max)
         ax.set_zticks(np.linspace(0, z_max, 6))
         
