@@ -1,13 +1,13 @@
-Parsing types from './simulation/components/iteration_308.typ.xml' ... done.
-Parsing nodes from './simulation/components/iteration_308.nod.xml' ... done.
-Parsing edges from './simulation/components/iteration_308.edg.xml' ...
-Duplicate edge id occurred ('1098062397#2'); assuming overwriting is wished.
+Parsing types from './simulation/components/iteration_2.typ.xml' ... done.
+Parsing nodes from './simulation/components/iteration_2.nod.xml' ... done.
+Parsing edges from './simulation/components/iteration_2.edg.xml' ...
+Duplicate edge id occurred ('1054116932#0'); assuming overwriting is wished.
  done.
-Parsing connections from './simulation/components/iteration_308.con.xml' ... done.
+Parsing connections from './simulation/components/iteration_2.con.xml' ... done.
  Import done:
-   190 nodes loaded.
+   199 nodes loaded.
    4 types loaded.
-   292 edges loaded.
+   313 edges loaded.
 Removing self-loops ... done (0ms).
 Removing empty nodes ... done (0ms).
    0 nodes removed.
@@ -16,7 +16,7 @@ Computing turning directions ... done (0ms).
 Assigning nodes to traffic lights ... done (0ms).
 Sorting nodes' edges ... done (0ms).
 Computing node shapes ... done (2ms).
-Computing edge shapes ... done (0ms).
+Computing edge shapes ... done (1ms).
 Computing node types ... done (0ms).
 Computing priorities ... done (0ms).
 Computing approached edges ... done (0ms).
@@ -32,17 +32,17 @@ Warning: Lane '773672647#17_0' is not connected from any incoming edge at juncti
  done (0ms).
 Computing traffic light control information ... done (0ms).
 Computing node logics ... done (0ms).
-Computing traffic light logics ... done (0ms).
- 5 traffic light(s) computed.
-Building inner edges ... done (1ms).
+Computing traffic light logics ... done (1ms).
+ 8 traffic light(s) computed.
+Building inner edges ... done (0ms).
 -----------------------------------------------------
 Summary:
  Node type statistics:
   Unregulated junctions       : 0
-  Dead-end junctions          : 152
+  Dead-end junctions          : 158
   Priority junctions          : 31
   Right-before-left junctions : 2
-  Traffic light junctions      : 5
+  Traffic light junctions      : 8
  Network boundaries:
   Original boundary  : 2030.74,2510.12,2948.01,2731.20
   Applied offset     : -2030.74,-2510.12

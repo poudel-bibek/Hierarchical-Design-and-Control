@@ -73,7 +73,7 @@ def get_config():
         "lower_ent_coef": 0.01,  # Entropy coefficient
         "lower_vf_coef": 0.5,  # Value function coefficient
         "lower_batch_size": 64,  # Batch size
-        "lower_num_processes": 10,  # Number of parallel processes to use (agent has multiple workers)
+        "lower_num_processes": 6,  # Number of parallel processes to use (agent has multiple workers)
         "lower_model_size": "medium",  # Model size for CNN: 'small' or 'medium'
         "lower_dropout_rate": 0.25,  # Dropout rate for CNN
         "lower_action_dim": None, # will be set later
@@ -202,12 +202,12 @@ def classify_and_return_args(train_config, device):
 
     if train_config['evaluate']:
         # during evaluation
-        eval_n_iterations = 2
+        eval_n_iterations = 10
         in_range_demand_scales = [1.0, 1.25, 1.5, 1.75, 2.0, 2.25] 
         out_of_range_demand_scales = [0.5, 0.75, 2.5, 2.75]
     else: 
         # during training
-        eval_n_iterations = 10
+        eval_n_iterations = 2
         in_range_demand_scales = [1.0, 1.25, 1.5, 1.75, 2.0, 2.25] # The demand scales that are used for training.
         out_of_range_demand_scales = [] # The demand scales that are used ONLY for evaluation.
     

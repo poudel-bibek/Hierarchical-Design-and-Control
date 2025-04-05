@@ -475,8 +475,6 @@ class ControlEnv(gym.Env):
         """
         If Tl = True, operating in eval mode with TL.
         """
-        # if not self.sumo_running:
-        #     raise Exception("Environment is not running. Call reset() to start the environment.")
         if self.previous_action is None:
             self.previous_action = action
 
@@ -535,7 +533,6 @@ class ControlEnv(gym.Env):
         
         #TODO: Placing an if-else here (at almost the innermost loop) is very inefficient.
         if tl: 
-
             if unsignalized: # Set all Midblock as green.
                 for i in range(self.steps_per_action): # Run simulation steps for the duration of the action
                     current_phase = [1]*len(self.tl_ids) # random phase
@@ -581,11 +578,6 @@ class ControlEnv(gym.Env):
             done = True
 
         observation = np.asarray(observation_buffer, dtype=np.float32) 
-        
-        #print(f"\nObservation shape: {observation.shape}, type: {type(observation)}, value: {observation}")
-        #visualize_observation(observation)
-        # print(f"\nRecorded conflicts: {self.recorded_conflicts}\n")
-        #print(f"Total switches: {self.total_switches}")
         return observation, reward, done, False, {} # info is empty
 
     def _detect_switch(self, current_action, previous_action):
@@ -614,15 +606,12 @@ class ControlEnv(gym.Env):
         switch_state.extend(intersection_switch)
         midblock_switch = [int(c1 == '1' and c2 == '0') for c1, c2 in zip(previous_mid_block_action, current_mid_block_action)] # only detect 1->0 transitions
         switch_state.extend(midblock_switch)
-        # print(f"Switch state: {switch_state}")
-        # breakpoint()
 
         # For the plot, also detect all the switches (full = as long as the phase changes).
         # full_switch_state = []
         # for i in range(len(current_action)):
         #     full_switch_state.append(int(current_action[i] != previous_action[i]))
         # print(f"Full switch state: {full_switch_state}\n")
-
         return switch_state, []
 
     def _get_observation(self, current_phase, print_map=False):

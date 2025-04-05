@@ -590,12 +590,10 @@ class GAT_v2_ActorCritic(nn.Module):
         Sample actions from the GMM (propose upto max_proposals number of crosswalks).
         Policy gradient methods require the log probabilities of the actions to be returned as well.
         Should thickness and location be independent? 
-        - No. 
-        - Modeling thickness and location jointly 
+        - Yes. Diagonal covarianve implies this. 
+        - Modeling thickness and location jointly requires more parameters.
         Utilizing the implicit stochasticity in sampling during training.
         However, at test, sample greedily at each mode.
-
-        TODO: Whether to make the policy deterministic at test time?
         """
 
         # properly batch the data using Batch.from_data_list() before sending here. 

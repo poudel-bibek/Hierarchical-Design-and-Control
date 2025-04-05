@@ -47,13 +47,12 @@ class DesignEnv(gym.Env):
         - Iterative means the networkx graph and plain XML components after every iteration.
     """
 
-    def __init__(self, design_args, control_args, lower_ppo_args, is_sweep=False, is_eval=False):
+    def __init__(self, design_args, control_args, lower_ppo_args, is_sweep=False):
         super().__init__()
         self.design_args = design_args
         self.control_args = control_args
         self.lower_ppo_args = lower_ppo_args
         self.is_sweep = is_sweep
-        self.is_eval = is_eval
         self.max_proposals = self.design_args['max_proposals']
         self.component_dir = self.design_args['component_dir']
         self.network_dir = self.design_args['network_dir']
@@ -75,7 +74,6 @@ class DesignEnv(gym.Env):
         
         # Cleanup the pedestrian walkway graph (i.e, remove isolated, fringe, existing crosswalks) to create a base canvas
         self.base_networkx_graph = self._cleanup_graph(pedestrian_networkx_graph, self.existing_crosswalks)
-        
         self.horizontal_edges_veh_original_data = self._get_original_veh_edge_config()
         
         # Relevant to the intersection
@@ -236,8 +234,7 @@ class DesignEnv(gym.Env):
              lower_state_normalizer,
              lower_reward_normalizer,
              higher_reward_normalizer,
-             eval_args,
-             is_sweep):
+             ):
         
         """
         Every step in the design environment involves:
@@ -558,8 +555,7 @@ class DesignEnv(gym.Env):
     def reset(self, start_from_base=False):
         """
         Reset the environment to its initial state.
-        Option to start with the initial original set of crosswalks or start with an empty canvas.
-        - Return state extracted from iterative torch graph
+        Option to start with the initial original set of crosswalks or start from base (empty canvas).
         """
 
         self.iterative_networkx_graph = self.base_networkx_graph.copy()
@@ -567,7 +563,6 @@ class DesignEnv(gym.Env):
         if start_from_base:
             pass # Do nothing
         else: 
-            pass
             # Add middle nodes and edges in the networkx graph. 
             # This middle node configuration will be slightly different from the middle nodes present in the original. 
             for cid, crosswalk_data in self.existing_crosswalks.items():
@@ -605,12 +600,6 @@ class DesignEnv(gym.Env):
                     edge_attr=iterative_torch_graph.edge_attr)
         
         return state
-
-    def close(self):
-        """
-        
-        """
-        pass
     
     def _cleanup_graph(self, graph, existing_crosswalks):
         """
@@ -663,9 +652,7 @@ class DesignEnv(gym.Env):
         # cleanup_graph.remove_nodes_from(isolated_and_fringe_nodes)
         #cleanup_graph.remove_edges_from(cleanup_graph.edges(isolated_and_fringe_nodes))  # TODO: When the isolated nodes are removed, are the edges automatically removed?
         #print(f"\nAfter cleanup: {len(cleanup_graph.nodes())} nodes, {len(cleanup_graph.edges())} edges\n")
-
         return cleanup_graph
-    
     
     def _convert_to_torch_geometric(self, graph):
         """
@@ -1245,8 +1232,7 @@ class DesignEnv(gym.Env):
             f"--output-file={output_file} "
             f"--log={netconvert_log_file}"
         )
-
-        # f"--tllogic-files={iteration_prefix}.tll.xml "
+        # f"--tllogic-files={iteration_prefix}.tll.xml " Not using TLL file (advice from Jakob)
 
         max_attempts = 3
         attempt = 0

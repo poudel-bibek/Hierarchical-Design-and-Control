@@ -87,31 +87,25 @@ def parallel_train_worker(rank,
     print(f"Worker {rank} finished. Control Episode Reward: {round(ep_reward, 2)}. Design Reward: {round(design_reward, 2)}. Worker puts None in queue.")
     train_queue.put((rank, None, design_reward))  # Signal that this worker is done 
     
-
-
 def parallel_eval_worker(rank, 
                          eval_worker_config, 
                          eval_queue, 
                          tl=False, 
                          unsignalized=False):
     """
-    - For the same demand, each worker runs n_iterations number of episodes and measures performance metrics at each iteration.
+    - For the same demand, each worker runs n_iterations number of episodes and measures performance metrics.
     - Each episode runs on a different random seed.
     - Performance metrics: 
-        - Average waiting time (Veh, Ped)
-        - Average travel time (Veh, Ped)
+        - Lower agent: Average waiting time (Veh, Ped)
+        - Lower agent: Average travel time (Veh, Ped)
+        - Higher agent: Pedestrian arrival time (total and average per pedestrian)
     - Returns a dictionary with performance metrics in all iterations.
-    - For PPO: 
-        - Create a single shared policy, and share among workers.
+    - For lower agent PPO: Create a single shared policy, and share among workers.
     - For TL:
         - Just pass tl = True
         - If unsignalized, all midblock TLs have no lights (equivalent to having all phases green)
     """
-    
-    worker_result = None # Initialize worker_result to None
-    env = None # Initialize env to None
-    worker_demand_scale = eval_worker_config.get('worker_demand_scale', 'unknown_scale') # Get scale early for finally block
-
+    worker_demand_scale = eval_worker_config.get('worker_demand_scale')
     try:
         shared_policy = eval_worker_config['shared_policy']
         control_args = eval_worker_config['control_args']
@@ -120,9 +114,8 @@ def parallel_eval_worker(rank,
         control_args['manual_demand_veh'] = worker_demand_scale
         control_args['manual_demand_ped'] = worker_demand_scale
         env = ControlEnv(control_args, worker_id=rank)
-        worker_result = {} # Initialize results dict here
+        worker_result = {} # results dict 
         
-        # Run the worker
         for i in range(eval_worker_config['n_iterations']):
             worker_result[i] = {}
 
@@ -151,7 +144,7 @@ def parallel_eval_worker(rank,
 
                     action, _ = shared_policy.act(state, eval_worker_config['num_proposals'])
                     action = action.detach().cpu() # sim runs in CPU
-                    state, reward, done, truncated, _ = env.eval_step(action, tl, unsignalized=unsignalized)
+                    state, _, done, truncated, _ = env.eval_step(action, tl, unsignalized=unsignalized)
 
                     # During this step, get all vehicles and pedestrians
                     veh_waiting_time_this_step = env.get_vehicle_waiting_time()
@@ -166,8 +159,13 @@ def parallel_eval_worker(rank,
                         break # Exit inner loop if episode ends early
 
             # gather performance metrics
+            total_ped_arrival_time = sum(env.pedestrian_arrival_times.values())
+            average_arrival_time_per_ped = total_ped_arrival_time / len(env.pedestrian_arrival_times)
+            worker_result[i]['total_ped_arrival_time'] = total_ped_arrival_time
+            worker_result[i]['average_arrival_time_per_ped'] = average_arrival_time_per_ped
             worker_result[i]['total_veh_waiting_time'] = veh_waiting_time_this_episode
             worker_result[i]['total_ped_waiting_time'] = ped_waiting_time_this_episode
+
             # Add safety check for division by zero
             worker_result[i]['veh_avg_waiting_time'] = (veh_waiting_time_this_episode / veh_unique_ids_this_episode) if veh_unique_ids_this_episode > 0 else 0
             worker_result[i]['ped_avg_waiting_time'] = (ped_waiting_time_this_episode / ped_unique_ids_this_episode) if ped_unique_ids_this_episode > 0 else 0
@@ -177,23 +175,10 @@ def parallel_eval_worker(rank,
     except Exception as e:
         print(f"Error in parallel_eval_worker {rank} for demand {worker_demand_scale}: {e}")
         # worker_result remains None or whatever partial result was collected
-        # Depending on needs, you could set worker_result = {'error': str(e)} 
-        worker_result = {'error': str(e)} # Let's explicitly mark it as an error
+        worker_result = {'error': str(e)}
         
-    finally:
-        # Ensure the environment is closed if it was created
-        if env is not None:
-            try:
-                env.close()
-            except Exception as e:
-                print(f"Error closing environment in worker {rank}: {e}")
-            # time.sleep(10) # Consider if this sleep is truly essential or was for debugging
-            del env
-        
-        # Always put a result (or error indicator) onto the queue
-        try:
-            eval_queue.put((worker_demand_scale, worker_result))
-            print(f"Worker {rank} (Demand: {worker_demand_scale}) finished and put result on queue.")
-        except Exception as e:
-            print(f"Error putting result onto queue from worker {rank}: {e}")
-            # If putting to queue fails, there's little else the worker can do.
+    finally: 
+        env.close()
+        del env
+        eval_queue.put((worker_demand_scale, worker_result))
+        print(f"Worker {rank} (Demand: {worker_demand_scale}) finished and put result on queue.")

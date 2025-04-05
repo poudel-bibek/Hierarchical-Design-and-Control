@@ -16,7 +16,7 @@ from utils import *
 from simulation.control_env import ControlEnv
 from simulation.design_env import DesignEnv
 from simulation.worker import parallel_eval_worker
-from utils import load_policy, save_config
+from simulation.env_utils import create_new_sumocfg
 
 def train(train_config, is_sweep=False, sweep_config=None):
     """
@@ -93,7 +93,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
     total_updates_lower = (train_config['total_timesteps'] / train_config['lower_action_duration']) // train_config['lower_update_freq']
 
     higher_ppo = PPO(**higher_ppo_args)
-    higher_env = DesignEnv(design_args, control_args, lower_ppo_args, is_sweep=is_sweep, is_eval=False)
+    higher_env = DesignEnv(design_args, control_args, lower_ppo_args, is_sweep=is_sweep)
     higher_env.total_updates_lower = total_updates_lower
 
     higher_ppo.policy_old = higher_ppo.policy_old.to(device)
@@ -135,8 +135,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
                                                                                      lower_state_normalizer,
                                                                                      lower_reward_normalizer,
                                                                                      higher_reward_normalizer,
-                                                                                     eval_args,
-                                                                                     is_sweep)
+                                                                                     )
         
         # Get value from critic network
         with torch.no_grad():
@@ -176,6 +175,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
                                  higher_ppo_args, 
                                  lower_ppo_args, 
                                  eval_args, 
+                                 global_step=higher_env.global_step,
                                  policy_path=policy_path)
                 
                 # calculate metrics for both policies
@@ -263,13 +263,15 @@ def eval(design_args,
          lower_ppo_args, 
          eval_args, 
          policy_path=None, 
+         global_step=None,
          tl=False, 
          unsignalized=False):
     """
-    - Evaluate both higher and lower level policies (including benchmarks like TL and unsignalized).
-    - Evaluate during training or stand-alone evaluation.
+    Evaluate both higher and lower level policies (during training or stand-alone evaluation)
+    - For higher agent, its just a single step (single greedy design) 
+    - For lower agent, it includes benchmarks like tl and unsignalized
     - Each demand is run on a different worker
-    - Results saved as json dict. 
+    - Results returned as json  
     """
 
     n_workers = eval_args['eval_n_workers']
@@ -292,6 +294,30 @@ def eval(design_args,
     higher_policy.eval()
     lower_state_normalizer.eval()
     
+    iteration = f"eval{global_step}"
+    higher_env = DesignEnv(design_args, control_args, lower_ppo_args, is_sweep=False)
+    # Get a single greedy design 
+    higher_state = higher_env.reset() # At reset, we get the original real-world configuration.
+    # Which is the input network to the act function
+    padded_proposals, num_proposals, _ = higher_policy.act(higher_state, 
+                                                            iteration, 
+                                                            design_args['clamp_min'], 
+                                                            design_args['clamp_max'], 
+                                                            eval_device,
+                                                            training=False, # Get argmax on num_proposals and sample greedily on GMM
+                                                            visualize=True) 
+
+    # Convert tensor action to proposals
+    padded_proposals = padded_proposals.cpu().numpy()  # Convert to numpy array if it's not already
+    proposals = padded_proposals[0][:num_proposals]  # Only consider the actual proposals
+    print(f"\nProposals: {proposals}")
+    
+    # Apply the action to output the latest SUMO network file 
+    higher_env._apply_action(proposals, iteration)
+    sumo_net_file = f"{higher_env.network_dir}/network_iteration_{iteration}.net.xml"
+    print(f"\nSUMO network file: {sumo_net_file}")
+    create_new_sumocfg(iteration)
+
     # number of times the n_workers have to be repeated to cover all eval demands
     num_times_workers_recycle = len(eval_demand_scales) if len(eval_demand_scales) < n_workers else (len(eval_demand_scales) // n_workers) + 1
     for i in range(num_times_workers_recycle):
