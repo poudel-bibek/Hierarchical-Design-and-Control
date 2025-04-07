@@ -53,8 +53,8 @@ def get_config():
         "clamp_min": 0.06,  # Minimum value for x location and thickness for crosswalks # Add small buffer to avoid exact 0.0 or 1.0
         "clamp_max": 0.94,  # Maximum value for x location and thickness for crosswalks
         "max_proposals": 10,  # Maximum number of proposals to consider for higher-level agent
-        "save_graph_images": True, # Save graph image every iteration.
-        "save_gmm_plots": True, # Save GMM visualization every iteration.
+        "save_graph_images": False, # Save graph image every iteration.
+        "save_gmm_plots": False, # Save GMM visualization every iteration.
         "num_mixtures": 5,  # Number of mixture components in GMM. Having more is ok (means will collapse into each other) but makes it difficult to learn. Having less will make it less representative.
         'initial_heads': 8, # Number of attention heads in first GATv2 layer
         'second_heads': 1, # Number of attention heads in second GATv2 layer
@@ -80,7 +80,7 @@ def get_config():
         "lower_in_channels": 1, # in_channels for cnn
         "lower_activation": "tanh",  # Policy activation function
         "lower_max_timesteps": 460,  # Maximum number of steps in one episode (make this multiple of 16*10)
-        "lower_memory_transfer_freq": 16,  # Frequency of memory transfer from worker to main process 
+        "lower_memory_transfer_freq": 32,  # Frequency of memory transfer from worker to main process 
         "lower_per_timestep_state_dim": 11 + 32 + 8 * 10,  # Number of features per timestep (corresponding to max_proposals = 10), calculation in _get_observation function.
         "lower_step_length": 1.0,  # Real-world time in seconds per simulation timestep (default: 1.0). 
         "lower_action_duration": 10,  # Number of simulation timesteps for each action (default: 10)

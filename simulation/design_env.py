@@ -493,7 +493,7 @@ class DesignEnv(gym.Env):
 
         return intersections
 
-    def _get_horizontal_segment_ped(self, horizontal_nodes_top, horizontal_nodes_bottom, latest_graph, validation=True):
+    def _get_horizontal_segment_ped(self, horizontal_nodes_top, horizontal_nodes_bottom, latest_graph, validation=False):
         """
         Get the entire horizontal pedestrian segment of the corridor.
         """
