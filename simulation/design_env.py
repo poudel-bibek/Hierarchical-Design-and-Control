@@ -1150,13 +1150,13 @@ class DesignEnv(gym.Env):
             tlLogic_element.text = "\n\t\t" # Inside <tlLogic>: phases start at two tabs
 
             # Create phases with proper indentation
-            phase1 = ET.SubElement(tlLogic_element, 'phase', duration='77', state='GGr')
+            phase1 = ET.SubElement(tlLogic_element, 'phase', duration='40', state='GGr')
             phase1.tail = "\n\t\t"
-            phase2 = ET.SubElement(tlLogic_element, 'phase', duration='3', state='yyr') 
+            phase2 = ET.SubElement(tlLogic_element, 'phase', duration='4', state='yyr') 
             phase2.tail = "\n\t\t"
-            phase3 = ET.SubElement(tlLogic_element, 'phase', duration='5', state='rrG')
+            phase3 = ET.SubElement(tlLogic_element, 'phase', duration='16', state='rrG')
             phase3.tail = "\n\t\t"
-            phase4 = ET.SubElement(tlLogic_element, 'phase', duration='5', state='rrr')
+            phase4 = ET.SubElement(tlLogic_element, 'phase', duration='2', state='rrr')
             phase4.tail = "\n\t"
 
             tlLogic_element.tail = "\n\t"
@@ -1229,10 +1229,10 @@ class DesignEnv(gym.Env):
             f"--edge-files={iteration_prefix}.edg.xml "
             f"--connection-files={iteration_prefix}.con.xml "
             f"--type-files={iteration_prefix}.typ.xml "
+            f"--tllogic-files={iteration_prefix}.tll.xml " # using TLL file (against advice from Jakob)
             f"--output-file={output_file} "
             f"--log={netconvert_log_file}"
         )
-        # f"--tllogic-files={iteration_prefix}.tll.xml " Not using TLL file (advice from Jakob)
 
         max_attempts = 3
         attempt = 0
