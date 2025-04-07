@@ -1,23 +1,23 @@
-Parsing types from './simulation/components/iteration_1.typ.xml' ... done.
-Parsing nodes from './simulation/components/iteration_1.nod.xml' ... done.
-Parsing edges from './simulation/components/iteration_1.edg.xml' ...
-Duplicate edge id occurred ('1060131392#1'); assuming overwriting is wished.
+Parsing types from './simulation/components/iteration_0.typ.xml' ... done.
+Parsing nodes from './simulation/components/iteration_0.nod.xml' ... done.
+Parsing edges from './simulation/components/iteration_0.edg.xml' ...
+Duplicate edge id occurred ('1050677005#15'); assuming overwriting is wished.
  done.
-Parsing connections from './simulation/components/iteration_1.con.xml' ... done.
-Parsing traffic lights from './simulation/components/iteration_1.tll.xml' ... done.
+Parsing connections from './simulation/components/iteration_0.con.xml' ... done.
+Parsing traffic lights from './simulation/components/iteration_0.tll.xml' ... done.
  Import done:
    205 nodes loaded.
    4 types loaded.
-   330 edges loaded.
+   327 edges loaded.
 Removing self-loops ... done (0ms).
 Removing empty nodes ... done (0ms).
    0 nodes removed.
 Moving network to origin ... done (0ms).
-Computing turning directions ... done (1ms).
+Computing turning directions ... done (0ms).
 Assigning nodes to traffic lights ... done (0ms).
 Sorting nodes' edges ... done (0ms).
 Computing node shapes ... done (2ms).
-Computing edge shapes ... done (0ms).
+Computing edge shapes ... done (1ms).
 Computing node types ... done (0ms).
 Computing priorities ... done (0ms).
 Computing approached edges ... done (0ms).
