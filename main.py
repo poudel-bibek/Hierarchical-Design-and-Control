@@ -108,11 +108,19 @@ def train(train_config, is_sweep=False, sweep_config=None):
     best_higher_loss = float('inf')
     best_higher_eval = float('inf')
     higher_avg_ped_arrival = float('inf')
+    higher_loss = {
+        'policy_loss': float('inf'),
+        'value_loss': float('inf'),
+        'entropy_loss': float('inf'),
+        'total_loss': float('inf'),
+        'approx_kl': float('inf')
+    }
+
     lower_avg_eval = 200.0 # arbitrary large numbers
     eval_veh_avg_wait = 200.0
     eval_ped_avg_wait = 200.0
     current_lr_higher = higher_ppo_args['lr']
-    
+
     for iteration in range(1, total_iterations + 1):
         print(f"\nStarting iteration: {iteration}/{total_iterations} with {higher_env.global_step} total steps so far\n")
 
@@ -363,7 +371,8 @@ def eval(design_args,
     # if torch.cuda.is_available():
     #     torch.cuda.empty_cache()
     del eval_queue
-    del shared_policy
+    del higher_policy
+    del shared_lower_policy
 
     print(f"All results: {all_results}")    
     if tl and unsignalized:

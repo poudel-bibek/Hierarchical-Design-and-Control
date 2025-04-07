@@ -1,4 +1,0 @@
-Warning: Missing green phase in tlLogic 'cluster_172228464_482708521_9687148201_9687148202_#5more', program '0' for tl-index 20.
-Warning: Unused states in tlLogic 'iter34_1_mid', program '0' in phase 0 after tl-index 2
-Warning: Teleporting vehicle '30'; waited too long (yield), lane='1078803478#0_1', time=552.00.
-Warning: Vehicle '30' ends teleporting on edge '16666012#2_left0', time=552.00.
