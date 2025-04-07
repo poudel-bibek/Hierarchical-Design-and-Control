@@ -1,0 +1,32 @@
+***Starting server on port 51691 ***
+Loading net-file from './simulation/network_iterations/network_iteration_34.net.xml' ... done (14ms).
+Warning: Missing green phase in tlLogic 'cluster_172228464_482708521_9687148201_9687148202_#5more', program '0' for tl-index 20.
+Warning: Unused states in tlLogic 'iter34_1_mid', program '0' in phase 0 after tl-index 2
+Loading route-files incrementally from './simulation/scaled_trips/scaled_vehtrips_2.xml'
+Loading route-files incrementally from './simulation/scaled_trips/scaled_pedtrips_2.xml'
+Loading done.
+Simulation started with time: 0.00.
+Warning: Teleporting vehicle '30'; waited too long (yield), lane='1078803478#0_1', time=552.00.
+Warning: Vehicle '30' ends teleporting on edge '16666012#2_left0', time=552.00.
+Simulation ended at time: 670.00.
+Reason: TraCI requested termination.
+Performance:
+ Duration: 73.20s
+ TraCI-Duration: 65.74s
+ Real time factor: 9.15338
+ UPS: 188.163449
+ UPS-Persons: 1601.636679
+Vehicles:
+ Inserted: 73 (Loaded: 89)
+ Running: 22
+ Waiting: 0
+ Teleports: 1 (Yield: 1)
+Persons:
+ Inserted: 611
+ Running: 243
+DijkstraRouter answered 7246 queries and explored 4.69 edges on average.
+DijkstraRouter spent 0.01s answering queries (0.00ms on average).
+DijkstraRouter answered 509 queries and explored 464.17 edges on average.
+DijkstraRouter spent 0.03s answering queries (0.06ms on average).
+DijkstraRouter answered 73 queries and explored 52.71 edges on average.
+DijkstraRouter spent 0.00s answering queries (0.01ms on average).

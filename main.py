@@ -107,6 +107,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
     best_higher_reward = float('-inf') 
     best_higher_loss = float('inf')
     best_higher_eval = float('inf')
+    higher_avg_ped_arrival = float('inf')
     lower_avg_eval = 200.0 # arbitrary large numbers
     eval_veh_avg_wait = 200.0
     eval_ped_avg_wait = 200.0
@@ -201,54 +202,54 @@ def train(train_config, is_sweep=False, sweep_config=None):
                 save_policy(higher_ppo.policy, higher_env.lower_ppo.policy, lower_state_normalizer, os.path.join(design_args['save_dir'], 'best_eval_policy.pth'))
                 best_higher_eval = higher_avg_ped_arrival
 
-            # logging at every update
-            if is_sweep:
-                wandb.log({
-                    "iteration": iteration,
-                    "global_step": higher_env.global_step,
-                    
-                    "higher/avg_reward": higher_reward,
-                    "higher/update_count": higher_update_count,
-                    "higher/current_lr": current_lr_higher if train_config['higher_anneal_lr'] else higher_ppo_args['lr'],
-                    "higher/losses/policy_loss": higher_loss['policy_loss'],
-                    "higher/losses/value_loss": higher_loss['value_loss'],
-                    "higher/losses/entropy_loss": higher_loss['entropy_loss'],
-                    "higher/losses/total_loss": higher_loss['total_loss'],
-                    "higher/approx_kl": higher_loss['approx_kl'],
-                    "higher/evaluation/avg_ped_arrival": higher_avg_ped_arrival,
+        # logging at every iteration (every time sample is drawn)
+        if is_sweep:
+            wandb.log({
+                "iteration": iteration,
+                "global_step": higher_env.global_step,
+                
+                "higher/avg_reward": higher_reward,
+                "higher/update_count": higher_update_count,
+                "higher/current_lr": current_lr_higher if train_config['higher_anneal_lr'] else higher_ppo_args['lr'],
+                "higher/losses/policy_loss": higher_loss['policy_loss'],
+                "higher/losses/value_loss": higher_loss['value_loss'],
+                "higher/losses/entropy_loss": higher_loss['entropy_loss'],
+                "higher/losses/total_loss": higher_loss['total_loss'],
+                "higher/approx_kl": higher_loss['approx_kl'],
+                "higher/evaluation/avg_ped_arrival": higher_avg_ped_arrival,
 
-                    "lower/avg_reward": info['lower_avg_reward'],
-                    "lower/update_count": info['lower_update_count'],
-                    "lower/current_lr": info['lower_current_lr'],
-                    "lower/losses/policy_loss": info['lower_policy_loss'],
-                    "lower/losses/value_loss": info['lower_value_loss'],
-                    "lower/losses/entropy_loss": info['lower_entropy_loss'],
-                    "lower/losses/total_loss": info['lower_total_loss'],
-                    "lower/approx_kl": info['lower_approx_kl'],
-                    "lower/evaluation/avg_eval": lower_avg_eval,
-                        })
-            else:
-                writer.add_scalar('Iteration', iteration, higher_env.global_step)
-                
-                writer.add_scalar('Higher/Average_Reward', higher_reward, higher_env.global_step)
-                writer.add_scalar('Higher/Update_Count', higher_update_count, higher_env.global_step)
-                writer.add_scalar('Higher/Current_LR', current_lr_higher if train_config['higher_anneal_lr'] else higher_ppo_args['lr'], higher_env.global_step)
-                writer.add_scalar('Higher/Losses/Policy_Loss', higher_loss['policy_loss'], higher_env.global_step)
-                writer.add_scalar('Higher/Losses/Value_Loss', higher_loss['value_loss'], higher_env.global_step)
-                writer.add_scalar('Higher/Losses/Entropy_Loss', higher_loss['entropy_loss'], higher_env.global_step)
-                writer.add_scalar('Higher/Losses/Total_Loss', higher_loss['total_loss'], higher_env.global_step)
-                writer.add_scalar('Higher/Approx_KL', higher_loss['approx_kl'], higher_env.global_step)
-                writer.add_scalar('Higher/Evaluation/Avg_Ped_Arrival', higher_avg_ped_arrival, higher_env.global_step)
-                
-                writer.add_scalar('Lower/Average_Reward', info['lower_avg_reward'], higher_env.global_step)
-                writer.add_scalar('Lower/Update_Count', info['lower_update_count'], higher_env.global_step)
-                writer.add_scalar('Lower/Current_LR', info['lower_current_lr'], higher_env.global_step)
-                writer.add_scalar('Lower/Losses/Policy_Loss', info['lower_policy_loss'], higher_env.global_step)
-                writer.add_scalar('Lower/Losses/Value_Loss', info['lower_value_loss'], higher_env.global_step)
-                writer.add_scalar('Lower/Losses/Entropy_Loss', info['lower_entropy_loss'], higher_env.global_step)
-                writer.add_scalar('Lower/Losses/Total_Loss', info['lower_total_loss'], higher_env.global_step)
-                writer.add_scalar('Lower/Approx_KL', info['lower_approx_kl'], higher_env.global_step)
-                writer.add_scalar('Lower/Evaluation/Avg_Eval', lower_avg_eval, higher_env.global_step)
+                "lower/avg_reward": info['lower_avg_reward'],
+                "lower/update_count": info['lower_update_count'],
+                "lower/current_lr": info['lower_current_lr'],
+                "lower/losses/policy_loss": info['lower_policy_loss'],
+                "lower/losses/value_loss": info['lower_value_loss'],
+                "lower/losses/entropy_loss": info['lower_entropy_loss'],
+                "lower/losses/total_loss": info['lower_total_loss'],
+                "lower/approx_kl": info['lower_approx_kl'],
+                "lower/evaluation/avg_eval": lower_avg_eval,
+                    })
+        else:
+            writer.add_scalar('Iteration', iteration, higher_env.global_step)
+            
+            writer.add_scalar('Higher/Average_Reward', higher_reward, higher_env.global_step)
+            writer.add_scalar('Higher/Update_Count', higher_update_count, higher_env.global_step)
+            writer.add_scalar('Higher/Current_LR', current_lr_higher if train_config['higher_anneal_lr'] else higher_ppo_args['lr'], higher_env.global_step)
+            writer.add_scalar('Higher/Losses/Policy_Loss', higher_loss['policy_loss'], higher_env.global_step)
+            writer.add_scalar('Higher/Losses/Value_Loss', higher_loss['value_loss'], higher_env.global_step)
+            writer.add_scalar('Higher/Losses/Entropy_Loss', higher_loss['entropy_loss'], higher_env.global_step)
+            writer.add_scalar('Higher/Losses/Total_Loss', higher_loss['total_loss'], higher_env.global_step)
+            writer.add_scalar('Higher/Approx_KL', higher_loss['approx_kl'], higher_env.global_step)
+            writer.add_scalar('Higher/Evaluation/Avg_Ped_Arrival', higher_avg_ped_arrival, higher_env.global_step)
+            
+            writer.add_scalar('Lower/Average_Reward', info['lower_avg_reward'], higher_env.global_step)
+            writer.add_scalar('Lower/Update_Count', info['lower_update_count'], higher_env.global_step)
+            writer.add_scalar('Lower/Current_LR', info['lower_current_lr'], higher_env.global_step)
+            writer.add_scalar('Lower/Losses/Policy_Loss', info['lower_policy_loss'], higher_env.global_step)
+            writer.add_scalar('Lower/Losses/Value_Loss', info['lower_value_loss'], higher_env.global_step)
+            writer.add_scalar('Lower/Losses/Entropy_Loss', info['lower_entropy_loss'], higher_env.global_step)
+            writer.add_scalar('Lower/Losses/Total_Loss', info['lower_total_loss'], higher_env.global_step)
+            writer.add_scalar('Lower/Approx_KL', info['lower_approx_kl'], higher_env.global_step)
+            writer.add_scalar('Lower/Evaluation/Avg_Eval', lower_avg_eval, higher_env.global_step)
 
         higher_state = Batch.from_data_list([higher_next_state]) # Convert Data object back to Batch
 
@@ -274,7 +275,7 @@ def eval(design_args,
     - Results returned as json  
     """
 
-    n_workers = eval_args['eval_n_workers']
+    n_workers = eval_args['eval_lower_workers'] 
     n_iterations = eval_args['eval_n_iterations']
     eval_device = torch.device("cuda") if eval_args['eval_worker_device']=='gpu' and torch.cuda.is_available() else torch.device("cpu")
     eval_demand_scales = eval_args['in_range_demand_scales'] + eval_args['out_of_range_demand_scales']
