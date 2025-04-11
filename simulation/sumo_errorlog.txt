@@ -1,0 +1,7 @@
+Warning: Person '1650' is jammed on edge ':iter5_5_mid_c0', time=300.00.
+Warning: Person '1601' is jammed on edge ':iter5_5_mid_c0', time=300.00.
+Warning: Person '1544' is jammed on edge ':iter5_5_mid_c0', time=300.00.
+Warning: Person '1617' is jammed on edge ':iter5_5_mid_c0', time=300.00.
+Warning: Person '1975' is jammed on edge ':iter5_5_mid_c0', time=358.00.
+Warning: Person '1658' is jammed on edge ':iter5_5_mid_c0', time=358.00.
+Warning: Person '1529' is jammed on edge ':iter5_5_mid_c0', time=358.00.

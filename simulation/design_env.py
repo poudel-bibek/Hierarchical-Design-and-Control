@@ -481,7 +481,7 @@ class DesignEnv(gym.Env):
                 from_y, to_y = to_y, from_y
 
             # Compute how far along the segment x_location lies as a fraction
-            x_diff = (x_location - from_x) / (to_x - from_x)
+            x_diff = (x_location - from_x) / (to_x - from_x) + 1e-6 # Avoid division by zero 
             # Now simply interpolate y
             y_location = from_y + x_diff * (to_y - from_y)
 
