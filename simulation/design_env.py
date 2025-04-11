@@ -369,17 +369,10 @@ class DesignEnv(gym.Env):
         2. Add proposed crosswalks to networkx graph
         3. Update XML
         """
-
-        print(f"DEBUG: Start _apply_action - self.horizontal_nodes_top_ped: {self.horizontal_nodes_top_ped}")
-        print(f"DEBUG: Start _apply_action - self.horizontal_nodes_bottom_ped: {self.horizontal_nodes_bottom_ped}")
-
         # First make a copy
         self.iterative_networkx_graph = self.base_networkx_graph.copy()
         latest_horizontal_nodes_top_ped = self.horizontal_nodes_top_ped
         latest_horizontal_nodes_bottom_ped = self.horizontal_nodes_bottom_ped
-
-        print(f"DEBUG: Initial local - latest_horizontal_nodes_top_ped: {latest_horizontal_nodes_top_ped}")
-        print(f"DEBUG: Initial local - latest_horizontal_nodes_bottom_ped: {latest_horizontal_nodes_bottom_ped}")
 
         for i, (location, thickness) in enumerate(proposals):
             location = location.item() 
@@ -387,20 +380,13 @@ class DesignEnv(gym.Env):
 
             # 1. Denormalize the location (x-coordinate) and thickness
             denorm_location = self.normalizer_x['min'] + location * (self.normalizer_x['max'] - self.normalizer_x['min'])
-            print(f"\nLocation: {location} Denormalized location: {denorm_location}")
-
             denorm_thickness = self.min_thickness + thickness * (self.max_thickness - self.min_thickness)
-            print(f"Thickness: {thickness} Denormalized thickness: {denorm_thickness}\n")
 
             # 2. Add to base networkx graph
             # Add new nodes in both sides in this intersection of type 'regular'.
             # Connect the new nodes to the existing nodes via edges with the given thickness.
 
             latest_horizontal_segment = self._get_horizontal_segment_ped(latest_horizontal_nodes_top_ped, latest_horizontal_nodes_bottom_ped, self.iterative_networkx_graph) # Start with set of nodes in base graph
-            print(f"DEBUG: Loop {i} - Before _get_horizontal_segment_ped - latest_top: {latest_horizontal_nodes_top_ped}")
-            print(f"DEBUG: Loop {i} - Before _get_horizontal_segment_ped - latest_bottom: {latest_horizontal_nodes_bottom_ped}")
-            print(f"DEBUG: Loop {i} - Before _get_horizontal_segment_ped - self.top: {self.horizontal_nodes_top_ped}")
-            print(f"DEBUG: Loop {i} - Before _get_horizontal_segment_ped - self.bottom: {self.horizontal_nodes_bottom_ped}")
 
             # print(f"\nLatest horizontal segment (Top): {latest_horizontal_segment['top']}\n")
             # print(f"\nLatest horizontal segment (Bottom): {latest_horizontal_segment['bottom']}\n")
@@ -425,14 +411,8 @@ class DesignEnv(gym.Env):
                 # Modify the horizontal segment (add the new node)
                 if side == 'top':
                     latest_horizontal_nodes_top_ped.append(end_node_id)
-                    print(f"DEBUG: Loop {i}, side {side} - Added {end_node_id}")
-                    print(f"DEBUG: Loop {i}, side {side} - latest_horizontal_nodes_top_ped: {latest_horizontal_nodes_top_ped}")
-                    print(f"DEBUG: Loop {i}, side {side} - self.horizontal_nodes_top_ped: {self.horizontal_nodes_top_ped}") # Compare with class member
                 else:
                     latest_horizontal_nodes_bottom_ped.append(end_node_id)
-                    print(f"DEBUG: Loop {i}, side {side} - Added {end_node_id}")
-                    print(f"DEBUG: Loop {i}, side {side} - latest_horizontal_nodes_bottom_ped: {latest_horizontal_nodes_bottom_ped}")
-                    print(f"DEBUG: Loop {i}, side {side} - self.horizontal_nodes_bottom_ped: {self.horizontal_nodes_bottom_ped}") # Compare with class member
 
                 mid_node_details[side]['y_cord'] = end_node_pos[1]
                 mid_node_details[side]['node_id'] = end_node_id
@@ -488,17 +468,6 @@ class DesignEnv(gym.Env):
             # print(f"\nLatest horizontal segment: {latest_horizontal_segment[side]}")
             # print(f" Bounds of the graph: min x: {min([data['pos'][0] for _, data in latest_graph.nodes(data=True)])} max x: {max([data['pos'][0] for _, data in latest_graph.nodes(data=True)])}")
             # print(f"\n{side} Intersect: {intersect}\n")
-
-            # --- DEBUGGING START ---
-            if intersect is None:
-                print(f"\nDEBUG: intersect is None for side '{side}'!")
-                print(f"DEBUG: x_location = {x_location}")
-                print(f"DEBUG: Segments for side '{side}':")
-                for start_x, (length, edge_data) in latest_horizontal_segment[side].items():
-                    print(f"  Segment: start={start_x}, end={start_x + length}, edge={edge_data[0]}-{edge_data[1]}")
-                # You might want to raise an error here during debugging or handle it gracefully
-                # raise ValueError(f"Intersection not found for x_location {x_location} on side {side}")
-            # --- DEBUGGING END ---
 
             from_node, to_node = intersect['edge'][0], intersect['edge'][1]
             
@@ -1148,8 +1117,7 @@ class DesignEnv(gym.Env):
 
                         # Then, it can be updated in crossing.
                         crossing.set('edges', f'-{new_edge} {new_edge}')
-
-        print(f"M node mapping: {m_node_mapping}\n")
+        print(f"m_node_mapping: {m_node_mapping}\n")
         # Add new connections (between top and bottom edges) and crossings (making use of new_veh_edges_to_add).
         # All tags that refer to the old edges should now refer to the new edges (if the refering edges fall to the left, they will refer to the new left edge and vice versa) 
         # They have the edges attribute (which are edges to the right) and outlineShape attribute (the shape of the crossing): 

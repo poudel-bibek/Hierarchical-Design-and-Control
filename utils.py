@@ -283,42 +283,51 @@ def plot_gradient_line(ax, x, y, std=None, cmap_name='Blues', label='', lw=2, zo
 def get_averages(result_json_path, total=False):
     """
     Helper function that reads a JSON file with results and returns the scales,
-    means and standard deviations for vehicles and pedestrians.
+    means and standard deviations for :
+    - Lower agent: Vehicle wait time, pedestrian wait time
+    - Higher agent: Pedestrian arrival time
     """
     with open(result_json_path, 'r') as f:
         results = json.load(f)
 
-    scales, veh_mean, ped_mean = [], [], []
-    veh_std, ped_std = [], []
+    scales, veh_wait_mean, ped_wait_mean, ped_arrival_mean = [], [], [], []
+    veh_wait_std, ped_wait_std, ped_arrival_std = [], [], []
     
     for scale_str, runs in results.items():
         scale = float(scale_str)
         scales.append(scale)
-        veh_vals = []
-        ped_vals = []
+        veh_wait_vals = []
+        ped_wait_vals = []
+        ped_arrival_vals = []
         
         for run in runs.values():
             if total:
-                veh_vals.append(run["total_veh_waiting_time"])
-                ped_vals.append(run["total_ped_waiting_time"])
+                veh_wait_vals.append(run["total_veh_waiting_time"])
+                ped_wait_vals.append(run["total_ped_waiting_time"])
+                ped_arrival_vals.append(run["total_ped_arrival_time"])
             else:
-                veh_vals.append(run["veh_avg_waiting_time"])
-                ped_vals.append(run["ped_avg_waiting_time"])
+                veh_wait_vals.append(run["veh_avg_waiting_time"])
+                ped_wait_vals.append(run["ped_avg_waiting_time"])
+                ped_arrival_vals.append(run["average_arrival_time_per_ped"])
                 
-        veh_mean.append(np.mean(veh_vals))
-        ped_mean.append(np.mean(ped_vals))
-        veh_std.append(np.std(veh_vals))
-        ped_std.append(np.std(ped_vals))
+        veh_wait_mean.append(np.mean(veh_wait_vals))
+        ped_wait_mean.append(np.mean(ped_wait_vals))
+        ped_arrival_mean.append(np.mean(ped_arrival_vals))
+        veh_wait_std.append(np.std(veh_wait_vals))
+        ped_wait_std.append(np.std(ped_wait_vals))
+        ped_arrival_std.append(np.std(ped_arrival_vals))
 
     # Convert to numpy arrays and sort by scale
     scales = np.array(scales)
     sort_idx = np.argsort(scales)
     
     return (scales[sort_idx], 
-            np.array(veh_mean)[sort_idx], 
-            np.array(ped_mean)[sort_idx],
-            np.array(veh_std)[sort_idx],
-            np.array(ped_std)[sort_idx])
+            np.array(veh_wait_mean)[sort_idx], 
+            np.array(ped_wait_mean)[sort_idx],
+            np.array(ped_arrival_mean)[sort_idx],
+            np.array(veh_wait_std)[sort_idx],
+            np.array(ped_wait_std)[sort_idx],
+            np.array(ped_arrival_std)[sort_idx])
 
 def count_consecutive_ones_filtered(actions):
     """
@@ -544,7 +553,7 @@ def plot_main_results(*json_paths, in_range_demand_scales, show_scales=True):
     all_ped_demands = []
     all_veh_demands = []
     for json_path in json_paths:
-        scales, _, _, _, _ = get_averages(json_path, total=False)
+        scales = get_averages(json_path, total=False)[0]
         all_ped_demands.extend(scales * original_pedestrian_demand)
         all_veh_demands.extend(scales * original_vehicle_demand)
 
@@ -573,8 +582,8 @@ def plot_main_results(*json_paths, in_range_demand_scales, show_scales=True):
 
     for idx, json_path in enumerate(json_paths):
         # Get data using the helper function
-        scales, veh_mean, ped_mean, veh_std, ped_std = get_averages(json_path, total=False)
-        _, veh_total, ped_total, veh_total_std, ped_total_std = get_averages(json_path, total=True)
+        scales, veh_mean, ped_mean, _, veh_std, ped_std, _ = get_averages(json_path, total=False)
+        _, veh_total, ped_total, _, veh_total_std, ped_total_std, _ = get_averages(json_path, total=True)
 
         # Use labels instead of raw method name
         method_name = labels[idx]
@@ -686,27 +695,35 @@ def plot_main_results(*json_paths, in_range_demand_scales, show_scales=True):
     ax_veh_avg.yaxis.set_major_formatter(FuncFormatter(format_avg_ticks))
     ax_ped_total.yaxis.set_major_formatter(FuncFormatter(format_total_ticks))
     ax_veh_total.yaxis.set_major_formatter(FuncFormatter(format_total_ticks))
-
     # Get data ranges for each plot
-    ped_avg_data_min = min([min(ped_mean - ped_std) for _, _, ped_mean, _, ped_std in
-                          [get_averages(path, total=False) for path in json_paths]])
-    ped_avg_data_max = max([max(ped_mean + ped_std) for _, _, ped_mean, _, ped_std in
-                          [get_averages(path, total=False) for path in json_paths]])
-
-    veh_avg_data_min = min([min(veh_mean - veh_std) for _, veh_mean, _, veh_std, _ in
-                          [get_averages(path, total=False) for path in json_paths]])
-    veh_avg_data_max = max([max(veh_mean + veh_std) for _, veh_mean, _, veh_std, _ in
-                          [get_averages(path, total=False) for path in json_paths]])
-
-    ped_total_data_min = min([min(ped_total - ped_total_std) for _, _, ped_total, _, ped_total_std in
-                            [get_averages(path, total=True) for path in json_paths]])
-    ped_total_data_max = max([max(ped_total + ped_total_std) for _, _, ped_total, _, ped_total_std in
-                            [get_averages(path, total=True) for path in json_paths]])
-
-    veh_total_data_min = min([min(veh_total - veh_total_std) for _, veh_total, _, veh_total_std, _ in
-                            [get_averages(path, total=True) for path in json_paths]])
-    veh_total_data_max = max([max(veh_total + veh_total_std) for _, veh_total, _, veh_total_std, _ in
-                            [get_averages(path, total=True) for path in json_paths]])
+    avg_data_ranges = []
+    total_data_ranges = []
+    
+    for path in json_paths:
+        # Get average data
+        _, veh_avg, ped_avg, _, veh_avg_std, ped_avg_std, _ = get_averages(path, total=False)
+        avg_data_ranges.append((
+            min(ped_avg - ped_avg_std), max(ped_avg + ped_avg_std),
+            min(veh_avg - veh_avg_std), max(veh_avg + veh_avg_std)
+        ))
+        
+        # Get total data
+        _, veh_total, ped_total, _, veh_total_std, ped_total_std, _ = get_averages(path, total=True)
+        total_data_ranges.append((
+            min(ped_total - ped_total_std), max(ped_total + ped_total_std),
+            min(veh_total - veh_total_std), max(veh_total + veh_total_std)
+        ))
+    
+    # Extract min and max values
+    ped_avg_data_min = min(r[0] for r in avg_data_ranges)
+    ped_avg_data_max = max(r[1] for r in avg_data_ranges)
+    veh_avg_data_min = min(r[2] for r in avg_data_ranges)
+    veh_avg_data_max = max(r[3] for r in avg_data_ranges)
+    
+    ped_total_data_min = min(r[0] for r in total_data_ranges)
+    ped_total_data_max = max(r[1] for r in total_data_ranges)
+    veh_total_data_min = min(r[2] for r in total_data_ranges)
+    veh_total_data_max = max(r[3] for r in total_data_ranges)
 
     # Ensure minimum values allow for lower data points (fixing crop issue at 0.5x)
     ped_avg_data_min = max(0.5, ped_avg_data_min)  # Start at 0.5 for top plots

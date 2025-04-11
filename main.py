@@ -194,13 +194,12 @@ def train(train_config, is_sweep=False, sweep_config=None):
                                  policy_path=policy_path)
                 
                 # calculate metrics for both policies
-                higher_avg_ped_arrival, lower_avg_ped_wait, lower_avg_veh_wait = get_averages(eval_json)
+                _, lower_avg_veh_wait, lower_avg_ped_wait, higher_avg_ped_arrival, _, _, _ = get_averages(eval_json)
 
                 # Get a single evaluation metric for both agents.
                 eval_veh_avg_wait = np.mean(lower_avg_veh_wait)
                 eval_ped_avg_wait = np.mean(lower_avg_ped_wait)
                 lower_avg_eval = ((eval_veh_avg_wait + eval_ped_avg_wait) / 2)
-                
                 print(f"Evaluation results: \n\tHigher: {higher_avg_ped_arrival} \n\tLower: {lower_avg_eval}")
 
             # save the policies at every update
@@ -402,7 +401,7 @@ def eval(design_args,
     del higher_policy
     del shared_lower_policy
 
-    print(f"All results: {all_results}")    
+    print(f"\nAll results: {all_results}\n")    
     if tl and unsignalized:
         tl_state = "unsignalized"
     elif tl:
@@ -411,6 +410,7 @@ def eval(design_args,
         tl_state = "ppo"
     
     result_json_path = os.path.join(eval_args['eval_save_dir'], f'{policy_path.split("/")[-1].split(".")[0]}_{tl_state}.json') # f'eval_{policy_path.split("/")[2].split(".")[0]}_{tl_state}.json
+    print(f"Result JSON path: {result_json_path}")
     with open(result_json_path, 'w') as f:
         json.dump(all_results, f, indent=4)
     f.close()

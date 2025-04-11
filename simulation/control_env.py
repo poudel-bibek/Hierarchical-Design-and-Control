@@ -1198,7 +1198,10 @@ class ControlEnv(gym.Env):
     def reset(self, extreme_edge_dict, num_proposals, tl= False):
         """
         """
-        
+        # useful when running multiple iterations of the same env (as in eval)
+        if self.sumo_running:
+            self.close()
+
         if self.manual_demand_veh is not None : 
             #scaling = convert_demand_to_scale_factor(self.manual_demand_veh, "vehicle", self.vehicle_input_trips) # Convert the demand to scaling factor first
             scale_demand(self.vehicle_input_trips, self.vehicle_output_trips, self.manual_demand_veh, demand_type="vehicle") # directly scaling factor given

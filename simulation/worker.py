@@ -37,56 +37,61 @@ def parallel_train_worker(rank,
     memory_transfer_freq = control_args['memory_transfer_freq']  # Get from config
     local_memory = Memory() # A worker instance must have their own memory 
 
-    state, _ = worker_env.reset(extreme_edge_dict, num_proposals)
-    ep_reward = 0
-    steps_since_update = 0
+    try:
+        state, _ = worker_env.reset(extreme_edge_dict, num_proposals)
+        ep_reward = 0
+        steps_since_update = 0
 
-    for _ in range(control_args['total_action_timesteps_per_episode']):
-        state = torch.FloatTensor(state)
-        # Select action
-        with torch.no_grad():
-            state = lower_state_normalizer.normalize(state)
-            state = state.to(worker_device)
-            action, logprob = shared_policy_old.act(state, num_proposals) # sim runs in CPU, state will initially always be in CPU.
-            value = shared_policy_old.critic(state.unsqueeze(0)) # add a batch dimension
+        for _ in range(control_args['total_action_timesteps_per_episode']):
+            state = torch.FloatTensor(state)
+            # Select action
+            with torch.no_grad():
+                state = lower_state_normalizer.normalize(state)
+                state = state.to(worker_device)
+                action, logprob = shared_policy_old.act(state, num_proposals) # sim runs in CPU, state will initially always be in CPU.
+                value = shared_policy_old.critic(state.unsqueeze(0)) # add a batch dimension
 
-            state = state.detach().cpu().numpy() # 2D
-            action = action.detach().cpu().numpy() # 1D
-            value = value.item() # Scalar
-            logprob = logprob.item() # Scalar
+                state = state.detach().cpu().numpy() # 2D
+                action = action.detach().cpu().numpy() # 1D
+                value = value.item() # Scalar
+                logprob = logprob.item() # Scalar
 
-        # Perform action
-        # These reward and next_state are for the action_duration timesteps.
-        next_state, control_reward, done, truncated, _ = worker_env.train_step(action) # need the returned state to be 2D
-        control_reward = lower_reward_normalizer.normalize(torch.tensor([control_reward], dtype=torch.float32)).item()
-        ep_reward += control_reward
+            # Perform action
+            # These reward and next_state are for the action_duration timesteps.
+            next_state, control_reward, done, truncated, _ = worker_env.train_step(action) # need the returned state to be 2D
+            control_reward = lower_reward_normalizer.normalize(torch.tensor([control_reward], dtype=torch.float32)).item()
+            ep_reward += control_reward
 
-        # Store data in memory
-        local_memory.append(state, action, value, logprob, control_reward, done) 
-        steps_since_update += 1
+            # Store data in memory
+            local_memory.append(state, action, value, logprob, control_reward, done) 
+            steps_since_update += 1
 
-        if steps_since_update >= memory_transfer_freq or done or truncated:
-            # Put local memory in the queue for the main process to collect
-            train_queue.put((rank, local_memory, None))
-            local_memory = Memory()  # Reset local memory
-            steps_since_update = 0
+            if steps_since_update >= memory_transfer_freq or done or truncated:
+                # Put local memory in the queue for the main process to collect
+                train_queue.put((rank, local_memory, None))
+                local_memory = Memory()  # Reset local memory
+                steps_since_update = 0
 
-        state = next_state
-        if done or truncated:
-            break
-    
-    # Higher level agent's reward can only be obtained after the lower level workers have finished
-    design_reward_tensor = worker_env._get_design_reward(num_proposals).clone().detach().to(dtype=torch.float32, device='cpu')
-    design_reward = higher_reward_normalizer.normalize(design_reward_tensor).item()
-    print(f"Design reward: {design_reward}")
+            state = next_state
+            if done or truncated:
+                break
+        
+        # Higher level agent's reward can only be obtained after the lower level workers have finished
+        design_reward_tensor = worker_env._get_design_reward(num_proposals).clone().detach().to(dtype=torch.float32, device='cpu')
+        design_reward = higher_reward_normalizer.normalize(design_reward_tensor).item()
+        print(f"Design reward: {design_reward}")
 
-    # In PPO, we do not make use of the total reward. We only use the rewards collected in the memory.
-    worker_env.close()
-    time.sleep(5) # Essential
-    del worker_env
-    print(f"Worker {rank} finished. Control Episode Reward: {round(ep_reward, 2)}. Design Reward: {round(design_reward, 2)}. Worker puts None in queue.")
-    train_queue.put((rank, None, design_reward))  # Signal that this worker is done 
-    
+        # In PPO, we do not make use of the total reward. We only use the rewards collected in the memory.
+        print(f"Worker {rank} finished. Control Episode Reward: {round(ep_reward, 2)}. Design Reward: {round(design_reward, 2)}. Worker puts None in queue.")
+        train_queue.put((rank, None, design_reward))  # Signal that this worker is done 
+
+    finally:
+        if 'worker_env' in locals() and worker_env is not None:
+            worker_env.close()
+            # time.sleep(5) # Keep this outside the finally block if it's not essential for cleanup
+            del worker_env
+            print(f"Worker {rank} environment closed.")
+
 def parallel_eval_worker(rank, 
                          eval_worker_config, 
                          eval_queue, 
@@ -108,9 +113,7 @@ def parallel_eval_worker(rank,
     """
 
     control_args = eval_worker_config['control_args']
-    env = ControlEnv(control_args, worker_id=rank, network_iteration=eval_worker_config['network_iteration']) 
     shared_policy = eval_worker_config['lower_policy']
-        
     worker_result = {} # results dict 
     
     # We set the demand manually (so that automatic scaling does not happen)
@@ -120,7 +123,7 @@ def parallel_eval_worker(rank,
     
     for i in range(eval_worker_config['n_iterations']):
         worker_result[i] = {}
-
+        
         SEED = random.randint(0, 1000000)
         random.seed(SEED)
         np.random.seed(SEED)
@@ -133,6 +136,7 @@ def parallel_eval_worker(rank,
         lower_state_normalizer = eval_worker_config['lower_state_normalizer']
 
         # Run the worker (reset includes warmup)
+        env = ControlEnv(control_args, worker_id=rank, network_iteration=eval_worker_config['network_iteration'])
         state, _ = env.reset(extreme_edge_dict, eval_worker_config['num_proposals'], tl = tl)
         veh_waiting_time_this_episode = 0
         ped_waiting_time_this_episode = 0
@@ -175,8 +179,8 @@ def parallel_eval_worker(rank,
         worker_result[i]['total_conflicts'] = env.total_conflicts
         worker_result[i]['total_switches'] = env.total_switches
 
-    env.close()
-    del env
+        env.close()
+        del env
 
     eval_queue.put((worker_demand_scale, worker_result))
     print(f"Worker {rank} (Demand: {worker_demand_scale}) finished and put result on queue.")
