@@ -60,12 +60,54 @@ class WelfordNormalizer:
 
     def normalize(self, x):
         """
-        Normalize the sample x using the running stats
-        - x (torch.Tensor or array-like)
+        Normalize the sample x using the running stats. Handles both single samples and batches.
+        - x (torch.Tensor or array-like): Input data, can be a single sample or a batch (dim 0).
         """
-        if self.training:
-            self.update(x)
-        return (x - self.mean) / self.std()
+        if not isinstance(x, torch.Tensor):
+            x = torch.tensor(x, dtype=torch.float32) # Ensure x is a tensor
+
+        original_shape = x.shape
+        is_batch = len(original_shape) > len(self.mean.shape) # Check if input has more dims than mean
+
+        if is_batch:
+            # Reshape batch to (batch_size, *feature_shape)
+            batch_size = original_shape[0]
+            feature_shape = original_shape[1:]
+            x_reshaped = x.view(batch_size, -1) # Flatten features if needed, adjust based on expected shape
+            # If self.mean is 1D [features], and x is [batch, features], reshaping might not be needed
+            # Check if feature shapes match
+            if feature_shape != self.mean.shape:
+                 # This case needs careful handling based on actual shapes.
+                 # Assuming features are the last dimension matching self.mean.shape
+                 if original_shape[-len(self.mean.shape):] == self.mean.shape:
+                      x_reshaped = x.reshape(-1, *self.mean.shape) # Reshape to [N, *mean_shape]
+                 else:
+                      # Raise error or handle differently if shapes are incompatible
+                      raise ValueError(f"Input shape {original_shape} incompatible with normalizer mean shape {self.mean.shape}")
+            else:
+                 x_reshaped = x # Use original if shapes already match [batch, *mean_shape]
+
+            normalized_x = torch.zeros_like(x_reshaped)
+            current_mean = self.mean.clone() # Use consistent mean/std for the whole batch
+            current_std = self.std().clone()
+
+            for i in range(x_reshaped.shape[0]):
+                sample = x_reshaped[i]
+                if self.training:
+                    self.update(sample) # Update stats one sample at a time
+                normalized_x[i] = (sample - current_mean) / current_std
+            
+            # Reshape back to original batch shape
+            return normalized_x.view(original_shape)
+
+        else: # Handle single sample
+             # Ensure single sample shape matches mean shape
+             if x.shape != self.mean.shape:
+                  raise ValueError(f"Input shape {x.shape} incompatible with normalizer mean shape {self.mean.shape}")
+             
+             if self.training:
+                 self.update(x)
+             return (x - self.mean) / self.std()
     
 
 class Memory:

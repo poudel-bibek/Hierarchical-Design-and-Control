@@ -76,7 +76,7 @@ class PPO:
         For the last step (step == len(rewards) - 1), we use the value estimate of the current state. 
         """ 
 
-        advantages = torch.zeros_like(rewards)
+        advantages = torch.zeros_like(rewards, dtype=torch.float32)
         gae = 0.0
         next_value = 0.0
         # First, we iterate through the rewards in reverse order.
@@ -96,7 +96,7 @@ class PPO:
             # Update the next value for the next step
             next_value = values[step]
             #print(f"Next value: {next_value}")
-        return torch.tensor(advantages, dtype=torch.float32)
+        return advantages
 
     def update(self, memories, num_proposals = None):
         """

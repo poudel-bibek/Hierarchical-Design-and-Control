@@ -10,18 +10,18 @@ from .env_utils import *
 from .sim_setup import *
 
 class ControlEnv(gym.Env):
-    """
-    Lower level agent.
-    Parallelizable environment, includes features:  
-    - Scaling the demand.
-    - Tracking and occupancy map.
-    """
-
+    
     def __init__(self, control_args, worker_id=None, network_iteration=None):
+        """
+        Lower level agent.
+        Parallelizable environment, includes features:  
+        - Scaling the demand.
+        - Tracking and occupancy map.
+        """
         super().__init__()
         self.worker_id = worker_id
+        self.traci_label = f"_{worker_id}" if worker_id is not None else "default"
         self.network_iteration = network_iteration
-
         self.vehicle_input_trips = control_args['vehicle_input_trips']
         self.vehicle_output_trips = control_args['vehicle_output_trips']
         self.pedestrian_input_trips = control_args['pedestrian_input_trips']
@@ -41,12 +41,11 @@ class ControlEnv(gym.Env):
         self.step_count = 0
         
         # Modify file paths to include the unique suffix. Each worker has their own environment and hence their own copy of the trips file.
-        self.unique_suffix = f"_{worker_id}" if worker_id is not None else ""
         self.total_unique_ids_veh = []
         self.total_unique_ids_ped = []
 
-        self.vehicle_output_trips = self.vehicle_output_trips.replace('.xml', f'{self.unique_suffix}.xml')
-        self.pedestrian_output_trips = self.pedestrian_output_trips.replace('.xml', f'{self.unique_suffix}.xml')
+        self.vehicle_output_trips = self.vehicle_output_trips.replace('.xml', f'{self.traci_label}.xml')
+        self.pedestrian_output_trips = self.pedestrian_output_trips.replace('.xml', f'{self.traci_label}.xml')
 
         # This list has to be gotten from the latest network. Will be populated dynamically during reset
         self.tl_ids = ['cluster_172228464_482708521_9687148201_9687148202_#5more'] # Intersection will always be present.
@@ -837,7 +836,7 @@ class ControlEnv(gym.Env):
 
         return design_reward
     
-    def _get_control_reward(self, corrected_occupancy_map, switch_state, pressure_dict):
+    def _get_control_reward(self, corrected_occupancy_map, switch_state, pressure_dict=None):
         """ 
         wrapper
         """
@@ -1199,9 +1198,6 @@ class ControlEnv(gym.Env):
     def reset(self, extreme_edge_dict, num_proposals, tl= False):
         """
         """
-        # if self.sumo_running:
-        #     time.sleep(5) # Wait until the process really finishes 
-        #     traci.close(False) #https://sumo.dlr.de/docs/TraCI/Interfacing_TraCI_from_Python.html
         
         if self.manual_demand_veh is not None : 
             #scaling = convert_demand_to_scale_factor(self.manual_demand_veh, "vehicle", self.vehicle_input_trips) # Convert the demand to scaling factor first
@@ -1241,7 +1237,7 @@ class ControlEnv(gym.Env):
         try:
             for attempt in range(max_retries):
                 try:
-                    traci.start(sumo_cmd)
+                    traci.start(sumo_cmd, label=self.traci_label)
                     break
                 except traci.exceptions.FatalTraCIError:
                     if attempt < max_retries - 1:
@@ -1294,7 +1290,7 @@ class ControlEnv(gym.Env):
                     current_phase = [1]*len(self.tl_ids) # random phase
                     traci.simulationStep() 
                     obs = self._get_observation(current_phase)
-                    _ = self._get_pressure_dict(self.corrected_occupancy_map)
+                    # _ = self._get_pressure_dict(self.corrected_occupancy_map)
                     observation_buffer.append(obs)
                     # No reward calculation
                     # self.step_count += 1 # We are not counting the warmup steps in the total simulation steps
@@ -1303,7 +1299,7 @@ class ControlEnv(gym.Env):
                     current_phase = self._apply_action(action, j, switch_state)
                     traci.simulationStep() 
                     obs = self._get_observation(current_phase)
-                    _ = self._get_pressure_dict(self.corrected_occupancy_map)
+                    # _ = self._get_pressure_dict(self.corrected_occupancy_map)
                     observation_buffer.append(obs)
                     # No reward calculation
                     # self.step_count += 1 # We are not counting the warmup steps in the total simulation steps
@@ -1387,6 +1383,7 @@ class ControlEnv(gym.Env):
 
     def close(self):
         if self.sumo_running:
+            traci.switch(self.traci_label)# switch to this worker's context
             traci.close(False) #https://sumo.dlr.de/docs/TraCI/Interfacing_TraCI_from_Python.html
             self.sumo_running = False
 

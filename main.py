@@ -93,7 +93,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
     total_updates_lower = (train_config['total_timesteps'] / train_config['lower_action_duration']) // train_config['lower_update_freq']
 
     higher_ppo = PPO(**higher_ppo_args)
-    higher_env = DesignEnv(design_args, control_args, lower_ppo_args, is_sweep=is_sweep)
+    higher_env = DesignEnv(design_args, control_args, lower_ppo_args, eval=False)
     higher_env.total_updates_lower = total_updates_lower
 
     higher_ppo.policy_old = higher_ppo.policy_old.to(device)
@@ -175,7 +175,13 @@ def train(train_config, is_sweep=False, sweep_config=None):
             # eval the policies every now and then. 
             if higher_update_count % design_args['eval_freq'] == 0:
                 policy_path = os.path.join(design_args['save_dir'], f'policy_at_step_{higher_env.global_step}.pth')
-
+                save_policy(higher_ppo.policy, 
+                            higher_env.lower_ppo.policy, 
+                            lower_state_normalizer, 
+                            higher_env.normalizer_x, 
+                            higher_env.normalizer_y, 
+                            policy_path)
+                
                 # Evaluate the latest policies
                 # At the time when higher agent is saved, lower agent is also exposed to designs from the same distribution.
                 print(f"Evaluating policies: {policy_path} at step {higher_env.global_step}")
@@ -199,15 +205,34 @@ def train(train_config, is_sweep=False, sweep_config=None):
 
             # save the policies at every update
             if avg_higher_reward > best_higher_reward:
-                save_policy(higher_ppo.policy, higher_env.lower_ppo.policy, lower_state_normalizer, os.path.join(design_args['save_dir'], 'best_reward_policy.pth'))
+                save_policy(higher_ppo.policy, 
+                            higher_env.lower_ppo.policy, 
+                            lower_state_normalizer, 
+                            higher_env.normalizer_x, 
+                            higher_env.normalizer_y, 
+                            os.path.join(design_args['save_dir'], 
+                            'best_reward_policy.pth'))
+                
                 best_higher_reward = avg_higher_reward
 
             if higher_loss['total_loss'] < best_higher_loss:
-                save_policy(higher_ppo.policy, higher_env.lower_ppo.policy, lower_state_normalizer, os.path.join(design_args['save_dir'], 'best_loss_policy.pth'))
+                save_policy(higher_ppo.policy, 
+                            higher_env.lower_ppo.policy, 
+                            lower_state_normalizer, 
+                            higher_env.normalizer_x, 
+                            higher_env.normalizer_y, 
+                            os.path.join(design_args['save_dir'], 
+                            'best_loss_policy.pth'))
                 best_higher_loss = higher_loss['total_loss']
 
             if higher_avg_ped_arrival < best_higher_eval:
-                save_policy(higher_ppo.policy, higher_env.lower_ppo.policy, lower_state_normalizer, os.path.join(design_args['save_dir'], 'best_eval_policy.pth'))
+                save_policy(higher_ppo.policy, 
+                            higher_env.lower_ppo.policy, 
+                            lower_state_normalizer, 
+                            higher_env.normalizer_x, 
+                            higher_env.normalizer_y, 
+                            os.path.join(design_args['save_dir'], 
+                            'best_eval_policy.pth'))
                 best_higher_eval = higher_avg_ped_arrival
 
         # logging at every iteration (every time sample is drawn)
@@ -291,10 +316,10 @@ def eval(design_args,
 
     eval_ppo_lower = PPO(**lower_ppo_args)
     eval_ppo_higher = PPO(**higher_ppo_args)
-    lower_state_normalizer = WelfordNormalizer(eval_args['state_dim'])
+    lower_state_normalizer = WelfordNormalizer(eval_args['lower_state_dim'])
 
     if policy_path:
-        load_policy(eval_ppo_higher.policy, eval_ppo_lower.policy, lower_state_normalizer, policy_path)
+        norm_x, norm_y = load_policy(eval_ppo_higher.policy, eval_ppo_lower.policy, lower_state_normalizer, policy_path)
 
     higher_policy = eval_ppo_higher.policy.to(eval_device)
     shared_lower_policy = eval_ppo_lower.policy.to(eval_device)
@@ -304,9 +329,11 @@ def eval(design_args,
     lower_state_normalizer.eval()
     
     iteration = f"eval{global_step}"
-    higher_env = DesignEnv(design_args, control_args, lower_ppo_args, is_sweep=False)
+    higher_env = DesignEnv(design_args, control_args, lower_ppo_args, eval=True) # Let the environment set its normalizers
+    higher_env.normalizer_x = norm_x # Then replace them
+    higher_env.normalizer_y = norm_y
     # Get a single greedy design 
-    higher_state = higher_env.reset() # At reset, we get the original real-world configuration.
+    higher_state =   Batch.from_data_list([higher_env.reset()])  # At reset, we get the original real-world configuration.
     # Which is the input network to the act function
     padded_proposals, num_proposals, _ = higher_policy.act(higher_state, 
                                                             iteration, 
@@ -342,18 +369,19 @@ def eval(design_args,
             demand_scale_to_rank[demand_scale] = rank
             print(f"For demand: {demand_scale}")    
             worker_config = {
+                'network_iteration': iteration,
                 'n_iterations': n_iterations,
-                'total_action_timesteps_per_episode': config['eval_n_timesteps'] // control_args['action_duration'], # Each time
+                'total_action_timesteps_per_episode': eval_args['eval_lower_timesteps'] // control_args['lower_action_duration'], # Each time
                 'worker_demand_scale': demand_scale,
+                'num_proposals': num_proposals,
                 'lower_policy': shared_lower_policy,
                 'control_args': control_args,
                 'worker_device': eval_device,
-                'lower_state_normalizer': lower_state_normalizer,
-                'num_proposals': control_args['max_proposals']
+                'lower_state_normalizer': lower_state_normalizer
             }
             p = mp.Process(
                 target=parallel_eval_worker,
-                args=(rank, worker_config, eval_queue, tl, unsignalized))
+                args=(rank, worker_config, eval_queue, higher_env.extreme_edge_dict, tl, unsignalized))
             
             p.start()
             eval_processes.append(p)
@@ -405,7 +433,7 @@ def main(config):
         eval_args['eval_save_dir'] = os.path.join('results', f'eval_{current_time}')
 
         dummy_env = ControlEnv(control_args, worker_id=None)
-        eval_args['state_dim'] = dummy_env.observation_space.shape
+        eval_args['lower_state_dim'] = dummy_env.observation_space.shape
         
         ppo_results_path = eval(control_args, ppo_args, eval_args, policy_path=config['eval_model_path'], tl= False)
         tl_results_path = eval(control_args, ppo_args, eval_args, policy_path=None, tl= True, unsignalized=False) 

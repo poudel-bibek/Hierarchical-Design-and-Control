@@ -28,12 +28,14 @@ def save_config(config, save_path):
     with open(save_path, 'w') as f:
         json.dump(config_to_save, f, indent=4)
 
-def save_policy(higher_policy, lower_policy, lower_state_normalizer, save_path):  
+def save_policy(higher_policy, lower_policy, lower_state_normalizer, norm_x, norm_y, save_path):  
     """
     """
     torch.save(
     {'higher': {
         'state_dict': higher_policy.state_dict(),  
+        'norm_x': norm_x,
+        'norm_y': norm_y
     },
     'lower': {
         'state_dict': lower_policy.state_dict(),  
@@ -55,6 +57,7 @@ def load_policy(higher_policy, lower_policy, lower_state_normalizer, load_path):
         M2=torch.from_numpy(checkpoint['lower']['state_normalizer_M2']),  
         count=checkpoint['lower']['state_normalizer_count']
     )
+    return checkpoint['higher']['norm_x'], checkpoint['higher']['norm_y']
     
 def convert_demand_to_scale_factor(demand, demand_type, input_file):
     """

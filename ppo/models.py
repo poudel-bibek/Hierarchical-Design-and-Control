@@ -517,6 +517,8 @@ class GAT_v2_ActorCritic(nn.Module):
           The design policy finishes training and we are supposed to get the best design at the end.
           It is kind of doing one round of expectation minimization.
 
+          Samples returned = First populate with all modes. Then populate with stochastic samples.
+
         """
         if training:
             if naive_stochastic:
@@ -526,63 +528,63 @@ class GAT_v2_ActorCritic(nn.Module):
                 # TODO: Implement potentially more sophisticated training sampling if needed
                 pass
 
-        else: # Test time: Deterministic sampling based on modes
-            grid_size = 20
+        else: # Test time: Hybrid sampling (Modes + Stochastic)
+            grid_size = 30  # Resolution for finding modes
             loc_min, loc_max = 0.0, 1.0
             thick_min, thick_max = 0.0, 1.0
-            
+
             # 1. Discretize
             loc_step = (loc_max - loc_min) / grid_size
             thick_step = (thick_max - thick_min) / grid_size
-            
+
             loc_centers = torch.linspace(loc_min + loc_step / 2, loc_max - loc_step / 2, grid_size, device=device)
             thick_centers = torch.linspace(thick_min + thick_step / 2, thick_max - thick_step / 2, grid_size, device=device)
-            
+
             grid_loc, grid_thick = torch.meshgrid(loc_centers, thick_centers, indexing='ij')
             grid_points = torch.stack([grid_loc.ravel(), grid_thick.ravel()], dim=-1) # Shape: (grid_size*grid_size, 2)
 
-            # 2. Evaluate
+            # 2. Evaluate GMM probability on the grid
             with torch.no_grad():
                 log_probs = gmm_single.log_prob(grid_points)
                 probs = torch.exp(log_probs).reshape(grid_size, grid_size) # Shape: (grid_size, grid_size)
 
             # 3. Find modes
-            # Pad probabilities to handle boundary conditions easily
-            padded_probs = F.pad(probs, (1, 1, 1, 1), mode='constant', value=0) 
-            
+            padded_probs = F.pad(probs, (1, 1, 1, 1), mode='constant', value=0)
             is_mode = (
                 (probs > padded_probs[1:-1, :-2]) &  # Compare with left neighbor
                 (probs > padded_probs[1:-1, 2:]) &   # Compare with right neighbor
                 (probs > padded_probs[:-2, 1:-1]) &  # Compare with top neighbor
                 (probs > padded_probs[2:, 1:-1])     # Compare with bottom neighbor
             )
-            
-            mode_indices = torch.nonzero(is_mode) # Shape: (num_modes, 2) [row, col] indices
+            mode_indices = torch.nonzero(is_mode) # Shape: (num_modes_found, 2) [row, col] indices
             num_modes_found = mode_indices.shape[0]
 
-            if num_modes_found == 0:
-                 # If no local modes, sample the single highest probability point
-                 max_prob_idx_flat = torch.argmax(probs)
-                 max_prob_idx = torch.tensor([max_prob_idx_flat // grid_size, max_prob_idx_flat % grid_size], device=device).unsqueeze(0)
-                 mode_indices = max_prob_idx
-                 num_modes_found = 1
-                 
-            # 4. Calculate num_sampled
-            num_sampled = min(num_proposals, num_modes_found)
+            # 4. Select top k modes
+            selected_mode_samples = torch.empty((0, 2), device=device, dtype=torch.float32)
+            num_modes_taken = 0
+            if num_modes_found > 0:
+                mode_probs_values = probs[mode_indices[:, 0], mode_indices[:, 1]]
+                sorted_mode_indices_idx = torch.argsort(mode_probs_values, descending=True)
 
-            # 5. Select top modes
-            mode_probs = probs[mode_indices[:, 0], mode_indices[:, 1]]
-            top_k_indices = torch.topk(mode_probs, k=num_sampled).indices
-            selected_mode_indices = mode_indices[top_k_indices] # Shape: (num_sampled, 2)
+                num_modes_to_take = min(num_modes_found, num_proposals)
+                top_mode_indices = mode_indices[sorted_mode_indices_idx[:num_modes_to_take]]
 
-            # 6. Get samples (centers of the selected mode cells)
-            # Note: Constraint step ("Add constraints: If there are two samples...") is complex and not implemented. Sampling the distinct mode centers.
-            selected_loc_indices = selected_mode_indices[:, 0]
-            selected_thick_indices = selected_mode_indices[:, 1]
-            
-            sampled_locations = loc_centers[selected_loc_indices]
-            sampled_thicknesses = thick_centers[selected_thick_indices]
-            return torch.stack([sampled_locations, sampled_thicknesses], dim=-1) # Shape: (num_sampled, 2)
+                mode_loc_indices = top_mode_indices[:, 0]
+                mode_thick_indices = top_mode_indices[:, 1]
+                mode_locations = loc_centers[mode_loc_indices]
+                mode_thicknesses = thick_centers[mode_thick_indices]
+                selected_mode_samples = torch.stack([mode_locations, mode_thicknesses], dim=-1)
+                num_modes_taken = selected_mode_samples.shape[0] # Update based on actual number taken
+
+            # 5. Sample remaining points stochastically
+            num_to_sample_stochastically = num_proposals - num_modes_taken
+            stochastic_samples = torch.empty((0, 2), device=device, dtype=torch.float32)
+            if num_to_sample_stochastically > 0:
+                stochastic_samples = gmm_single.sample((num_to_sample_stochastically,))
+
+            # 6. Combine samples
+            # torch.cat handles empty tensors gracefully
+            return torch.cat((selected_mode_samples, stochastic_samples), dim=0)
 
 
     def act(self, states_batch, iteration, clamp_min, clamp_max, device, training=True, visualize=False):
@@ -608,7 +610,7 @@ class GAT_v2_ActorCritic(nn.Module):
             # Deterministic selection during evaluation (choose max probability)
             num_proposals = torch.argmax(num_proposals_probs_batch, dim=-1) + 1
         
-        # print(f"\nnum_proposals: {num_proposals.shape, num_proposals}\n")
+        print(f"\nnum_proposals: {num_proposals.shape, num_proposals}\n")
 
         batch_size = states_batch.num_graphs 
         # Initialize output tensors with -1 so that its easier to infer actual proposals in critic.
