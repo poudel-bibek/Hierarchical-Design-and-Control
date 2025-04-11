@@ -195,12 +195,14 @@ def train(train_config, is_sweep=False, sweep_config=None):
                 
                 # calculate metrics for both policies
                 _, lower_avg_veh_wait, lower_avg_ped_wait, higher_avg_ped_arrival, _, _, _ = get_averages(eval_json)
+                # print(f"Lower Avg Veh Wait: {lower_avg_veh_wait} \nLower Avg Ped Wait: {lower_avg_ped_wait} \nHigher Avg Ped Arrival: {higher_avg_ped_arrival}")
 
                 # Get a single evaluation metric for both agents.
                 eval_veh_avg_wait = np.mean(lower_avg_veh_wait)
                 eval_ped_avg_wait = np.mean(lower_avg_ped_wait)
+                eval_ped_avg_arrival = np.mean(higher_avg_ped_arrival)
                 lower_avg_eval = ((eval_veh_avg_wait + eval_ped_avg_wait) / 2)
-                print(f"Evaluation results: \n\tHigher: {higher_avg_ped_arrival} \n\tLower: {lower_avg_eval}")
+                print(f"Evaluation results: \n\tHigher: {eval_ped_avg_arrival} \n\tLower: {lower_avg_eval}")
 
             # save the policies at every update
             if avg_higher_reward > best_higher_reward:
@@ -224,7 +226,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
                             'best_loss_policy.pth'))
                 best_higher_loss = higher_loss['total_loss']
 
-            if higher_avg_ped_arrival < best_higher_eval:
+            if np.mean(higher_avg_ped_arrival) < best_higher_eval:
                 save_policy(higher_ppo.policy, 
                             higher_env.lower_ppo.policy, 
                             lower_state_normalizer, 
@@ -388,7 +390,7 @@ def eval(design_args,
 
         while active_eval_workers:
             worker_demand_scale, result = eval_queue.get() #timeout=60) # Result is obtained after all iterations are complete
-            print(f"Result from worker with demand scale: {worker_demand_scale}: {result}")
+            print(f"\nResult from worker with demand scale: {worker_demand_scale}: {result}\n")
             all_results[worker_demand_scale] = result
             active_eval_workers.remove(demand_scale_to_rank[worker_demand_scale])
 

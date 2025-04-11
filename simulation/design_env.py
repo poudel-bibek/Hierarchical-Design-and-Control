@@ -1117,7 +1117,7 @@ class DesignEnv(gym.Env):
 
                         # Then, it can be updated in crossing.
                         crossing.set('edges', f'-{new_edge} {new_edge}')
-        print(f"m_node_mapping: {m_node_mapping}\n")
+        # print(f"m_node_mapping: {m_node_mapping}\n")
         # Add new connections (between top and bottom edges) and crossings (making use of new_veh_edges_to_add).
         # All tags that refer to the old edges should now refer to the new edges (if the refering edges fall to the left, they will refer to the new left edge and vice versa) 
         # They have the edges attribute (which are edges to the right) and outlineShape attribute (the shape of the crossing): 

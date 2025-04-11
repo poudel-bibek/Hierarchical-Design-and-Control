@@ -526,7 +526,6 @@ class ControlEnv(gym.Env):
         done = False
         observation_buffer = []
         action = np.array(action)
-        
         # switch detection does not need to be done every timestep. 
         switch_state, full_switch_state = self._detect_switch(action, self.previous_action)
         
@@ -559,13 +558,17 @@ class ControlEnv(gym.Env):
             self.total_switches += sum(full_switch_state)
             # Only apply the action from policy if not TL.   
             for i in range(self.steps_per_action): # Run simulation steps for the duration of the action
+                self._update_pedestrian_existence_times()
+
                 # Apply action is called every timestep (return information useful for reward calculation)
                 current_phase = self._apply_action(action, i, switch_state)
                 traci.simulationStep() # Step length is the simulation time that elapses when each time this is called.
                 self.step_count += 1
                 obs = self._get_observation(current_phase)
                 observation_buffer.append(obs)
-        
+                
+                self._get_pedestrian_arrival_times()
+
         # Outside the loop, before reward calculation
         # pressure_dict = self._get_pressure_dict(self.corrected_occupancy_map)
         # Reward outside the loop (only once per duration)
@@ -823,7 +826,7 @@ class ControlEnv(gym.Env):
 
         # Pedestrian
         total_ped_arrival_time = sum(self.pedestrian_arrival_times.values())
-        average_arrival_time_per_ped = total_ped_arrival_time / len(self.pedestrian_arrival_times)
+        average_arrival_time_per_ped = total_ped_arrival_time / (len(self.pedestrian_arrival_times) + 1e-6) # Avoid division by zero (due to some bad-faith design)
         design_reward -= average_arrival_time_per_ped
         print(f"Total pedestrian arrival time: {total_ped_arrival_time}")
         print(f"Average arrival time per pedestrian: {average_arrival_time_per_ped}")
