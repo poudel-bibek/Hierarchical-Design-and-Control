@@ -15,15 +15,15 @@ def create_new_sumocfg(save_dir, network_iteration):
     """
     os.makedirs(save_dir, exist_ok=True)
     config_content = f"""<?xml version="1.0" encoding="UTF-8"?>
-                        <configuration>
-                            <input>
-                                <net-file value="network_iterations/network_iteration_{network_iteration}.net.xml"/>
-                            </input>
-                            <output>
-                                <log value="sumo_logfile.txt"/>
-                                <error-log value="sumo_errorlog.txt"/>
-                            </output>
-                        </configuration>"""
+    <configuration>
+        <input>
+            <net-file value="network_iterations/network_iteration_{network_iteration}.net.xml"/>
+        </input>
+        <output>
+            <log value="sumo_logfile.txt"/>
+            <error-log value="sumo_errorlog.txt"/>
+        </output>
+    </configuration>"""
     
     temp_config_path = f'{save_dir}/Craver_traffic_lights_iterative.sumocfg'
     with open(temp_config_path, 'w') as f:
@@ -75,7 +75,7 @@ def save_graph_visualization(graph, iteration, run_dir):
     plt.title(f"Pedestrian Graph - Iteration {iteration}", fontsize=12)
     plt.axis('off')
     plt.tight_layout()
-    plt.savefig(os.path.join(run_dir, f'graph_iterations/graph_i_{iteration}.png'), dpi=300, bbox_inches='tight')
+    plt.savefig(os.path.join(run_dir, f'graph_iterations/graph_i{iteration}.png'), dpi=300, bbox_inches='tight')
     plt.close()
 
 def save_better_graph_visualization(graph, 
@@ -268,7 +268,7 @@ def save_better_graph_visualization(graph,
     ax.spines['left'].set_visible(False)
 
     plt.tight_layout()
-    plt.savefig(os.path.join(f'{run_dir}', f'graph_iterations/enhanced_graph_i_{iteration}.png'), dpi=dpi, bbox_inches='tight', facecolor='white')
+    plt.savefig(os.path.join(f'{run_dir}', f'graph_iterations/egraph_i{iteration}.png'), dpi=dpi, bbox_inches='tight', facecolor='white')
     plt.close()
 
 #### XML related Utils #####    

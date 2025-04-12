@@ -22,7 +22,7 @@ def get_config():
         "seed": None,  # Random seed (default: None)
         "gpu": True,  # Use GPU if available (default: use CPU)
         "total_timesteps": 15000000,  # Total number of timesteps the simulation will run
-        "eval_freq": 5,  # Evaluate both higher and lower-level policies and their normalizers after every n updates of the higher policy (0 to disable). 
+        "eval_freq": 2,  # Evaluate both higher and lower-level policies and their normalizers after every n updates of the higher policy (0 to disable). 
         # Also decides how often to evaluate
 
         # PPO Higher level agent params
@@ -30,7 +30,7 @@ def get_config():
         "higher_gae_lambda": 0.95,  # GAE lambda for higher-level agent
         "higher_max_grad_norm": 0.75,  # Maximum gradient norm for gradient clipping
         "higher_vf_clip_param": 0.5,  # Value function clipping parameter
-        "higher_update_freq": 32,  # Number of action timesteps between each policy update. A low value incurs high variance for design agent.
+        "higher_update_freq": 2,  # Number of action timesteps between each policy update. A low value incurs high variance for design agent.
         "higher_lr": 0.001,  # Learning rate for higher-level agent
         "higher_gamma": 0.99,  # Discount factor for higher-level agent
         "higher_K_epochs": 2,  # Number of epochs to update policy for higher-level agent
@@ -86,7 +86,7 @@ def get_config():
         "lower_auto_start": True,  # Automatically start the simulation
 
         # Evaluation
-        "eval_model_path": "./runs/xyz/best_eval_policy.pth",  # Path to the saved PPO model for evaluation
+        "eval_model_path": "./runs/xyz/saved_policies/best_eval_policy.pth",  # Path to the saved PPO model for evaluation. replace xyz.
         "eval_lower_timesteps": 600,  # Number of timesteps to each episode. Warmup not counted.
         "eval_lower_workers": 6,  # Parallelizes how many demands can be evaluated at the same time.
         "eval_worker_device": "gpu",  # Policy during eval can be run in GPU 

@@ -77,7 +77,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
     writer = SummaryWriter(log_dir=run_dir)
     eval_args['eval_save_dir'] = os.path.join(run_dir, f'results/train_{current_time}')
     os.makedirs(eval_args['eval_save_dir'], exist_ok=True)
-
+    os.makedirs(os.path.join(run_dir, 'saved_policies'), exist_ok=True)
     design_args.update({'save_dir': run_dir})
     higher_ppo_args['model_kwargs'].update({'run_dir': run_dir})
     control_args.update({'global_seed': SEED})
@@ -171,7 +171,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
 
             # eval the policies every now and then. 
             if higher_update_count % design_args['eval_freq'] == 0:
-                policy_path = os.path.join(design_args['save_dir'], f'policy_at_step_{higher_env.global_step}.pth')
+                policy_path = os.path.join(design_args['save_dir'], f'saved_policies/policy_at_{higher_env.global_step}.pth')
                 save_policy(higher_ppo.policy, 
                             higher_env.lower_ppo.policy, 
                             lower_state_normalizer, 
@@ -209,7 +209,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
                             higher_env.normalizer_x, 
                             higher_env.normalizer_y, 
                             os.path.join(design_args['save_dir'], 
-                            'best_reward_policy.pth'))
+                            'saved_policies/best_reward_policy.pth'))
                 
                 best_higher_reward = avg_higher_reward
 
@@ -220,7 +220,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
                             higher_env.normalizer_x, 
                             higher_env.normalizer_y, 
                             os.path.join(design_args['save_dir'], 
-                            'best_loss_policy.pth'))
+                            'saved_policies/best_loss_policy.pth'))
                 best_higher_loss = higher_loss['total_loss']
 
             if np.mean(higher_avg_ped_arrival) < best_higher_eval:
@@ -230,7 +230,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
                             higher_env.normalizer_x, 
                             higher_env.normalizer_y, 
                             os.path.join(design_args['save_dir'], 
-                            'best_eval_policy.pth'))
+                            'saved_policies/best_eval_policy.pth'))
                 best_higher_eval = higher_avg_ped_arrival
 
         # logging at every iteration (every time sample is drawn)
@@ -338,7 +338,6 @@ def eval(design_args,
                                                             design_args['clamp_min'], 
                                                             design_args['clamp_max'], 
                                                             eval_device,
-                                                            design_args['save_dir'],
                                                             training=False, # Get argmax on num_proposals and sample greedily on GMM
                                                             visualize=True) 
 
