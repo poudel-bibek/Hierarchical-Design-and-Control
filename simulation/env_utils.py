@@ -1,5 +1,4 @@
 import os
-import shutil
 from itertools import tee
 import matplotlib
 matplotlib.use('Agg')
@@ -9,12 +8,12 @@ import networkx as nx
 import numpy as np
 import random
 import xml.etree.ElementTree as ET
-from copy import deepcopy
 
-def create_new_sumocfg(network_iteration):
+def create_new_sumocfg(save_dir, network_iteration):
     """
     Need to iteratively load a new net file.
     """
+    os.makedirs(save_dir, exist_ok=True)
     config_content = f"""<?xml version="1.0" encoding="UTF-8"?>
                         <configuration>
                             <input>
@@ -26,7 +25,7 @@ def create_new_sumocfg(network_iteration):
                             </output>
                         </configuration>"""
     
-    temp_config_path = './simulation/Craver_traffic_lights_iterative.sumocfg'
+    temp_config_path = f'{save_dir}/Craver_traffic_lights_iterative.sumocfg'
     with open(temp_config_path, 'w') as f:
         f.write(config_content)
         
@@ -37,19 +36,6 @@ def pairwise(iterable):
     a, b = tee(iterable)
     next(b, None)
     return zip(a, b)
-
-def clear_folders(component_dir, network_dir):
-    """
-    Clear existing folders (graph_iterations, network_iterations, gmm_iterations) if they exist.
-    Create new ones.
-    """
-    folders_to_clear = ['graph_iterations', network_dir, component_dir, 'gmm_iterations']
-    for folder in folders_to_clear:
-        if os.path.exists(folder):
-            shutil.rmtree(folder)
-            # print(f"Cleared existing {folder} folder.")
-        os.makedirs(folder)
-        # print(f"Created new {folder} folder.")
 
 # Instead of setting the y-coordinate of the middle node as mid_point in networkx_graph, interpolation is used.
 def interpolate_y_coordinate(denorm_x_coordinate, horizontal_edges_veh_original_data):
@@ -72,13 +58,10 @@ def interpolate_y_coordinate(denorm_x_coordinate, horizontal_edges_veh_original_
 
     return coords[0] # only top one
 
-
-def save_graph_visualization(graph, iteration):
+def save_graph_visualization(graph, iteration, run_dir):
     """
     """
-
     plt.figure(figsize=(20, 15))
-
     pos = nx.get_node_attributes(graph, 'pos')
     
     # Draw nodes
@@ -92,20 +75,16 @@ def save_graph_visualization(graph, iteration):
     plt.title(f"Pedestrian Graph - Iteration {iteration}", fontsize=12)
     plt.axis('off')
     plt.tight_layout()
-    
-    os.makedirs('graph_iterations', exist_ok=True)
-    save_path = os.path.join('graph_iterations', f'graph_iteration_{iteration}.png')
-    
-    plt.savefig(save_path, dpi=300, bbox_inches='tight')
-    # print(f"Graph visualization saved to {save_path}")
+    plt.savefig(os.path.join(run_dir, f'graph_iterations/graph_i_{iteration}.png'), dpi=300, bbox_inches='tight')
     plt.close()
 
-def save_better_graph_visualization(graph, iteration, 
+def save_better_graph_visualization(graph, 
+                                  iteration, 
+                                  run_dir,
                                   show_node_ids=False, 
                                   show_coordinates=False,
                                   show_edge_width=False, 
                                   proportional_width=False,
-                                  scale_position='bottom_right',
                                   node_size=300, 
                                   font_size=16,
                                   edge_width=2.0, 
@@ -289,12 +268,7 @@ def save_better_graph_visualization(graph, iteration,
     ax.spines['left'].set_visible(False)
 
     plt.tight_layout()
-
-    # Save output
-    os.makedirs('graph_iterations', exist_ok=True)
-    save_path = os.path.join('graph_iterations', f'enhanced_graph_iteration_{iteration}.png')
-    plt.savefig(save_path, dpi=dpi, bbox_inches='tight', facecolor='white')
-    # print(f"Enhanced graph visualization saved to {save_path}")
+    plt.savefig(os.path.join(f'{run_dir}', f'graph_iterations/enhanced_graph_i_{iteration}.png'), dpi=dpi, bbox_inches='tight', facecolor='white')
     plt.close()
 
 #### XML related Utils #####    

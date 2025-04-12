@@ -16,23 +16,8 @@ results
 # TensorBoard runs
 runs/
 
-# Saved models
-saved_models/
-
 ./wandb
 wandb/
-
-./graph_iterations/
-/graph_iterations/
-
-./gmm_iterations/
-/gmm_iterations/
-
-./simulation/components/
-/simulation/components/
-
-./simulation/network_iterations/
-/simulation/network_iterations/
 
 ./simulation/scaled_trips/*
 /simulation/scaled_trips/*

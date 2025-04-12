@@ -8,14 +8,11 @@ import torch.multiprocessing as mp
 import xml.etree.ElementTree as ET
 from gymnasium import spaces
 from torch_geometric.data import Data
-
 from ppo.ppo import PPO
 from ppo.ppo_utils import Memory
 from .env_utils import *
 from .sim_setup import CONTROLLED_CROSSWALKS_DICT, return_horizontal_nodes
 from .worker import parallel_train_worker
-from utils import save_policy, get_averages
-# from main import eval # Circular import.
 
 class DesignEnv(gym.Env):
     """
@@ -47,17 +44,18 @@ class DesignEnv(gym.Env):
         - Iterative means the networkx graph and plain XML components after every iteration.
     """
 
-    def __init__(self, design_args, control_args, lower_ppo_args, eval=False):
+    def __init__(self, design_args, control_args, lower_ppo_args, run_dir=""):
         super().__init__()
         self.design_args = design_args
         self.control_args = control_args
         self.lower_ppo_args = lower_ppo_args
         self.max_proposals = self.design_args['max_proposals']
-        self.component_dir = self.design_args['component_dir']
-        self.network_dir = self.design_args['network_dir']
-        if not eval:
-            clear_folders(self.component_dir, self.network_dir) # Do not change the position of this.
-        
+        self.run_dir = run_dir
+        self.component_dir = f"{run_dir}/components"
+        self.network_dir = f"{run_dir}/network_iterations"
+        os.makedirs(self.component_dir, exist_ok=True)
+        os.makedirs(self.network_dir, exist_ok=True)
+
         # Generate the 5 different component XML files (node, edge, connection, type, tllogic) from the net file.
         self._create_component_xml_files(self.design_args['original_net_file'])
 
@@ -83,10 +81,11 @@ class DesignEnv(gym.Env):
         self._update_xml_files(self.base_networkx_graph, 'base') # Create base XML files from latest networkx graph
 
         if self.design_args['save_graph_images']:
-            save_graph_visualization(graph=pedestrian_networkx_graph, iteration='original')
-            save_graph_visualization(graph=self.base_networkx_graph, iteration='base')
-            save_better_graph_visualization(graph=pedestrian_networkx_graph, iteration='original')
-            save_better_graph_visualization(graph=self.base_networkx_graph, iteration='base')
+            os.makedirs(os.path.join(self.run_dir, 'graph_iterations'), exist_ok=True)
+            save_graph_visualization(pedestrian_networkx_graph, 'original', self.run_dir)
+            save_graph_visualization(self.base_networkx_graph, 'base', self.run_dir)
+            save_better_graph_visualization(pedestrian_networkx_graph, 'original', self.run_dir)
+            save_better_graph_visualization(self.base_networkx_graph, 'base', self.run_dir)
 
         # Lower level agent
         self.lower_ppo = PPO(**self.lower_ppo_args)
@@ -210,13 +209,8 @@ class DesignEnv(gym.Env):
         """
         Creates the base SUMO files (5 files).
         """
-        # Node (base_xml.nod.xml), Edge (base_xml.edg.xml), Connection (base_xml.con.xml), Type file (base_xml.typ.xml) and Traffic Light (base_xml.tll.xml)
-        # Create the output directory if it doesn't exist
-        output_dir = "./simulation/components"
-        os.makedirs(output_dir, exist_ok=True)
-        
         # Run netconvert with output files in the specified directory
-        command = f"netconvert --sumo-net-file {sumo_net_file} --plain-output-prefix {output_dir}/original --plain-output.lanes true"
+        command = f"netconvert --sumo-net-file {sumo_net_file} --plain-output-prefix {self.component_dir}/original --plain-output.lanes true"
 
         try:
             result = subprocess.run(command, shell=True, check=True, capture_output=True, text=True)
@@ -233,9 +227,7 @@ class DesignEnv(gym.Env):
              SEED, 
              lower_state_normalizer,
              lower_reward_normalizer,
-             higher_reward_normalizer,
-             ):
-        
+             higher_reward_normalizer):
         """
         Every step in the design environment involves:
         - Updating the network xml file based on the design action.
@@ -265,6 +257,7 @@ class DesignEnv(gym.Env):
                 target=parallel_train_worker,
                 args=(
                     rank,
+                    self.run_dir,
                     lower_old_policy,
                     self.control_args,
                     lower_queue,
@@ -433,8 +426,8 @@ class DesignEnv(gym.Env):
             self.iterative_networkx_graph.add_edge(mid_node_id, mid_node_details['bottom']['node_id'], width=denorm_thickness) 
 
         if self.design_args['save_graph_images']:
-            save_graph_visualization(graph=self.iterative_networkx_graph, iteration=iteration)
-            save_better_graph_visualization(graph=self.iterative_networkx_graph, iteration=iteration)
+            save_graph_visualization(self.iterative_networkx_graph, iteration, self.run_dir)
+            save_better_graph_visualization(self.iterative_networkx_graph, iteration, self.run_dir)
 
         # 3. Update XML
         self._update_xml_files(self.iterative_networkx_graph, iteration)
@@ -465,9 +458,6 @@ class DesignEnv(gym.Env):
         for side in ['top', 'bottom']:
             intersections[side] = {}
             intersect = self._find_segment_intersects_ped(latest_horizontal_segment[side], x_location)
-            # print(f"\nLatest horizontal segment: {latest_horizontal_segment[side]}")
-            # print(f" Bounds of the graph: min x: {min([data['pos'][0] for _, data in latest_graph.nodes(data=True)])} max x: {max([data['pos'][0] for _, data in latest_graph.nodes(data=True)])}")
-            # print(f"\n{side} Intersect: {intersect}\n")
 
             from_node, to_node = intersect['edge'][0], intersect['edge'][1]
             
@@ -513,40 +503,37 @@ class DesignEnv(gym.Env):
                 smaller_x, larger_x = min(from_node_x, to_node_x), max(from_node_x, to_node_x)
                 horizontal_segment['bottom'][smaller_x] = [larger_x - smaller_x, edge] #[2]['id']] # starting position, length, edge id
 
-        # print(f"\nHorizontal top: {horizontal_segment['top']}\n")
-        # print(f"\nHorizontal bottom: {horizontal_segment['bottom']}\n")
-
         # validation plot (to see if they make continuous horizontal segments)
-        if validation:
-            _, ax = plt.subplots()
-            horizontal_segment_top = sorted(list(horizontal_segment['top'].keys()))
-            horizontal_segment_bottom = sorted(list(horizontal_segment['bottom'].keys()))
-            for start_pos in horizontal_segment_top:
-                x_min, x_max = horizontal_segment_top[0], horizontal_segment_top[-1]
-                length = horizontal_segment['top'][start_pos][0]
-                ax.plot([start_pos, start_pos + length], [2, 2], 'r-')
-                ax.plot(start_pos, 2, 'x')
+        # Uncomment when necessary
+        # if validation:
+        #     _, ax = plt.subplots()
+        #     horizontal_segment_top = sorted(list(horizontal_segment['top'].keys()))
+        #     horizontal_segment_bottom = sorted(list(horizontal_segment['bottom'].keys()))
+        #     for start_pos in horizontal_segment_top:
+        #         x_min, x_max = horizontal_segment_top[0], horizontal_segment_top[-1]
+        #         length = horizontal_segment['top'][start_pos][0]
+        #         ax.plot([start_pos, start_pos + length], [2, 2], 'r-')
+        #         ax.plot(start_pos, 2, 'x')
 
-                # plot the min and max x-coordinate values
-                ax.text(x_min, 2, f'{x_min:.2f}', fontsize=12, verticalalignment='bottom')
-                ax.text(x_max, 2, f'{x_max:.2f}', fontsize=12, verticalalignment='bottom')
+        #         # plot the min and max x-coordinate values
+        #         ax.text(x_min, 2, f'{x_min:.2f}', fontsize=12, verticalalignment='bottom')
+        #         ax.text(x_max, 2, f'{x_max:.2f}', fontsize=12, verticalalignment='bottom')
 
-            for start_pos in horizontal_segment_bottom:
-                x_min, x_max = horizontal_segment_bottom[0], horizontal_segment_bottom[-1]
-                length = horizontal_segment['bottom'][start_pos][0]
-                ax.plot([start_pos, start_pos + length], [8, 8], 'b-')
-                ax.plot(start_pos, 8, 'x')
+        #     for start_pos in horizontal_segment_bottom:
+        #         x_min, x_max = horizontal_segment_bottom[0], horizontal_segment_bottom[-1]
+        #         length = horizontal_segment['bottom'][start_pos][0]
+        #         ax.plot([start_pos, start_pos + length], [8, 8], 'b-')
+        #         ax.plot(start_pos, 8, 'x')
 
-                # plot the min and max x-coordinate values
-                ax.text(x_min, 8, f'{x_min:.2f}', fontsize=12, verticalalignment='bottom')
-                ax.text(x_max, 8, f'{x_max:.2f}', fontsize=12, verticalalignment='bottom')
+        #         # plot the min and max x-coordinate values
+        #         ax.text(x_min, 8, f'{x_min:.2f}', fontsize=12, verticalalignment='bottom')
+        #         ax.text(x_max, 8, f'{x_max:.2f}', fontsize=12, verticalalignment='bottom')
 
-            ax.set_ylim(-1, 11)
-            ax.set_xlabel('X-coordinate')
-            plt.savefig('./simulation/horizontal_segments.png')
-            #plt.show()
-            plt.close()
-        
+        #     ax.set_ylim(-1, 11)
+        #     ax.set_xlabel('X-coordinate')
+        #     plt.savefig('./simulation/horizontal_segments.png')
+        #     plt.close()
+
         return horizontal_segment
 
     def reset(self, start_from_base=False):
@@ -554,9 +541,8 @@ class DesignEnv(gym.Env):
         Reset the environment to its initial state.
         Option to start with the initial original set of crosswalks or start from base (empty canvas).
         """
-
+    
         self.iterative_networkx_graph = self.base_networkx_graph.copy()
-
         if start_from_base:
             pass # Do nothing
         else: 
@@ -583,8 +569,8 @@ class DesignEnv(gym.Env):
                 self.iterative_networkx_graph.add_edge(middle_node_id, top_node, width=3.0)
 
         if self.design_args['save_graph_images']:
-            save_graph_visualization(graph=self.iterative_networkx_graph, iteration=0)
-            save_better_graph_visualization(graph=self.iterative_networkx_graph, iteration=0)
+            save_graph_visualization(self.iterative_networkx_graph, '0', self.run_dir)
+            save_better_graph_visualization(self.iterative_networkx_graph, '0', self.run_dir)
 
         # Everytime the networkx graph is updated, the XML graph needs to be updated.
         # Make the added nodes/edges a crossing with traffic light in XML.
@@ -687,9 +673,7 @@ class DesignEnv(gym.Env):
         edge_attr = torch.tensor(edge_attr, dtype=torch.float)
 
         # Create PyTorch Geometric Data object
-        data = Data(x=x, edge_index=edge_index, edge_attr=edge_attr)
-        
-        return data
+        return Data(x=x, edge_index=edge_index, edge_attr=edge_attr)
 
     def _normalize_features(self, features):
         """
@@ -731,8 +715,7 @@ class DesignEnv(gym.Env):
 
         horizontal_edges_veh_original_data = {
             'top': {},
-            'bottom': {}
-        }
+            'bottom': {}}
 
         for direction in ['top', 'bottom']:
             for edge in edge_root.findall('edge'):
@@ -833,26 +816,16 @@ class DesignEnv(gym.Env):
 
         # Extract pedestrian nodes and edges from networkx_graph
         pedestrian_nodes_in_graph = set(networkx_graph.nodes())
-        # print(f"Pedestrian nodes in XML: {pedestrian_nodes_in_xml}\n")
-        # print(f"Pedestrian nodes in graph: {pedestrian_nodes_in_graph}\n")
-        # print(f"Pedestrian edges in XML: {list(pedestrian_edges_in_xml.keys())}\n")
-        # print(f"Pedestrian edges in graph: {set(networkx_graph.edges())}\n")
         
         # Remove PEDESTRIAN nodes that are in XML component file but not in networkx graph.
         potential_nodes_to_remove = pedestrian_nodes_in_xml - pedestrian_nodes_in_graph
-        # print(f"Potential Nodes to remove: Total: {len(potential_nodes_to_remove)},\n {potential_nodes_to_remove}\n")
-        
+
         # Some edges may still access the nodes that are in potential_nodes_to_remove.
         # Find the edges that still access the nodes that are in potential_nodes_to_remove.
         edges_in_xml_that_access_removal_nodes = {}
         for (f, t) in edges_in_xml:
             if f in potential_nodes_to_remove or t in potential_nodes_to_remove:
                 edges_in_xml_that_access_removal_nodes[(f, t)] = edges_in_xml[(f, t)] # These can be vehicle edges as well.
-
-        # print(f"Edges in XML that still access the potential removal nodes: Total: {len(edges_in_xml_that_access_removal_nodes)}")
-        # for (f, t), e in edges_in_xml_that_access_removal_nodes.items():
-        #     print(f"Edge: {f} -> {t}")
-        #     print(f"Edge attributes: {e.attrib}\n")
 
         # In the edges that access nodes in potential_nodes_to_remove, some of the edges are vehicle edges (For e.g., when the old TL was removed).
         vehicle_edges_that_access_removal_nodes = {}
@@ -987,8 +960,6 @@ class DesignEnv(gym.Env):
                                                                                                          f'{self.component_dir}/original.edg.xml', 
                                                                                                          f'{self.component_dir}/original.nod.xml', 
                                                                                                          connection_root)
-        # print(f"old_veh_edges_to_remove: {old_veh_edges_to_remove}\n")
-        # print(f"new_veh_edges_to_add: {new_veh_edges_to_add}\n")
 
         # Add the new edges (each edge has a single nested lane) to the edge file. The width is the default road width.
         for direction in ['top', 'bottom']:
@@ -1183,9 +1154,7 @@ class DesignEnv(gym.Env):
         # Respective changes to the connections file.
         # All the connections present in the TLL file should also be present in the connections file. But the connection file will have more of them.
         # In iteration base, there will be a bunch of connections to remove from original file (remove connections with the same from and to edges).
-        # all_conn_file_connections = [(conn.get('from'), conn.get('to')) for conn in connection_root.findall('connection')]
-        # print(f"connection Before removal: Total: {len(all_conn_file_connections)},\n {all_conn_file_connections}\n")
-        
+
         # Look at the same from and to edges in the connections file and remove them.
         connections_to_remove_list = [(conn.get('from'), conn.get('to')) for conn in connections_to_remove]
         to_remove = []
@@ -1203,8 +1172,6 @@ class DesignEnv(gym.Env):
         for (f,t), edge in pedestrian_edges_to_remove.items():
             pedestrian_edges_to_remove_connections.append(edge.get('id'))
 
-        # print(f"pedestrian_edges_to_remove_connections: Total: {len(pedestrian_edges_to_remove_connections)},\n {pedestrian_edges_to_remove_connections}\n")
-
         for conn in connection_root.findall('connection'):
             if conn.get('from') in pedestrian_edges_to_remove_connections or conn.get('to') in pedestrian_edges_to_remove_connections:
                 connection_root.remove(conn)
@@ -1218,7 +1185,7 @@ class DesignEnv(gym.Env):
 
         # Generate the final net file using netconvert
         output_file = f'{self.network_dir}/network_iteration_{iteration}.net.xml'
-        netconvert_log_file = f'simulation/netconvert_log.txt'
+        netconvert_log_file = f'{self.run_dir}/netconvert_log.txt'
         command = (
             f"netconvert "
             f"--node-files={iteration_prefix}.nod.xml "
@@ -1254,11 +1221,9 @@ class DesignEnv(gym.Env):
         horizontal_segment = self._get_horizontal_segment_ped(
             self.horizontal_nodes_top_ped, 
             self.horizontal_nodes_bottom_ped, 
-            pedestrian_networkx_graph
-        )
+            pedestrian_networkx_graph)
         
         offset = 2 # Add or Subtract a small buffer.
-
         # Find the leftmost and rightmost valid x coordinates from both top and bottom segments
         top_x_coords = list(horizontal_segment['top'].keys())
         bottom_x_coords = list(horizontal_segment['bottom'].keys())

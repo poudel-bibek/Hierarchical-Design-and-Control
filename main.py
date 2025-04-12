@@ -38,10 +38,9 @@ def train(train_config, is_sweep=False, sweep_config=None):
 
     os.makedirs('runs', exist_ok=True)
     current_time = datetime.now().strftime('%b%d_%H-%M-%S')
-    log_dir = os.path.join('runs', current_time)
-    os.makedirs(log_dir, exist_ok=True)
-
-    config_path = os.path.join(log_dir, f'config_{current_time}.json')
+    run_dir = os.path.join('runs', current_time)
+    os.makedirs(run_dir, exist_ok=True)
+    config_path = os.path.join(run_dir, f'config_{current_time}.json')
     save_config(train_config, config_path)
     print(f"\nConfiguration saved to {config_path}")
 
@@ -49,8 +48,8 @@ def train(train_config, is_sweep=False, sweep_config=None):
 
     # Print stats from dummy environment
     dummy_envs = {
-        'higher' : DesignEnv(design_args, control_args, lower_ppo_args), 
-        'lower' : ControlEnv(control_args, worker_id=None)
+        'higher' : DesignEnv(design_args, control_args, lower_ppo_args, run_dir), 
+        'lower' : ControlEnv(control_args, run_dir, worker_id=None)
     }
 
     print(f"\nEnvironments")
@@ -75,14 +74,12 @@ def train(train_config, is_sweep=False, sweep_config=None):
     dummy_envs['higher'].close()
 
     # Model saving and tensorboard 
-    writer = SummaryWriter(log_dir=log_dir)
-    save_dir = os.path.join('saved_models', current_time)
-    os.makedirs(save_dir, exist_ok=True)
-    eval_args['eval_save_dir'] = os.path.join('results', f'train_{current_time}')
+    writer = SummaryWriter(log_dir=run_dir)
+    eval_args['eval_save_dir'] = os.path.join(run_dir, f'results/train_{current_time}')
     os.makedirs(eval_args['eval_save_dir'], exist_ok=True)
-    os.makedirs('./results', exist_ok=True)
 
-    design_args.update({'save_dir': save_dir})
+    design_args.update({'save_dir': run_dir})
+    higher_ppo_args['model_kwargs'].update({'run_dir': run_dir})
     control_args.update({'global_seed': SEED})
     control_args.update({'total_action_timesteps_per_episode': train_config['lower_max_timesteps'] // train_config['lower_action_duration']})
 
@@ -93,7 +90,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
     total_updates_lower = (train_config['total_timesteps'] / train_config['lower_action_duration']) // train_config['lower_update_freq']
 
     higher_ppo = PPO(**higher_ppo_args)
-    higher_env = DesignEnv(design_args, control_args, lower_ppo_args, eval=False)
+    higher_env = DesignEnv(design_args, control_args, lower_ppo_args, run_dir)
     higher_env.total_updates_lower = total_updates_lower
 
     higher_ppo.policy_old = higher_ppo.policy_old.to(device)
@@ -330,7 +327,7 @@ def eval(design_args,
     lower_state_normalizer.eval()
     
     iteration = f"eval{global_step}"
-    higher_env = DesignEnv(design_args, control_args, lower_ppo_args, eval=True) # Let the environment set its normalizers
+    higher_env = DesignEnv(design_args, control_args, lower_ppo_args, design_args['save_dir']) # Let the environment set its normalizers
     higher_env.normalizer_x = norm_x # Then replace them
     higher_env.normalizer_y = norm_y
     # Get a single greedy design 
@@ -341,6 +338,7 @@ def eval(design_args,
                                                             design_args['clamp_min'], 
                                                             design_args['clamp_max'], 
                                                             eval_device,
+                                                            design_args['save_dir'],
                                                             training=False, # Get argmax on num_proposals and sample greedily on GMM
                                                             visualize=True) 
 
@@ -353,7 +351,7 @@ def eval(design_args,
     higher_env._apply_action(proposals, iteration)
     sumo_net_file = f"{higher_env.network_dir}/network_iteration_{iteration}.net.xml"
     print(f"\nSUMO network file: {sumo_net_file}")
-    create_new_sumocfg(iteration)
+    create_new_sumocfg(design_args['save_dir'], iteration)
 
     # number of times the n_workers have to be repeated to cover all eval demands
     num_times_workers_recycle = len(eval_demand_scales) if len(eval_demand_scales) < n_workers else (len(eval_demand_scales) // n_workers) + 1
@@ -378,7 +376,8 @@ def eval(design_args,
                 'lower_policy': shared_lower_policy,
                 'control_args': control_args,
                 'worker_device': eval_device,
-                'lower_state_normalizer': lower_state_normalizer
+                'lower_state_normalizer': lower_state_normalizer,
+                'run_dir': design_args['save_dir']
             }
             p = mp.Process(
                 target=parallel_eval_worker,
@@ -434,7 +433,7 @@ def main(config):
         os.makedirs(f'./results/eval_{current_time}', exist_ok=True)
         eval_args['eval_save_dir'] = os.path.join('results', f'eval_{current_time}')
 
-        dummy_env = ControlEnv(control_args, worker_id=None)
+        dummy_env = ControlEnv(control_args, " ", worker_id=None)
         eval_args['lower_state_dim'] = dummy_env.observation_space.shape
         
         ppo_results_path = eval(control_args, ppo_args, eval_args, policy_path=config['eval_model_path'], tl= False)

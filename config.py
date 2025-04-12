@@ -10,8 +10,6 @@ def get_config():
         "pedestrian_input_trips": "./simulation/original_pedtrips.xml",  # Original Input pedestrian trips file
         "pedestrian_output_trips": "./simulation/scaled_trips/scaled_pedtrips.xml",  # Output pedestrian trips file
         "original_net_file": "./simulation/Craver_traffic_lights_wide.net.xml",  # Original net file
-        "component_dir": "./simulation/components",
-        "network_dir": "./simulation/network_iterations",
         "total_sweep_trials": 128,  # Total number of trials for the wandb sweep
 
         # Demand scaling
@@ -88,8 +86,7 @@ def get_config():
         "lower_auto_start": True,  # Automatically start the simulation
 
         # Evaluation
-        "eval_model_path": "./saved_models/best_eval_policy.pth",  # Path to the saved PPO model for evaluation
-        "eval_save_dir": None,
+        "eval_model_path": "./runs/xyz/best_eval_policy.pth",  # Path to the saved PPO model for evaluation
         "eval_lower_timesteps": 600,  # Number of timesteps to each episode. Warmup not counted.
         "eval_lower_workers": 6,  # Parallelizes how many demands can be evaluated at the same time.
         "eval_worker_device": "gpu",  # Policy during eval can be run in GPU 
@@ -107,8 +104,6 @@ def classify_and_return_args(train_config, device):
         'save_graph_images': train_config['save_graph_images'],
         'save_gmm_plots': train_config['save_gmm_plots'],
         'save_dir': None, # Will be set later.
-        'network_dir': train_config['network_dir'],
-        'component_dir': train_config['component_dir'],
         'original_net_file': train_config['original_net_file'],
         'eval_freq': train_config['eval_freq'],
         'max_proposals': train_config['max_proposals'],
@@ -154,6 +149,7 @@ def classify_and_return_args(train_config, device):
         'activation': train_config['higher_activation'],
         'model_size': train_config['higher_model_size'],
         'dropout_rate': train_config['higher_dropout_rate'],
+        'run_dir': None, # Will be set later.
     }
 
     lower_model_kwargs = { 
@@ -214,7 +210,7 @@ def classify_and_return_args(train_config, device):
     eval_args = {
         'lower_state_dim': None,
         'eval_model_path': train_config['eval_model_path'],
-        'eval_save_dir': train_config['eval_save_dir'],
+        'eval_save_dir': None, # Will be set later.
         'eval_lower_timesteps': train_config['eval_lower_timesteps'],
         'eval_lower_workers': train_config['eval_lower_workers'],
         'eval_worker_device': train_config['eval_worker_device'],

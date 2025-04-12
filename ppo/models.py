@@ -1,3 +1,4 @@
+import os
 import torch
 import numpy as np
 import torch.nn as nn
@@ -233,7 +234,8 @@ class GAT_v2_ActorCritic(nn.Module):
         super(GAT_v2_ActorCritic, self).__init__()
         self.in_channels = in_channels
         self.max_proposals = action_dim
-        
+        self.run_dir = kwargs.get('run_dir')
+        os.makedirs(os.path.join(self.run_dir, 'gmm_iterations'), exist_ok=True)
         self.num_mixtures = kwargs.get('num_mixtures')
         self.hidden_channels = kwargs.get('hidden_channels')
         self.out_channels = kwargs.get('out_channels')
@@ -375,7 +377,7 @@ class GAT_v2_ActorCritic(nn.Module):
 
         self.critic_layers = nn.Sequential(*critic_layers)
         self.critic_value = layer_init(nn.Linear(input_size_critic, 1))
-
+    
     def readout_layer(self, x, batch):
         """
         Applied at the transition of GAT to MLP layers.
@@ -648,7 +650,7 @@ class GAT_v2_ActorCritic(nn.Module):
             # Visualization is only meaningful during act (i.e., not during evaluation)
             if visualize and iteration is not None:
                 markers = (locations.squeeze().detach().cpu().numpy(), thicknesses.squeeze().detach().cpu().numpy())
-                self.visualize_gmm(gmm_batch[b], markers=markers, batch_index=b, thickness_range=(0, 1), location_range=(0, 1), iteration=iteration)
+                self.visualize_gmm(gmm_batch[b], self.run_dir, markers=markers, batch_index=b, thickness_range=(0, 1), location_range=(0, 1), iteration=iteration)
 
             # Store in output tensor
             num_returned_samples = samples.shape[0] # Number of samples actually returned by _sample_gmm
@@ -741,7 +743,7 @@ class GAT_v2_ActorCritic(nn.Module):
             "critic": critic_params,
             "Grand total": total_params}
     
-    def visualize_gmm(self, gmm_single, num_samples=50000, markers=None, batch_index=None, thickness_range=None, location_range=None, iteration=None):
+    def visualize_gmm(self, gmm_single, run_dir, num_samples=50000, markers=None, batch_index=None, thickness_range=None, location_range=None, iteration=None):
         """
         Visualize the GMM distribution in 3D.
         If sampling locations provided, they are marked as red crosses in a separate top-down view.
@@ -752,7 +754,7 @@ class GAT_v2_ActorCritic(nn.Module):
             markers (tuple of ndarrays): Markers to plot, shape (N, 2).
         """
         fs = 16
-        base_save_path = f"gmm_iterations/gmm_distribution_iter_{iteration}_batch_{batch_index}"
+        base_save_path = f"{run_dir}/gmm_iterations/gmm_i{iteration}_b{batch_index}"
         
         # Sample from the GMM
         samples = gmm_single.sample((num_samples,))  # Shape: (num_samples, 2)

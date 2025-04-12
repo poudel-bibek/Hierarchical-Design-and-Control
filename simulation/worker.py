@@ -8,6 +8,7 @@ from ppo.ppo_utils import Memory
 from simulation.control_env import ControlEnv
 
 def parallel_train_worker(rank, 
+                         run_dir,
                          shared_policy_old, 
                          control_args, 
                          train_queue, 
@@ -33,7 +34,7 @@ def parallel_train_worker(rank,
     np.random.seed(worker_seed)
     torch.manual_seed(worker_seed)
 
-    worker_env = ControlEnv(control_args, worker_id=rank, network_iteration=network_iteration)
+    worker_env = ControlEnv(control_args, run_dir, worker_id=rank, network_iteration=network_iteration)
     memory_transfer_freq = control_args['memory_transfer_freq']  # Get from config
     local_memory = Memory() # A worker instance must have their own memory 
 
@@ -136,7 +137,7 @@ def parallel_eval_worker(rank,
         lower_state_normalizer = eval_worker_config['lower_state_normalizer']
 
         # Run the worker (reset includes warmup)
-        env = ControlEnv(control_args, worker_id=rank, network_iteration=eval_worker_config['network_iteration'])
+        env = ControlEnv(control_args, eval_worker_config['run_dir'], worker_id=rank, network_iteration=eval_worker_config['network_iteration'])
         state, _ = env.reset(extreme_edge_dict, eval_worker_config['num_proposals'], tl = tl)
         veh_waiting_time_this_episode = 0
         ped_waiting_time_this_episode = 0

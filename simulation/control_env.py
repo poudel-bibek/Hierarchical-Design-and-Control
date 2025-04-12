@@ -11,7 +11,7 @@ from .sim_setup import *
 
 class ControlEnv(gym.Env):
     
-    def __init__(self, control_args, worker_id=None, network_iteration=None):
+    def __init__(self, control_args, run_dir, worker_id=None, network_iteration=None):
         """
         Lower level agent.
         Parallelizable environment, includes features:  
@@ -21,6 +21,7 @@ class ControlEnv(gym.Env):
         super().__init__()
         self.worker_id = worker_id
         self.traci_label = f"_{worker_id}" if worker_id is not None else "default"
+        self.run_dir = run_dir
         self.network_iteration = network_iteration
         self.vehicle_input_trips = control_args['vehicle_input_trips']
         self.vehicle_output_trips = control_args['vehicle_output_trips']
@@ -1222,21 +1223,21 @@ class ControlEnv(gym.Env):
 
 
         # create the new sumocfg file before the call
-        create_new_sumocfg(self.network_iteration)
+        create_new_sumocfg(self.run_dir, self.network_iteration)
 
         if self.auto_start:
             sumo_cmd = ["sumo-gui" if self.use_gui else "sumo", 
                         "--verbose",
                         "--start" , 
                         "--quit-on-end", 
-                        "-c", "./simulation/Craver_traffic_lights_iterative.sumocfg", 
+                        "-c", f"{self.run_dir}/Craver_traffic_lights_iterative.sumocfg", 
                         "--step-length", str(self.step_length),
                         "--route-files", f"{self.vehicle_output_trips},{self.pedestrian_output_trips}"]
         else:
             sumo_cmd = ["sumo-gui" if self.use_gui else "sumo", 
                         "--verbose",  
                         "--quit-on-end", 
-                        "-c", "./simulation/Craver_traffic_lights_iterative.sumocfg", 
+                        "-c", f"{self.run_dir}/Craver_traffic_lights_iterative.sumocfg", 
                         "--step-length", str(self.step_length),
                         "--route-files", f"{self.vehicle_output_trips},{self.pedestrian_output_trips}"]
         max_retries = 3

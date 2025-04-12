@@ -1196,25 +1196,3 @@ def plot_consolidated_insights(sampled_actions_file_path, conflict_json_file_pat
     plt.show()
     return fig
 
-# Usage
-####### CONSOLIDATED 3 SUBPLOTS ######
-# sampled_actions_file_path = "./results/sampled_actions.json"
-# unsignalized_conflicts_file_path = "./results/eval_unsignalized_conflicts.json"
-# switching_freq_data_path = "./results/switching_freq_data.json"
-# plot_consolidated_insights(sampled_actions_file_path, unsignalized_conflicts_file_path, switching_freq_data_path) # Other values are manually input inside the function.
-
-
-# ###### MAIN RESULTS PLOT ######
-# unsignalized_results_path = "./results/eval_unsignalized.json"
-# tl_results_path = "./results/eval_tl.json"
-# ppo_results_path = "./results/eval_ppo.json"
-
-# plot_main_results(unsignalized_results_path, 
-#                          tl_results_path, 
-#                          ppo_results_path,
-#                          in_range_demand_scales=[1.0, 1.25, 1.5, 1.75, 2.0, 2.25])
-
-######  Just plot sampled 1's ###### 
-# sampled_actions_file_path = "./saved_models/Feb24_13-54-26/sampled_actions.json"
-# plot_avg_consecutive_ones(sampled_actions_file_path)
-
