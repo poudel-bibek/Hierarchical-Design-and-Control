@@ -648,13 +648,13 @@ class GAT_v2_ActorCritic(nn.Module):
             # Apply a noisy clamp individually to prevent exact overlap at same locations.
             # Although means are constrained to [0,1], log_stds are not.
             # We should be less dependent on clamping here and make sure the GMM itself lies in the desired range.
-            below_min_mask_loc = locations < clamp_min
-            above_max_mask_loc = locations > clamp_max
-            locations[below_min_mask_loc] = 0.0 + torch.rand_like(locations[below_min_mask_loc], device=device) * clamp_min # In the range [0, clamp_min]
-            locations[above_max_mask_loc] = clamp_max + torch.rand_like(locations[above_max_mask_loc], device=device) * (1.0 - clamp_max) # In the range [clamp_max, clamp_max + noise_offset]
+            # below_min_mask_loc = locations < clamp_min
+            # above_max_mask_loc = locations > clamp_max
+            # locations[below_min_mask_loc] = 0.0 + torch.rand_like(locations[below_min_mask_loc], device=device) * clamp_min # In the range [0, clamp_min]
+            # locations[above_max_mask_loc] = clamp_max + torch.rand_like(locations[above_max_mask_loc], device=device) * (1.0 - clamp_max) # In the range [clamp_max, clamp_max + noise_offset]
             
             # Standard clamp
-            # locations = torch.clamp(locations, clamp_min, clamp_max)  
+            locations = torch.clamp(locations, clamp_min, clamp_max)  
             
             thicknesses = torch.clamp(thicknesses, clamp_min, clamp_max) 
             print(f"\nAfter clamping: Locations: {locations}, Thicknesses: {thicknesses}")
@@ -711,7 +711,7 @@ class GAT_v2_ActorCritic(nn.Module):
             merged_proposals[b, actual_num_proposals:] = -1.0 # Pad rest with -1
 
             num_proposals[b] = actual_num_proposals # Store the actual count after merging
-            print(f"\nAfter Merging: Locations: {locations}, Thicknesses: {thicknesses}")
+            print(f"\nAfter Merging: {merged_proposals[b]}")
 
             # Visualization is only meaningful during act (i.e., not during evaluation)
             if visualize and iteration is not None:

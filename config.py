@@ -48,8 +48,8 @@ def get_config():
         # Design specific parameters
         "min_thickness": 1.0,  # Minimum thickness for crosswalks
         "max_thickness": 15.0,  # Maximum thickness for crosswalks
-        "clamp_min": 0.06,  # Minimum value for x location and thickness for crosswalks # Add small buffer to avoid exact 0.0 or 1.0
-        "clamp_max": 0.94,  # Maximum value for x location and thickness for crosswalks
+        "clamp_min": 0.01,  # Minimum value for x location and thickness for crosswalks # Add small buffer to avoid exact 0.0 or 1.0
+        "clamp_max": 0.99,  # Maximum value for x location and thickness for crosswalks
         "max_proposals": 10,  # Maximum number of proposals to consider for higher-level agent
         "save_graph_images": True, # Save graph image every iteration.
         "save_gmm_plots": True, # Save GMM visualization every iteration.
