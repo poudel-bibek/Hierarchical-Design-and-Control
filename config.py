@@ -22,7 +22,7 @@ def get_config():
         "seed": None,  # Random seed (default: None)
         "gpu": True,  # Use GPU if available (default: use CPU)
         "total_timesteps": 15000000,  # Total number of timesteps the simulation will run
-        "eval_freq": 2,  # Evaluate both higher and lower-level policies and their normalizers after every n updates of the higher policy (0 to disable). 
+        "eval_freq": 1,  # Evaluate both higher and lower-level policies and their normalizers after every n updates of the higher policy (0 to disable). 
         # Also decides how often to evaluate
 
         # PPO Higher level agent params
@@ -205,7 +205,7 @@ def classify_and_return_args(train_config, device):
         # during training
         eval_n_iterations = 5
         in_range_demand_scales = [1.0, 1.25, 1.5, 1.75, 2.0, 2.25] # The demand scales that are used for training.
-        out_of_range_demand_scales = [0.5, 2.5] # The demand scales that are used ONLY for evaluation.
+        out_of_range_demand_scales = [0.5, 0.75, 2.5, 2.75] # The demand scales that are used ONLY for evaluation.
     
     eval_args = {
         'lower_state_dim': None,
