@@ -425,23 +425,32 @@ def main(config):
     # Spawn means create a new process. There is a fork method as well which will create a copy of the current process.
     mp.set_start_method('spawn') 
     if config['evaluate']: 
+        # setup params
         device = torch.device("cuda") if config['eval_worker_device']=='gpu' and torch.cuda.is_available() else torch.device("cpu")
         control_args, ppo_args, eval_args = classify_and_return_args(config, device)
+        dummy_env = ControlEnv(control_args, " ", worker_id=None)
+
         current_time = datetime.now().strftime('%b%d_%H-%M-%S')
         os.makedirs(f'./results', exist_ok=True)
         os.makedirs(f'./results/eval_{current_time}', exist_ok=True)
         eval_args['eval_save_dir'] = os.path.join('results', f'eval_{current_time}')
-
-        dummy_env = ControlEnv(control_args, " ", worker_id=None)
         eval_args['lower_state_dim'] = dummy_env.observation_space.shape
-        
-        ppo_results_path = eval(control_args, ppo_args, eval_args, policy_path=config['eval_model_path'], tl= False)
-        tl_results_path = eval(control_args, ppo_args, eval_args, policy_path=None, tl= True, unsignalized=False) 
-        unsignalized_results_path = eval(control_args, ppo_args, eval_args, policy_path=None, tl= True, unsignalized=True)
 
-        plot_main_results(unsignalized_results_path, 
-                          tl_results_path,
-                          ppo_results_path,
+        # Evaluate the real-world design in the unsignalized setting. A control policy was never trained on the real-world design. 
+        real_world_design_unsignalized_results_path = eval(control_args, ppo_args, eval_args, policy_path=None, global_step="_final", tl= True, unsignalized=True) 
+        
+        # Evaluate the ``new design`` in the all three settings. The new design network has to be same across all three settings.
+        new_design_ppo_results_path = eval(control_args, ppo_args, eval_args, policy_path=config['eval_model_path'], global_step="_final", tl= False)
+        new_design_tl_results_path = eval(control_args, ppo_args, eval_args, policy_path=None, global_step="_final", tl= True, unsignalized=False) 
+        new_design_unsignalized_results_path = eval(control_args, ppo_args, eval_args, policy_path=None, global_step="_final", tl= True, unsignalized=True)
+
+        plot_control_results(new_design_unsignalized_results_path, 
+                          new_design_tl_results_path,
+                          new_design_ppo_results_path,
+                          in_range_demand_scales = eval_args['in_range_demand_scales'])
+        
+        plot_design_results(new_design_unsignalized_results_path, 
+                          real_world_design_unsignalized_results_path,
                           in_range_demand_scales = eval_args['in_range_demand_scales'])
 
     elif config['sweep']:

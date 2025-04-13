@@ -387,7 +387,10 @@ class GAT_v2_ActorCritic(nn.Module):
         - global_mean_pool: average across the nodes for each graph in a batch.
 
         """
-        return global_mean_pool(x, batch)
+        # print(f"\nReadout layer input: {x}")
+        pool = global_mean_pool(x, batch)
+        # print(f"\nReadout layer output: {pool}")
+        return pool
 
     def actor(self, states_batch, device):
         """

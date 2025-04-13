@@ -492,9 +492,11 @@ def plot_avg_consecutive_ones(file_path, output_path="./results/sampled_actions_
 
     print(f"Plot saved to {output_path}")
 
-def plot_main_results(*json_paths, in_range_demand_scales, show_scales=True):
+def plot_control_results(*json_paths, in_range_demand_scales, show_scales=True):
     """
-    Plot consolidated results from multiple JSON files into a single figure with 4 subplots.
+    Evaluation of control agent: comparision with unsignalized, and TL in the ``New design``. 
+    - Average wait time per pedestrian, total wait time per pedestrian
+    - Average wait time per vehicle, total wait time per vehicle
     """
     # Original demand values
     original_vehicle_demand = 201.54    # veh/hr
@@ -781,6 +783,13 @@ def plot_main_results(*json_paths, in_range_demand_scales, show_scales=True):
     plt.show()
     plt.close()
 
+def plot_design_results(*json_paths, in_range_demand_scales, show_scales=True):
+    """
+    Evaluation of design agent: comparision with real-world design. 
+    - Average arrival time per pedestrian, total arrival time per pedestrian
+    - TODO: Number of proposals (correspondingly number of stops for vehicles, cost). 
+    """
+    pass
 
 def plot_consolidated_insights(sampled_actions_file_path, conflict_json_file_path, switching_freq_data_path):
     """
