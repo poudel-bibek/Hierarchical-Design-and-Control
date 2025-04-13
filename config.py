@@ -71,7 +71,7 @@ def get_config():
         "lower_ent_coef": 0.01,  # Entropy coefficient
         "lower_vf_coef": 0.5,  # Value function coefficient
         "lower_batch_size": 64,  # Batch size
-        "lower_num_processes": 6,  # Number of parallel processes to use (agent has multiple workers)
+        "lower_num_processes": 12,  # Number of parallel processes to use (agent has multiple workers)
         "lower_model_size": "medium",  # Model size for CNN: 'small' or 'medium'
         "lower_dropout_rate": 0.25,  # Dropout rate for CNN
         "lower_action_dim": None, # will be set later
@@ -88,7 +88,7 @@ def get_config():
         # Evaluation
         "eval_model_path": "./runs/xyz/saved_policies/best_eval_policy.pth",  # Path to the saved PPO model for evaluation. replace xyz.
         "eval_lower_timesteps": 600,  # Number of timesteps to each episode. Warmup not counted.
-        "eval_lower_workers": 6,  # Parallelizes how many demands can be evaluated at the same time.
+        "eval_lower_workers": 8,  # Parallelizes how many demands can be evaluated at the same time.
         "eval_worker_device": "gpu",  # Policy during eval can be run in GPU 
     }
     return config

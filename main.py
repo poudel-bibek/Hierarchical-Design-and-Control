@@ -346,8 +346,8 @@ def eval(design_args,
     proposals = merged_proposals[0][:num_proposals]  # Only consider the actual proposals
     print(f"\nProposals: {proposals}")
     
-    # Apply the action to output the latest SUMO network file 
-    higher_env._apply_action(merged_proposals, iteration) # merged proposals are applied to the environment.
+    # Apply the action to output the latest SUMO network file
+    higher_env._apply_action(proposals, iteration) # Pass the actual proposals derived above
     sumo_net_file = f"{higher_env.network_dir}/network_iteration_{iteration}.net.xml"
     print(f"\nSUMO network file: {sumo_net_file}")
     create_new_sumocfg(design_args['save_dir'], iteration)

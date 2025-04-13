@@ -48,16 +48,16 @@ class HyperParameterTuner:
             'parameters': {
                 # Higher Level Agent (Design)
                 'higher_lr': {
-                    'values': [1e-4] #[5e-5, 1e-4, 5e-4, 1e-3]
+                    'values': [1e-4, 5e-4] #[5e-5, 1e-4, 5e-4, 1e-3]
                 },
                 'higher_gae_lambda': {
                     'values': [0.97] #[0.95, 0.98, 0.99]
                 },
                 'higher_update_freq': {
-                    'values': [32] #[8, 16, 32]
+                    'values': [32, 64] #[8, 16, 32]
                 },
                 'higher_gamma': {
-                    'values': [0.98, 0.99, 0.995]
+                    'values': [0.99] #, 0.99, 0.995]
                 },
                 'higher_K_epochs': {
                     'values': [8]
@@ -75,7 +75,7 @@ class HyperParameterTuner:
                     'values': [0.5]
                 },
                 'higher_batch_size': {
-                    'values': [4] #[16, 32, 64]
+                    'values': [4, 8] #[16, 32, 64]
                 },
                 'higher_activation': {
                     'values': ["tanh", "relu"]

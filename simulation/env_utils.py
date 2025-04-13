@@ -1,4 +1,5 @@
 import os
+import pickle
 from itertools import tee
 import matplotlib
 matplotlib.use('Agg')
@@ -268,7 +269,12 @@ def save_better_graph_visualization(graph,
     ax.spines['left'].set_visible(False)
 
     plt.tight_layout()
-    plt.savefig(os.path.join(f'{run_dir}', f'graph_iterations/egraph_i{iteration}.png'), dpi=dpi, bbox_inches='tight', facecolor='white')
+    plt.savefig(os.path.join(f'{run_dir}', f'graph_iterations/egraph_i_{iteration}.png'), dpi=dpi, bbox_inches='tight', facecolor='white')
+    # save data as a file
+    data = graph, special_nodes, regular_nodes
+    with open(f"{run_dir}/graph_iterations/graph_i_{iteration}_data.pkl", "wb") as f:
+        pickle.dump(data, f)
+        
     plt.close()
 
 #### XML related Utils #####    

@@ -1,4 +1,5 @@
 import os
+import pickle
 import torch
 import numpy as np
 import torch.nn as nn
@@ -815,7 +816,7 @@ class GAT_v2_ActorCritic(nn.Module):
             markers (tuple of ndarrays): Markers to plot, shape (N, 2).
         """
         fs = 16
-        base_save_path = f"{run_dir}/gmm_iterations/gmm_i{iteration}_b{batch_index}"
+        base_save_path = f"{run_dir}/gmm_iterations/gmm_i_{iteration}_b{batch_index}"
         
         # Sample from the GMM
         samples = gmm_single.sample((num_samples,))  # Shape: (num_samples, 2)
@@ -883,4 +884,9 @@ class GAT_v2_ActorCritic(nn.Module):
             ax.tick_params(axis='both', which='major', labelsize=fs-2)
             plt.tight_layout()
             plt.savefig(f"{base_save_path}_markers.png")
+
+            # save data as a file
+            data = gmm_single, markers
+            with open(f"{base_save_path}_data.pkl", "wb") as f:
+                pickle.dump(data, f)
             plt.close()
