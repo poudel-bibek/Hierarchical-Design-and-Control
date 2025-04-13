@@ -323,46 +323,46 @@ class GAT_v2_ActorCritic(nn.Module):
         self.actor_means = layer_init(nn.Linear(input_size_actor_means, self.num_mixtures * 2))
 
         # log-std
-        actor_log_std_layers = []
-        input_size_actor_log_std = input_size_actor_shared
-        for h in actor_gmm_hidden_sizes:
-            actor_log_std_layers.append(layer_init(nn.Linear(input_size_actor_log_std, h)))
-            # Add layer norm, batch norm, dropout, etc.
-            actor_log_std_layers.append(nn.LayerNorm(h))
-            actor_log_std_layers.append(self.activation)
-            # actor_log_std_layers.append(nn.Dropout(self.dropout_rate))
-            input_size_actor_log_std = h
+        # actor_log_std_layers = []
+        # input_size_actor_log_std = input_size_actor_shared
+        # for h in actor_gmm_hidden_sizes:
+        #     actor_log_std_layers.append(layer_init(nn.Linear(input_size_actor_log_std, h)))
+        #     # Add layer norm, batch norm, dropout, etc.
+        #     actor_log_std_layers.append(nn.LayerNorm(h))
+        #     actor_log_std_layers.append(self.activation)
+        #     # actor_log_std_layers.append(nn.Dropout(self.dropout_rate))
+        #     input_size_actor_log_std = h
 
-        self.actor_log_std_layers = nn.Sequential(*actor_log_std_layers)
-        self.actor_log_std = layer_init(nn.Linear(input_size_actor_log_std, self.num_mixtures * 2))
+        # self.actor_log_std_layers = nn.Sequential(*actor_log_std_layers)
+        # self.actor_log_std = layer_init(nn.Linear(input_size_actor_log_std, self.num_mixtures * 2))
 
         # mix logits
-        actor_mix_logits_layers = []
-        input_size_actor_mix_logits = input_size_actor_shared
-        for h in actor_gmm_hidden_sizes:
-            actor_mix_logits_layers.append(layer_init(nn.Linear(input_size_actor_mix_logits, h)))
-            # Add layer norm, batch norm, dropout, etc.
-            actor_mix_logits_layers.append(nn.LayerNorm(h))
-            actor_mix_logits_layers.append(self.activation)
-            # actor_mix_logits_layers.append(nn.Dropout(self.dropout_rate))
-            input_size_actor_mix_logits = h
+        # actor_mix_logits_layers = []
+        # input_size_actor_mix_logits = input_size_actor_shared
+        # for h in actor_gmm_hidden_sizes:
+        #     actor_mix_logits_layers.append(layer_init(nn.Linear(input_size_actor_mix_logits, h)))
+        #     # Add layer norm, batch norm, dropout, etc.
+        #     actor_mix_logits_layers.append(nn.LayerNorm(h))
+        #     actor_mix_logits_layers.append(self.activation)
+        #     # actor_mix_logits_layers.append(nn.Dropout(self.dropout_rate))
+        #     input_size_actor_mix_logits = h
 
-        self.actor_mix_logits_layers = nn.Sequential(*actor_mix_logits_layers)
-        self.actor_mix_logits = layer_init(nn.Linear(input_size_actor_mix_logits, self.num_mixtures))
+        # self.actor_mix_logits_layers = nn.Sequential(*actor_mix_logits_layers)
+        # self.actor_mix_logits = layer_init(nn.Linear(input_size_actor_mix_logits, self.num_mixtures))
 
         # number of proposals (Does not share i.e., attached directly to readout layer output)
-        actor_sample_layers = []
-        input_size_actor_sample = self.out_channels * self.second_heads
-        for h in actor_sample_hidden_sizes:
-            actor_sample_layers.append(layer_init(nn.Linear(input_size_actor_sample, h)))
-            # Add layer norm, batch norm, dropout, etc.
-            actor_sample_layers.append(nn.LayerNorm(h))
-            actor_sample_layers.append(self.activation)
-            # actor_gmm_layers.append(nn.Dropout(self.dropout_rate))
-            input_size_actor_sample = h
+        # actor_sample_layers = []
+        # input_size_actor_sample = self.out_channels * self.second_heads
+        # for h in actor_sample_hidden_sizes:
+        #     actor_sample_layers.append(layer_init(nn.Linear(input_size_actor_sample, h)))
+        #     # Add layer norm, batch norm, dropout, etc.
+        #     actor_sample_layers.append(nn.LayerNorm(h))
+        #     actor_sample_layers.append(self.activation)
+        #     # actor_gmm_layers.append(nn.Dropout(self.dropout_rate))
+        #     input_size_actor_sample = h
 
-        self.actor_sample_layers = nn.Sequential(*actor_sample_layers)
-        self.actor_num_proposals = layer_init(nn.Linear(input_size_actor_sample, self.max_proposals)) # No activation in last layer.
+        # self.actor_sample_layers = nn.Sequential(*actor_sample_layers)
+        # self.actor_num_proposals = layer_init(nn.Linear(input_size_actor_sample, self.max_proposals)) # No activation in last layer.
 
         # critic
         critic_layers = []
@@ -388,7 +388,7 @@ class GAT_v2_ActorCritic(nn.Module):
         """
         return global_mean_pool(x, batch)
 
-    def actor(self, states_batch):
+    def actor(self, states_batch, device):
         """
         - GMM parameters prediction 
         - Number of proposals prediction (# of times to sample from GMM)
@@ -399,7 +399,7 @@ class GAT_v2_ActorCritic(nn.Module):
         - edge attributes (edge_attr) = Edge features (num_edges, edge_dim)
         - batch (batch)
         """
-
+        states_batch = states_batch.to(device)
         y = self.conv1(states_batch.x, states_batch.edge_index, states_batch.edge_attr)
         y = self.activation(y)
 
@@ -420,16 +420,20 @@ class GAT_v2_ActorCritic(nn.Module):
         
         # Scale and shift tanh to get log_stds in [-2.30, 0] range
         # tanh outputs [-1, 1], so we scale by 0.693 and shift by -2.303 to get [-3.0, -0.693], exp(-3.0) ≈ 0.05, exp(-0.693) ≈ 0.5
-        log_stds = torch.tanh(self.actor_log_std(self.actor_log_std_layers(shared_y))) * 0.693 - 2.303  # Results in std range [0.05, 0.5]
+        # log_stds = torch.tanh(self.actor_log_std(self.actor_log_std_layers(shared_y))) * 0.693 - 2.303  # Results in std range [0.05, 0.5]
 
         # # tanh outputs [-1, 1], so we scale by 1.15 and shift by -1.15 to get [-2.30, 0], exp(-2.30) ≈ 0.1, exp(0) = 1.
         # log_stds = torch.tanh(self.actor_log_std(self.actor_log_std_layers(shared_y))) * 1.15 - 1.15  # Results in std range [0.1, 1.0]
+        log_stds = torch.ones((means.shape[0], self.num_mixtures * 2), device=device) * -2.5 # exp(-2.5) ≈ 0.08
 
-        mix_logits = self.actor_mix_logits(self.actor_mix_logits_layers(shared_y))
-        num_proposal_logits = self.actor_num_proposals(self.actor_sample_layers(y)) # probabilites obtained later.
+        # mix_logits = self.actor_mix_logits(self.actor_mix_logits_layers(shared_y))
+        mix_logits = torch.ones((means.shape[0], self.num_mixtures), device=device) # give equal probability to all components.
+        # num_proposal_logits = self.actor_num_proposals(self.actor_sample_layers(y)) # probabilites obtained later.
 
-        return means, log_stds, mix_logits, num_proposal_logits
-
+        # return means, log_stds, mix_logits, num_proposal_logits
+        print(f"\nMeans: {means.shape}, Log-stds: {log_stds.shape}, Mix logits: {mix_logits.shape}")
+        return means, log_stds, mix_logits
+    
     def critic(self, states_batch):
         """
         """
@@ -442,7 +446,7 @@ class GAT_v2_ActorCritic(nn.Module):
         critic_features = self.critic_layers(y)
         return self.critic_value(critic_features).squeeze(-1)  # Ensure output is of shape (batch_size,)
 
-    def get_gmm_distribution(self, states_batch):
+    def get_gmm_distribution(self, states_batch, device):
         """
         For a GMM with M components, we need: 
         - M mixture weights (logits -> convert to probabilities that sum to 1)
@@ -461,11 +465,13 @@ class GAT_v2_ActorCritic(nn.Module):
         # print(f"\nInside get_gmm_distribution:\nBatch size: {batch_size}")
 
         # Returns (batch_size, num_mixtures * 5) and (batch_size, max_proposals)
-        means, log_stds, mix_logits, num_proposals_logits = self.actor(states_batch)
+        # means, log_stds, mix_logits, num_proposals_logits = self.actor(states_batch)
         # print(f"\nMeans: {means}, Log-stds: {log_stds}, Mix logits: {mix_logits}, Num proposal logits: {num_proposals_logits}")
 
-        num_proposals_probs_batch = F.softmax(num_proposals_logits, dim=-1)
+        # num_proposals_probs_batch = F.softmax(num_proposals_logits, dim=-1)
         # print(f"\nProposal probabilities: {num_proposals_probs_batch}")
+        
+        means, log_stds, mix_logits = self.actor(states_batch, device=device)
 
         gmms_batch = []
         for b in range(batch_size):
@@ -485,9 +491,10 @@ class GAT_v2_ActorCritic(nn.Module):
             gmm = MixtureSameFamily(mixture_distribution = mixture_dist,
                                     component_distribution = component_dist)
             gmms_batch.append(gmm)
-        return gmms_batch, num_proposals_probs_batch
+        # return gmms_batch, num_proposals_probs_batch
+        return gmms_batch
     
-    def _sample_gmm(self, gmm_single, num_proposals, naive_stochastic = False, training=True, device = None):
+    def _sample_gmm(self, gmm_single, num_proposals, naive_stochastic = False, training=True, device=None):
         """
 
         Sampling from GMM has several issues of discussion.
@@ -601,28 +608,29 @@ class GAT_v2_ActorCritic(nn.Module):
         """
 
         # properly batch the data using Batch.from_data_list() before sending here. 
-        gmm_batch, num_proposals_probs_batch = self.get_gmm_distribution(states_batch.to(device))
-        # print(f"\n\nGMMs: {gmm_batch}\n\n")
-
-        # Sample one proposal for each batch element (add 1 to ensure at least 1 proposal; default starts from index 0)
-        if training:
-            # Stochastic sampling during training
-            num_proposals = torch.multinomial(num_proposals_probs_batch, 1).squeeze(-1) + 1
-        else:
-            # Deterministic selection during evaluation (choose max probability)
-            num_proposals = torch.argmax(num_proposals_probs_batch, dim=-1) + 1
+        # gmm_batch, num_proposals_probs_batch = self.get_gmm_distribution(states_batch.to(device))
+        gmm_batch = self.get_gmm_distribution(states_batch, device=device)
+        # # Sample one proposal for each batch element (add 1 to ensure at least 1 proposal; default starts from index 0)
+        # if training:
+        #     # Stochastic sampling during training
+        #     num_proposals = torch.multinomial(num_proposals_probs_batch, 1).squeeze(-1) + 1
+        # else:
+        #     # Deterministic selection during evaluation (choose max probability)
+        #     num_proposals = torch.argmax(num_proposals_probs_batch, dim=-1) + 1
         
-        print(f"\nnum_proposals: {num_proposals.shape, num_proposals}\n")
 
         batch_size = states_batch.num_graphs 
         # Initialize output tensors with -1 so that its easier to infer actual proposals in critic.
-        padded_proposals = torch.full((batch_size, self.max_proposals, 2), -1.0, dtype=torch.float32, device=device)
+        original_proposals = torch.full((batch_size, self.max_proposals, 2), -1.0, dtype=torch.float32, device=device)
+        merged_proposals = torch.full((batch_size, self.max_proposals, 2), -1.0, dtype=torch.float32, device=device)
         log_probs = torch.zeros(batch_size, device=device)
-        
+        num_proposals = torch.zeros(batch_size, dtype=torch.int32, device=device) # 1D tensor of shape (batch_size,)
+
         for b in range(batch_size):
             # Sample proposals for this batch element
             samples = self._sample_gmm(gmm_batch[b], 
-                                       num_proposals[b].item(), 
+                                    #    num_proposals[b].item(), 
+                                       torch.ones(batch_size, dtype=torch.int32, device=device) * int(self.max_proposals), #sample full proposals
                                        naive_stochastic = True, 
                                        training = training, 
                                        device = device)
@@ -630,6 +638,12 @@ class GAT_v2_ActorCritic(nn.Module):
             locations, thicknesses = samples.split(1, dim=-1)
             print(f"\nBefore clamping: Locations: {locations}, Thicknesses: {thicknesses}")
             
+            original_proposals[b] = torch.cat([locations, thicknesses], dim=-1)
+
+            # Compute log probabilities for this batch element using the actually returned samples (before things like clamping and merging)
+            # SUM operation is correct for joint log prob of thickness and location.
+            log_probs[b] = gmm_batch[b].log_prob(original_proposals[b]).sum() # Log probs should be of the real samples (not the merged ones).
+
             # Apply a noisy clamp individually to prevent exact overlap at same locations.
             # Although means are constrained to [0,1], log_stds are not.
             # We should be less dependent on clamping here and make sure the GMM itself lies in the desired range.
@@ -643,26 +657,72 @@ class GAT_v2_ActorCritic(nn.Module):
             
             thicknesses = torch.clamp(thicknesses, clamp_min, clamp_max) 
             print(f"\nAfter clamping: Locations: {locations}, Thicknesses: {thicknesses}")
- 
-            # Recombine the samples
-            samples = torch.cat([locations, thicknesses], dim=-1)
-            
+
+            # --- Iterative Merging Until Separation --- Even the merged ones cannot be within 0.08 of each other.
+            # Analogy: Deterministic environment physics.
+            current_proposals = torch.cat([locations, thicknesses], dim=-1) # Start with clamped proposals
+
+            threshold = 0.08 # One standard deviation
+            while True:
+                num_current = current_proposals.shape[0]
+                if num_current <= 1:
+                    break # Cannot merge less than 2 proposals
+
+                # Calculate pairwise distances based on location only
+                locs = current_proposals[:, :1] # Shape (N, 1)
+                dist_matrix = torch.cdist(locs, locs) # Shape (N, N)
+
+                # Set diagonal to infinity to avoid self-merging
+                dist_matrix.fill_diagonal_(float('inf'))
+
+                # Find the minimum distance between any pair
+                min_dist = torch.min(dist_matrix)
+
+                # If the closest pair is already far enough apart, stop merging
+                if min_dist >= threshold:
+                    break
+
+                # Find the indices (row, col) of the closest pair
+                flat_idx = torch.argmin(dist_matrix.view(-1)) # Index in the flattened matrix
+                idx1 = torch.div(flat_idx, num_current, rounding_mode='floor')
+                idx2 = flat_idx % num_current
+                # Ensure idx1 < idx2 for consistent removal logic
+                if idx1 > idx2:
+                    idx1, idx2 = idx2, idx1
+
+                # Merge the closest pair by averaging
+                merged_proposal = (current_proposals[idx1] + current_proposals[idx2]) / 2.0
+
+                # Create a mask to keep all proposals *except* the merged pair (idx1, idx2)
+                keep_mask = torch.ones(num_current, dtype=torch.bool, device=device)
+                keep_mask[idx1] = False
+                keep_mask[idx2] = False
+
+                # Update current_proposals: keep the ones not merged, add the new merged one
+                current_proposals = torch.cat((current_proposals[keep_mask], merged_proposal.unsqueeze(0)), dim=0)
+            # --- End Iterative Merging ---
+
+            # current_proposals now holds the final set satisfying the separation condition
+            actual_num_proposals = current_proposals.shape[0]
+
+            # Store the final (merged and not consumed in merging) proposals, padded
+            merged_proposals[b, :actual_num_proposals] = current_proposals
+            merged_proposals[b, actual_num_proposals:] = -1.0 # Pad rest with -1
+
+            num_proposals[b] = actual_num_proposals # Store the actual count after merging
+            print(f"\nAfter Merging: Locations: {locations}, Thicknesses: {thicknesses}")
+
             # Visualization is only meaningful during act (i.e., not during evaluation)
             if visualize and iteration is not None:
-                markers = (locations.squeeze().detach().cpu().numpy(), thicknesses.squeeze().detach().cpu().numpy())
-                self.visualize_gmm(gmm_batch[b], self.run_dir, markers=markers, batch_index=b, thickness_range=(0, 1), location_range=(0, 1), iteration=iteration)
+                # original_markers = (locations.squeeze().detach().cpu().numpy(), thicknesses.squeeze().detach().cpu().numpy())
+                merged_markers = (merged_proposals[b, :actual_num_proposals, 0].squeeze().detach().cpu().numpy(), merged_proposals[b, :actual_num_proposals, 1].squeeze().detach().cpu().numpy())
+                self.visualize_gmm(gmm_batch[b], self.run_dir, markers=merged_markers, batch_index=b, thickness_range=(0, 1), location_range=(0, 1), iteration=iteration)
 
-            # Store in output tensor
-            num_returned_samples = samples.shape[0] # Number of samples actually returned by _sample_gmm
-            padded_proposals[b, :num_returned_samples, 0] = locations.squeeze(-1) # Assign only num_returned_samples
-            padded_proposals[b, :num_returned_samples, 1] = thicknesses.squeeze(-1) # Assign only num_returned_samples
-        
-            # Compute log probabilities for this batch element using the actually returned samples
-            # SUM operation is correct for joint log prob of thickness and location.
-            log_probs[b] = gmm_batch[b].log_prob(samples).sum()
-
-        print(f"\nPadded_proposals: {padded_proposals}")
-        return padded_proposals, num_proposals, log_probs
+        print(f"\noriginal_proposals: {original_proposals}")
+        print(f"\nnum_proposals: {num_proposals}")
+        # The higher ppo memory needs to store the proposals and log_probs without considering the merging operations.
+        # The number of actual proposals is corresponding to the merged proposals.
+        return original_proposals, merged_proposals, num_proposals, log_probs
     
     def evaluate(self, states_batch, actions_batch, device = None):
         """
@@ -678,7 +738,7 @@ class GAT_v2_ActorCritic(nn.Module):
     
         state_values = self.critic(states_batch.to(device))
         # Get distribution (internally passes through actor)
-        gmm_batch, _ = self.get_gmm_distribution(states_batch.to(device))
+        gmm_batch = self.get_gmm_distribution(states_batch, device=device)
         
         # Initialize return tensors
         batch_size = states_batch.num_graphs 
@@ -722,11 +782,12 @@ class GAT_v2_ActorCritic(nn.Module):
 
         # Actor-specific 
         actor_means_params = sum(p.numel() for p in self.actor_means_layers.parameters())
-        actor_log_std_params = sum(p.numel() for p in self.actor_log_std_layers.parameters())
-        actor_mix_logits_params = sum(p.numel() for p in self.actor_mix_logits_layers.parameters())
-        actor_sample_params = sum(p.numel() for p in self.actor_sample_layers.parameters())
+        # actor_log_std_params = sum(p.numel() for p in self.actor_log_std_layers.parameters())
+        # actor_mix_logits_params = sum(p.numel() for p in self.actor_mix_logits_layers.parameters())
+        # actor_sample_params = sum(p.numel() for p in self.actor_sample_layers.parameters())
 
-        actor_params = actor_means_params + actor_log_std_params + actor_mix_logits_params + actor_sample_params
+        # actor_params = shared_mlp_params + actor_means_params + actor_log_std_params + actor_mix_logits_params + actor_sample_params
+        actor_params = shared_mlp_params + actor_means_params
 
         # Critic-specific 
         critic_params = sum(p.numel() for p in self.critic_layers.parameters())
@@ -736,9 +797,9 @@ class GAT_v2_ActorCritic(nn.Module):
             "shared_gat": shared_gat_params,
             "actor_shared_mlp": shared_mlp_params,
             "actor_means": actor_means_params,
-            "actor_log_std": actor_log_std_params,
-            "actor_mix_logits": actor_mix_logits_params,
-            "actor_sample": actor_sample_params,
+            # "actor_log_std": actor_log_std_params,
+            # "actor_mix_logits": actor_mix_logits_params,
+            # "actor_sample": actor_sample_params,
             "actor_total": actor_params,
             "critic": critic_params,
             "Grand total": total_params}

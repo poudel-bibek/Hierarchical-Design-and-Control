@@ -481,7 +481,6 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
         if from_edge in edges_to_remove or to_edge in edges_to_remove:
             conn_root.remove(connection)
 
-    # Previous mechanism
     # If the edges are present in edges_to_remove, then they should not be present in edges_to_add (they may be because of a split of a split).
     for edge_id in edges_to_remove:
         if edge_id in edges_to_add['top']:

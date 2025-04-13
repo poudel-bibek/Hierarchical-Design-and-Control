@@ -104,7 +104,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
     best_higher_reward = float('-inf') 
     best_higher_loss = float('inf')
     best_higher_eval = float('inf')
-    higher_avg_ped_arrival = float('inf')
+    eval_ped_avg_arrival = float('inf')
     higher_loss = {
         'policy_loss': float('inf'),
         'value_loss': float('inf'),
@@ -124,7 +124,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
         # Higher level agent takes node features, edge index, edge attributes and batch (to make single large graph) as input 
         # To produce padded fixed-sized actions num_actual_proposals is also returned.
         higher_ppo.policy_old.eval()
-        padded_proposals, num_proposals, higher_logprob = higher_ppo.policy_old.act(higher_state, 
+        original_proposals, merged_proposals, num_proposals, higher_logprob = higher_ppo.policy_old.act(higher_state, 
                                                                                         iteration, 
                                                                                         design_args['clamp_min'], 
                                                                                         design_args['clamp_max'], 
@@ -134,7 +134,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
         
         # Since the higher agent internally takes a step where a number of parallel lower agents take their own steps, 
         # We return things relevant to both the higher and lower agents. First, for higher.
-        higher_next_state, higher_reward, higher_done, info = higher_env.step(padded_proposals, 
+        higher_next_state, higher_reward, higher_done, info = higher_env.step(merged_proposals, # Act on the enrironment with merged proposals
                                                                                      num_proposals, 
                                                                                      iteration,
                                                                                      SEED,
@@ -151,7 +151,8 @@ def train(train_config, is_sweep=False, sweep_config=None):
             # The critic returns a tensor of shape [1], so we can directly call .item()
             higher_value = critic_output.item()
         
-        higher_memories.append(higher_state, padded_proposals, higher_value, higher_logprob, higher_reward, higher_done)
+        # Append to memory, the original proposals. Get reward based on merged proposals.
+        higher_memories.append(higher_state, original_proposals, higher_value, higher_logprob, higher_reward, higher_done) 
 
         if iteration % design_args['higher_update_freq'] == 0:
             print(f"Updating Higher PPO with {len(higher_memories.actions)} memories") 
@@ -192,7 +193,6 @@ def train(train_config, is_sweep=False, sweep_config=None):
                 
                 # calculate metrics for both policies
                 _, lower_avg_veh_wait, lower_avg_ped_wait, higher_avg_ped_arrival, _, _, _ = get_averages(eval_json)
-                # print(f"Lower Avg Veh Wait: {lower_avg_veh_wait} \nLower Avg Ped Wait: {lower_avg_ped_wait} \nHigher Avg Ped Arrival: {higher_avg_ped_arrival}")
 
                 # Get a single evaluation metric for both agents.
                 eval_veh_avg_wait = np.mean(lower_avg_veh_wait)
@@ -210,7 +210,6 @@ def train(train_config, is_sweep=False, sweep_config=None):
                             higher_env.normalizer_y, 
                             os.path.join(design_args['save_dir'], 
                             'saved_policies/best_reward_policy.pth'))
-                
                 best_higher_reward = avg_higher_reward
 
             if higher_loss['total_loss'] < best_higher_loss:
@@ -223,7 +222,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
                             'saved_policies/best_loss_policy.pth'))
                 best_higher_loss = higher_loss['total_loss']
 
-            if np.mean(higher_avg_ped_arrival) < best_higher_eval:
+            if eval_ped_avg_arrival < best_higher_eval:
                 save_policy(higher_ppo.policy, 
                             higher_env.lower_ppo.policy, 
                             lower_state_normalizer, 
@@ -231,14 +230,13 @@ def train(train_config, is_sweep=False, sweep_config=None):
                             higher_env.normalizer_y, 
                             os.path.join(design_args['save_dir'], 
                             'saved_policies/best_eval_policy.pth'))
-                best_higher_eval = higher_avg_ped_arrival
+                best_higher_eval = eval_ped_avg_arrival
 
         # logging at every iteration (every time sample is drawn)
         if is_sweep:
             wandb.log({
                 "iteration": iteration,
                 "global_step": higher_env.global_step,
-                
                 "higher/avg_reward": higher_reward,
                 "higher/update_count": higher_update_count,
                 "higher/current_lr": current_lr_higher if train_config['higher_anneal_lr'] else higher_ppo_args['lr'],
@@ -247,7 +245,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
                 "higher/losses/entropy_loss": higher_loss['entropy_loss'],
                 "higher/losses/total_loss": higher_loss['total_loss'],
                 "higher/approx_kl": higher_loss['approx_kl'],
-                "higher/evaluation/avg_ped_arrival": higher_avg_ped_arrival,
+                "evals/higher_avg_ped_arrival": eval_ped_avg_arrival,
 
                 "lower/avg_reward": info['lower_avg_reward'],
                 "lower/update_count": info['lower_update_count'],
@@ -257,11 +255,11 @@ def train(train_config, is_sweep=False, sweep_config=None):
                 "lower/losses/entropy_loss": info['lower_entropy_loss'],
                 "lower/losses/total_loss": info['lower_total_loss'],
                 "lower/approx_kl": info['lower_approx_kl'],
-                "lower/evaluation/avg_eval": lower_avg_eval,
-                    })
+                "evals/lower_ped_avg_wait": eval_ped_avg_wait,
+                "evals/lower_veh_avg_wait": eval_veh_avg_wait,
+                "evals/lower_avg_eval": lower_avg_eval })
         else:
             writer.add_scalar('Iteration', iteration, higher_env.global_step)
-            
             writer.add_scalar('Higher/Average_Reward', higher_reward, higher_env.global_step)
             writer.add_scalar('Higher/Update_Count', higher_update_count, higher_env.global_step)
             writer.add_scalar('Higher/Current_LR', current_lr_higher if train_config['higher_anneal_lr'] else higher_ppo_args['lr'], higher_env.global_step)
@@ -270,8 +268,8 @@ def train(train_config, is_sweep=False, sweep_config=None):
             writer.add_scalar('Higher/Losses/Entropy_Loss', higher_loss['entropy_loss'], higher_env.global_step)
             writer.add_scalar('Higher/Losses/Total_Loss', higher_loss['total_loss'], higher_env.global_step)
             writer.add_scalar('Higher/Approx_KL', higher_loss['approx_kl'], higher_env.global_step)
-            writer.add_scalar('Higher/Evaluation/Avg_Ped_Arrival', higher_avg_ped_arrival, higher_env.global_step)
-            
+            writer.add_scalar('Evaluation/Avg_Ped_Arrival', eval_ped_avg_arrival, higher_env.global_step)
+
             writer.add_scalar('Lower/Average_Reward', info['lower_avg_reward'], higher_env.global_step)
             writer.add_scalar('Lower/Update_Count', info['lower_update_count'], higher_env.global_step)
             writer.add_scalar('Lower/Current_LR', info['lower_current_lr'], higher_env.global_step)
@@ -280,7 +278,9 @@ def train(train_config, is_sweep=False, sweep_config=None):
             writer.add_scalar('Lower/Losses/Entropy_Loss', info['lower_entropy_loss'], higher_env.global_step)
             writer.add_scalar('Lower/Losses/Total_Loss', info['lower_total_loss'], higher_env.global_step)
             writer.add_scalar('Lower/Approx_KL', info['lower_approx_kl'], higher_env.global_step)
-            writer.add_scalar('Lower/Evaluation/Avg_Eval', lower_avg_eval, higher_env.global_step)
+            writer.add_scalar('Evaluation/Avg_Veh_Wait', eval_veh_avg_wait, higher_env.global_step)
+            writer.add_scalar('Evaluation/Avg_Ped_Wait', eval_ped_avg_wait, higher_env.global_step)
+            writer.add_scalar('Evaluation/Avg_Eval', lower_avg_eval, higher_env.global_step)
 
         higher_state = Batch.from_data_list([higher_next_state]) # Convert Data object back to Batch
 
@@ -333,7 +333,7 @@ def eval(design_args,
     # Get a single greedy design 
     higher_state =   Batch.from_data_list([higher_env.reset()])  # At reset, we get the original real-world configuration.
     # Which is the input network to the act function
-    padded_proposals, num_proposals, _ = higher_policy.act(higher_state, 
+    _, merged_proposals, num_proposals, _ = higher_policy.act(higher_state, 
                                                             iteration, 
                                                             design_args['clamp_min'], 
                                                             design_args['clamp_max'], 
@@ -342,12 +342,12 @@ def eval(design_args,
                                                             visualize=True) 
 
     # Convert tensor action to proposals
-    padded_proposals = padded_proposals.cpu().numpy()  # Convert to numpy array if it's not already
-    proposals = padded_proposals[0][:num_proposals]  # Only consider the actual proposals
+    merged_proposals = merged_proposals.cpu().numpy()  # Convert to numpy array if it's not already
+    proposals = merged_proposals[0][:num_proposals]  # Only consider the actual proposals
     print(f"\nProposals: {proposals}")
     
     # Apply the action to output the latest SUMO network file 
-    higher_env._apply_action(proposals, iteration)
+    higher_env._apply_action(merged_proposals, iteration) # merged proposals are applied to the environment.
     sumo_net_file = f"{higher_env.network_dir}/network_iteration_{iteration}.net.xml"
     print(f"\nSUMO network file: {sumo_net_file}")
     create_new_sumocfg(design_args['save_dir'], iteration)

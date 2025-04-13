@@ -41,47 +41,41 @@ class HyperParameterTuner:
 
             'method': method, 
             'metric': {
-                'name': 'avg_eval', # Using avg_eval like in bayes
+                'name': 'avg_ped_arrival', # Using avg_eval like in bayes
                 'goal': 'minimize'  # Minimize average evaluation time
                 },
 
             'parameters': {
                 # Higher Level Agent (Design)
                 'higher_lr': {
-                    'values': [5e-5, 1e-4, 5e-4, 1e-3]
+                    'values': [1e-4] #[5e-5, 1e-4, 5e-4, 1e-3]
                 },
                 'higher_gae_lambda': {
-                    'values': [0.95, 0.98, 0.99]
+                    'values': [0.97] #[0.95, 0.98, 0.99]
                 },
                 'higher_update_freq': {
-                    'values': [2] #[8, 16, 32]
+                    'values': [32] #[8, 16, 32]
                 },
                 'higher_gamma': {
                     'values': [0.98, 0.99, 0.995]
                 },
                 'higher_K_epochs': {
-                    'values': [2, 4, 8]
+                    'values': [8]
                 },
                 'higher_eps_clip': {
-                    'values': [0.15, 0.2, 0.25]
+                    'values': [0.2]
                 },
                 'higher_ent_coef': {
-                    'values': [0.005, 0.01, 0.02]
+                    'values': [0.01]
                 },
                 'higher_vf_coef': {
-                    'values': [0.4, 0.5, 0.6]
+                    'values':  [0.5]
                 },
                 'higher_vf_clip_param': {
-                    'values': [0.4, 0.5, 0.6]
+                    'values': [0.5]
                 },
                 'higher_batch_size': {
-                    'values': [16, 32, 64]
-                },
-                'higher_dropout_rate': {
-                    'values': [0.1, 0.2, 0.3]
-                },
-                'higher_model_size': {
-                    'values': ['medium'] 
+                    'values': [4] #[16, 32, 64]
                 },
                 'higher_activation': {
                     'values': ["tanh", "relu"]

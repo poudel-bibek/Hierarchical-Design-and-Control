@@ -30,7 +30,7 @@ def get_config():
         "higher_gae_lambda": 0.95,  # GAE lambda for higher-level agent
         "higher_max_grad_norm": 0.75,  # Maximum gradient norm for gradient clipping
         "higher_vf_clip_param": 0.5,  # Value function clipping parameter
-        "higher_update_freq": 2,  # Number of action timesteps between each policy update. A low value incurs high variance for design agent.
+        "higher_update_freq": 16,  # Number of action timesteps between each policy update. A low value incurs high variance for design agent.
         "higher_lr": 0.001,  # Learning rate for higher-level agent
         "higher_gamma": 0.99,  # Discount factor for higher-level agent
         "higher_K_epochs": 2,  # Number of epochs to update policy for higher-level agent
@@ -46,14 +46,14 @@ def get_config():
         "higher_activation": "tanh",  # Policy activation function
 
         # Design specific parameters
-        "min_thickness": 0.5,  # Minimum thickness for crosswalks
-        "max_thickness": 10.0,  # Maximum thickness for crosswalks
+        "min_thickness": 1.0,  # Minimum thickness for crosswalks
+        "max_thickness": 15.0,  # Maximum thickness for crosswalks
         "clamp_min": 0.06,  # Minimum value for x location and thickness for crosswalks # Add small buffer to avoid exact 0.0 or 1.0
         "clamp_max": 0.94,  # Maximum value for x location and thickness for crosswalks
         "max_proposals": 10,  # Maximum number of proposals to consider for higher-level agent
         "save_graph_images": True, # Save graph image every iteration.
         "save_gmm_plots": True, # Save GMM visualization every iteration.
-        "num_mixtures": 5,  # Number of mixture components in GMM. Having more is ok (means will collapse into each other) but makes it difficult to learn. Having less will make it less representative.
+        "num_mixtures": 7,  # Number of mixture components in GMM. Having more is ok (means will collapse into each other) but makes it difficult to learn. Having less will make it less representative.
         'initial_heads': 8, # Number of attention heads in first GATv2 layer
         'second_heads': 1, # Number of attention heads in second GATv2 layer
         'edge_dim': 2, # Number of features per edge 
@@ -203,9 +203,9 @@ def classify_and_return_args(train_config, device):
         out_of_range_demand_scales = [0.5, 0.75, 2.5, 2.75]
     else: 
         # during training
-        eval_n_iterations = 2
+        eval_n_iterations = 5
         in_range_demand_scales = [1.0, 1.25, 1.5, 1.75, 2.0, 2.25] # The demand scales that are used for training.
-        out_of_range_demand_scales = [] # The demand scales that are used ONLY for evaluation.
+        out_of_range_demand_scales = [0.5, 2.5] # The demand scales that are used ONLY for evaluation.
     
     eval_args = {
         'lower_state_dim': None,
