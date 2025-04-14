@@ -306,7 +306,15 @@ def eval(design_args,
     - Each demand is run on a different worker
     - Results returned as json  
     """
-
+    
+    if tl:
+        if unsignalized:
+            tl_state = "unsignalized"
+        else:
+            tl_state = "tl"
+    else:
+        tl_state = "ppo"
+    
     n_workers = eval_args['eval_lower_workers'] 
     n_iterations = eval_args['eval_n_iterations']
     eval_device = torch.device("cuda") if eval_args['eval_worker_device']=='gpu' and torch.cuda.is_available() else torch.device("cpu")
@@ -322,6 +330,9 @@ def eval(design_args,
         norm_x, norm_y = load_policy(eval_ppo_higher.policy, eval_ppo_lower.policy, lower_state_normalizer, policy_path)
         higher_env.normalizer_x = norm_x # Then replace them
         higher_env.normalizer_y = norm_y
+        result_json_path = os.path.join(eval_args['eval_save_dir'], f'{policy_path.split("/")[-1].split(".")[0]}_{tl_state}.json')
+    else: 
+        result_json_path = os.path.join(eval_args['eval_save_dir'], f'realworld_{tl_state}.json')
 
     higher_policy = eval_ppo_higher.policy.to(eval_device)
     shared_lower_policy = eval_ppo_lower.policy.to(eval_device)
@@ -406,22 +417,11 @@ def eval(design_args,
     del eval_queue
     del higher_policy
     del shared_lower_policy
-
-    print(f"\nAll results: {all_results}\n")    
-    if tl and unsignalized:
-        tl_state = "unsignalized"
-    elif tl:
-        tl_state = "tl"
-    else:
-        tl_state = "ppo"
-    
-    if real_world:
-        result_json_path = os.path.join(eval_args['eval_save_dir'], f'{policy_path.split("/")[-1].split(".")[0]}_{tl_state}_real_world.json') # f'eval_{policy_path.split("/")[2].split(".")[0]}_{tl_state}.json
-    else: 
-        result_json_path = os.path.join(eval_args['eval_save_dir'], f'{policy_path.split("/")[-1].split(".")[0]}_{tl_state}.json') # f'eval_{policy_path.split("/")[2].split(".")[0]}_{tl_state}.json
-    print(f"Result JSON path: {result_json_path}")
+    # print(f"\nAll results: {all_results}\n")    
     with open(result_json_path, 'w') as f:
         json.dump(all_results, f, indent=4)
+    
+    print(f"Results saved to JSON path: {result_json_path}")
     return result_json_path
     
 def main(config):
@@ -433,6 +433,8 @@ def main(config):
     # Spawn means create a new process. There is a fork method as well which will create a copy of the current process.
     mp.set_start_method('spawn') 
     if config['evaluate']: 
+        # TODO: Load from saved config
+        
         # setup params
         device = torch.device("cuda") if config['eval_worker_device']=='gpu' and torch.cuda.is_available() else torch.device("cpu")
         design_args, control_args, higher_ppo_args, lower_ppo_args, eval_args = classify_and_return_args(config, device)
@@ -459,7 +461,7 @@ def main(config):
                                                            eval_args, 
                                                            policy_path=None, 
                                                            global_step="_final", 
-                                                           tl= True, 
+                                                           tl=True, 
                                                            unsignalized=True, 
                                                            real_world=True) 
         
@@ -477,18 +479,18 @@ def main(config):
                                            higher_ppo_args, 
                                            lower_ppo_args, 
                                            eval_args, 
-                                           policy_path=None, 
+                                           policy_path=config['eval_model_path'], # Although this wont use the policy, provide path.
                                            global_step="_final", 
-                                           tl= True) 
+                                           tl=True) 
 
         new_design_unsignalized_results_path = eval(design_args, 
                                                     control_args, 
                                                     higher_ppo_args, 
                                                     lower_ppo_args, 
                                                     eval_args, 
-                                                    policy_path=None, 
+                                                    policy_path=config['eval_model_path'], # Although this wont use the policy, provide path.
                                                     global_step="_final", 
-                                                    tl= True, 
+                                                    tl=True, 
                                                     unsignalized=True)
 
         plot_control_results(new_design_unsignalized_results_path, 
@@ -509,3 +511,5 @@ def main(config):
 if __name__ == "__main__":
     config = get_config()
     main(config)
+
+    

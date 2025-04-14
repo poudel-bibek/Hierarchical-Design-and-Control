@@ -1403,7 +1403,7 @@ class ControlEnv(gym.Env):
                 else: 
                     top_edge = f"edge_{tl_id.split('mid')[0]}top_{tl_id}"
                     bottom_edge = f"edge_{tl_id.split('mid')[0]}bottom_{tl_id}"
-                    print(f"Top edge: {top_edge}, Bottom edge: {bottom_edge}")
+                    # print(f"Top edge: {top_edge}, Bottom edge: {bottom_edge}")
                     self.tl_lane_dict[tl_id]["pedestrian"]["incoming"]["north"]["main"].append(top_edge)
                     self.tl_lane_dict[tl_id]["pedestrian"]["incoming"]["north"]["main"].append(bottom_edge)
 

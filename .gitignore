@@ -24,3 +24,6 @@ wandb/
 
 ./simulation/scaled_trips/
 /simulation/scaled_trips/
+
+./consolidated_control_results.pdf
+./consolidated_design_results.pdf

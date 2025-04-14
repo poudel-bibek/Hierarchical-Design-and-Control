@@ -30,7 +30,7 @@ def get_config():
         "higher_gae_lambda": 0.97,  # GAE lambda for higher-level agent
         "higher_max_grad_norm": 0.75,  # Maximum gradient norm for gradient clipping
         "higher_vf_clip_param": 0.5,  # Value function clipping parameter
-        "higher_update_freq": 2,  # Number of action timesteps between each policy update. A low value incurs high variance for design agent.
+        "higher_update_freq": 16,  # Number of action timesteps between each policy update. A low value incurs high variance for design agent.
         "higher_lr": 0.0001,  # Learning rate for higher-level agent
         "higher_gamma": 0.99,  # Discount factor for higher-level agent
         "higher_K_epochs": 4,  # Number of epochs to update policy for higher-level agent
@@ -86,9 +86,9 @@ def get_config():
         "lower_auto_start": True,  # Automatically start the simulation
 
         # Evaluation
-        "eval_model_path": "./runs/Apr12_17-40-27/saved_policies/best_eval_policy.pth",  # Path to the saved PPO model for evaluation. replace xyz.
-        "eval_lower_timesteps": 50,  # Number of timesteps to each episode. Warmup not counted.
-        "eval_lower_workers": 2,  # Parallelizes how many demands can be evaluated at the same time.
+        "eval_model_path": "./runs/Apr14_16-06-55/saved_policies/best_eval_policy.pth",  # Path to the saved PPO model for evaluation. replace xyz.
+        "eval_lower_timesteps": 500,  # Number of timesteps to each episode. Warmup not counted.
+        "eval_lower_workers": 10,  # Parallelizes how many demands can be evaluated at the same time.
         "eval_worker_device": "gpu",  # Policy during eval can be run in GPU 
     }
     return config
@@ -198,7 +198,7 @@ def classify_and_return_args(train_config, device):
 
     if train_config['evaluate']:
         # during evaluation
-        eval_n_iterations = 2
+        eval_n_iterations = 5
         in_range_demand_scales = [1.0, 1.25, 1.5, 1.75, 2.0, 2.25] 
         out_of_range_demand_scales = [0.5, 0.75, 2.5, 2.75]
     else: 
