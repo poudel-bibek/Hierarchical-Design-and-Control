@@ -297,7 +297,8 @@ def eval(design_args,
          policy_path=None, 
          global_step=None,
          tl=False, 
-         unsignalized=False):
+         unsignalized=False,
+         real_world=False):
     """
     Evaluate both higher and lower level policies (during training or stand-alone evaluation)
     - For higher agent, its just a single step (single greedy design) 
@@ -316,8 +317,11 @@ def eval(design_args,
     eval_ppo_higher = PPO(**higher_ppo_args)
     lower_state_normalizer = WelfordNormalizer(eval_args['lower_state_dim'])
 
+    higher_env = DesignEnv(design_args, control_args, lower_ppo_args, higher_ppo_args['model_kwargs']['run_dir']) # Pass the correct run_dir
     if policy_path:
         norm_x, norm_y = load_policy(eval_ppo_higher.policy, eval_ppo_lower.policy, lower_state_normalizer, policy_path)
+        higher_env.normalizer_x = norm_x # Then replace them
+        higher_env.normalizer_y = norm_y
 
     higher_policy = eval_ppo_higher.policy.to(eval_device)
     shared_lower_policy = eval_ppo_lower.policy.to(eval_device)
@@ -325,32 +329,34 @@ def eval(design_args,
     shared_lower_policy.eval()
     higher_policy.eval()
     lower_state_normalizer.eval()
-    
-    iteration = f"eval{global_step}"
-    higher_env = DesignEnv(design_args, control_args, lower_ppo_args, design_args['save_dir']) # Let the environment set its normalizers
-    higher_env.normalizer_x = norm_x # Then replace them
-    higher_env.normalizer_y = norm_y
-    # Get a single greedy design 
-    higher_state =   Batch.from_data_list([higher_env.reset()])  # At reset, we get the original real-world configuration.
-    # Which is the input network to the act function
-    _, merged_proposals, num_proposals, _ = higher_policy.act(higher_state, 
-                                                            iteration, 
-                                                            design_args['clamp_min'], 
-                                                            design_args['clamp_max'], 
-                                                            eval_device,
-                                                            training=False, # Get argmax on num_proposals and sample greedily on GMM
-                                                            visualize=True) 
+    higher_state = Batch.from_data_list([higher_env.reset()]) # At reset, we get the original real-world configuration.
 
-    # Convert tensor action to proposals
-    merged_proposals = merged_proposals.cpu().numpy()  # Convert to numpy array if it's not already
-    proposals = merged_proposals[0][:num_proposals]  # Only consider the actual proposals
-    print(f"\nProposals: {proposals}")
-    
-    # Apply the action to output the latest SUMO network file
-    higher_env._apply_action(proposals, iteration) # Pass the actual proposals derived above
-    sumo_net_file = f"{higher_env.network_dir}/network_iteration_{iteration}.net.xml"
+    if real_world:
+        iteration = "0"
+        sumo_net_file = f"{higher_env.network_dir}/network_iteration_0.net.xml"
+        num_proposals = 7 # not used.
+    else: 
+        iteration = f"eval{global_step}"
+        # Which is the input network to the act function
+        _, merged_proposals, num_proposals, _ = higher_policy.act(higher_state,
+                                                                iteration, 
+                                                                design_args['clamp_min'], 
+                                                                design_args['clamp_max'], 
+                                                                eval_device,
+                                                                training=False, # Get argmax on num_proposals and sample greedily on GMM
+                                                                visualize=True) 
+
+        # Convert tensor action to proposals
+        merged_proposals = merged_proposals.cpu().numpy()  # Convert to numpy array if it's not already
+        proposals = merged_proposals[0][:num_proposals]  # Only consider the actual proposals
+        print(f"\nProposals: {proposals}")
+        
+        # Apply the action to output the latest SUMO network file
+        higher_env._apply_action(proposals, iteration) # Pass the actual proposals derived above
+        sumo_net_file = f"{higher_env.network_dir}/network_iteration_{iteration}.net.xml"
+
     print(f"\nSUMO network file: {sumo_net_file}")
-    create_new_sumocfg(design_args['save_dir'], iteration)
+    create_new_sumocfg(higher_ppo_args['model_kwargs']['run_dir'], iteration)
 
     # number of times the n_workers have to be repeated to cover all eval demands
     num_times_workers_recycle = len(eval_demand_scales) if len(eval_demand_scales) < n_workers else (len(eval_demand_scales) // n_workers) + 1
@@ -376,11 +382,11 @@ def eval(design_args,
                 'control_args': control_args,
                 'worker_device': eval_device,
                 'lower_state_normalizer': lower_state_normalizer,
-                'run_dir': design_args['save_dir']
+                'run_dir': higher_ppo_args['model_kwargs']['run_dir']
             }
             p = mp.Process(
                 target=parallel_eval_worker,
-                args=(rank, worker_config, eval_queue, higher_env.extreme_edge_dict, tl, unsignalized))
+                args=(rank, worker_config, eval_queue, higher_env.extreme_edge_dict, tl, unsignalized, real_world))
             
             p.start()
             eval_processes.append(p)
@@ -409,11 +415,13 @@ def eval(design_args,
     else:
         tl_state = "ppo"
     
-    result_json_path = os.path.join(eval_args['eval_save_dir'], f'{policy_path.split("/")[-1].split(".")[0]}_{tl_state}.json') # f'eval_{policy_path.split("/")[2].split(".")[0]}_{tl_state}.json
+    if real_world:
+        result_json_path = os.path.join(eval_args['eval_save_dir'], f'{policy_path.split("/")[-1].split(".")[0]}_{tl_state}_real_world.json') # f'eval_{policy_path.split("/")[2].split(".")[0]}_{tl_state}.json
+    else: 
+        result_json_path = os.path.join(eval_args['eval_save_dir'], f'{policy_path.split("/")[-1].split(".")[0]}_{tl_state}.json') # f'eval_{policy_path.split("/")[2].split(".")[0]}_{tl_state}.json
     print(f"Result JSON path: {result_json_path}")
     with open(result_json_path, 'w') as f:
         json.dump(all_results, f, indent=4)
-    f.close()
     return result_json_path
     
 def main(config):
@@ -427,22 +435,61 @@ def main(config):
     if config['evaluate']: 
         # setup params
         device = torch.device("cuda") if config['eval_worker_device']=='gpu' and torch.cuda.is_available() else torch.device("cpu")
-        control_args, ppo_args, eval_args = classify_and_return_args(config, device)
+        design_args, control_args, higher_ppo_args, lower_ppo_args, eval_args = classify_and_return_args(config, device)
         dummy_env = ControlEnv(control_args, " ", worker_id=None)
 
         current_time = datetime.now().strftime('%b%d_%H-%M-%S')
-        os.makedirs(f'./results', exist_ok=True)
-        os.makedirs(f'./results/eval_{current_time}', exist_ok=True)
-        eval_args['eval_save_dir'] = os.path.join('results', f'eval_{current_time}')
+        # Correctly determine the run directory from the model path
+        eval_model_path = config['eval_model_path']
+        run_dir_parent = os.path.dirname(os.path.dirname(eval_model_path)) # e.g., runs/Apr12_17-40-27
+        higher_ppo_args['model_kwargs']['run_dir'] = run_dir_parent
+        print(f"Run directory: {run_dir_parent}")
+        
+        eval_save_dir = os.path.join(run_dir_parent, 'results', f'eval_{current_time}')
+        print(f"Eval save directory: {eval_save_dir}")
+        os.makedirs(eval_save_dir, exist_ok=True)
+        eval_args['eval_save_dir'] = eval_save_dir
         eval_args['lower_state_dim'] = dummy_env.observation_space.shape
-
+        
         # Evaluate the real-world design in the unsignalized setting. A control policy was never trained on the real-world design. 
-        real_world_design_unsignalized_results_path = eval(control_args, ppo_args, eval_args, policy_path=None, global_step="_final", tl= True, unsignalized=True) 
+        real_world_design_unsignalized_results_path = eval(design_args, 
+                                                           control_args, 
+                                                           higher_ppo_args, 
+                                                           lower_ppo_args, 
+                                                           eval_args, 
+                                                           policy_path=None, 
+                                                           global_step="_final", 
+                                                           tl= True, 
+                                                           unsignalized=True, 
+                                                           real_world=True) 
         
         # Evaluate the ``new design`` in the all three settings. The new design network has to be same across all three settings.
-        new_design_ppo_results_path = eval(control_args, ppo_args, eval_args, policy_path=config['eval_model_path'], global_step="_final", tl= False)
-        new_design_tl_results_path = eval(control_args, ppo_args, eval_args, policy_path=None, global_step="_final", tl= True, unsignalized=False) 
-        new_design_unsignalized_results_path = eval(control_args, ppo_args, eval_args, policy_path=None, global_step="_final", tl= True, unsignalized=True)
+        new_design_ppo_results_path = eval(design_args, 
+                                           control_args, 
+                                           higher_ppo_args, 
+                                           lower_ppo_args, 
+                                           eval_args, 
+                                           policy_path=config['eval_model_path'], 
+                                           global_step="_final")
+        
+        new_design_tl_results_path = eval(design_args,
+                                           control_args, 
+                                           higher_ppo_args, 
+                                           lower_ppo_args, 
+                                           eval_args, 
+                                           policy_path=None, 
+                                           global_step="_final", 
+                                           tl= True) 
+
+        new_design_unsignalized_results_path = eval(design_args, 
+                                                    control_args, 
+                                                    higher_ppo_args, 
+                                                    lower_ppo_args, 
+                                                    eval_args, 
+                                                    policy_path=None, 
+                                                    global_step="_final", 
+                                                    tl= True, 
+                                                    unsignalized=True)
 
         plot_control_results(new_design_unsignalized_results_path, 
                           new_design_tl_results_path,

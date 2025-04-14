@@ -1199,7 +1199,7 @@ class ControlEnv(gym.Env):
         """
         return self.step_count >= self.max_timesteps
 
-    def reset(self, extreme_edge_dict, num_proposals, tl= False):
+    def reset(self, extreme_edge_dict, num_proposals, tl= False, real_world=False):
         """
         """
         # useful when running multiple iterations of the same env (as in eval)
@@ -1269,7 +1269,7 @@ class ControlEnv(gym.Env):
         self.tl_ids.extend(new_tl_ids)
         #print(f"Traffic light IDs in current network: {self.tl_ids}")
         self.num_proposals = num_proposals
-        self.dynamically_populate_edges_lanes(extreme_edge_dict)
+        self.dynamically_populate_edges_lanes(extreme_edge_dict, real_world)
 
         temp_mb_ped_incoming_edges_all = [self.tl_lane_dict[tl_id]['pedestrian']['incoming']['north']['main'] \
                                           for tl_id in self.tl_ids if tl_id != 'cluster_172228464_482708521_9687148201_9687148202_#5more']
@@ -1325,7 +1325,7 @@ class ControlEnv(gym.Env):
         
         return observation, {} # info is empty
 
-    def dynamically_populate_edges_lanes(self, extreme_edge_dict):
+    def dynamically_populate_edges_lanes(self, extreme_edge_dict, real_world=False):
         """
         Get midblock TLs lanes/edges for occupancy map to use. i.e., update self.tl_lane_dict with latest network iteration.
         - For vehicle + inside (pedestrians dont have inside), use the mid-block TL id with _0 for west-straight, _1 for east-straight.
@@ -1335,7 +1335,8 @@ class ControlEnv(gym.Env):
         - For vehicles, in both incoming and outgoing, west-straight will have a negative sign in edge id. east-straight will have a positive sign.
         - Sometimes the returned controlled links are empty. Because for pedestrians, we are using a single direction, the other direction is not present.
         """
-        
+    
+
         # For each midblock traffic light (everything except the intersection)
         for tl_id in self.tl_ids:
             if tl_id == 'cluster_172228464_482708521_9687148201_9687148202_#5more':
@@ -1347,46 +1348,64 @@ class ControlEnv(gym.Env):
             # Skip if the traffic light ID already exists in the dictionary
             if tl_id in self.tl_lane_dict:
                 continue
-                
-            # controlled_lanes = traci.trafficlight.getControlledLanes(tl_id)
-            controlled_links = traci.trafficlight.getControlledLinks(tl_id)
-            tl_internal = f":{tl_id}"
-            self.tl_lane_dict[tl_id] = {
-                "vehicle": {
-                    "incoming": {
-                        "west-straight": [controlled_links[0][0][0]],
-                        "east-straight": [controlled_links[1][0][0]]
-                    },
-                    "inside": {
-                        "west-straight": [f"{tl_internal}_0"],
-                        "east-straight": [f"{tl_internal}_1"]
-                    },
-                    "outgoing": {
-                        "west-straight": [controlled_links[0][0][1]],
-                        "east-straight": [controlled_links[1][0][1]]
-                    }
-                },
-                "pedestrian": {
-                    "incoming": {
-                        "north": {
-                            "main": [f"{tl_internal}_w0", f"{tl_internal}_w1"]
+            else: 
+                # controlled_lanes = traci.trafficlight.getControlledLanes(tl_id)
+                controlled_links = traci.trafficlight.getControlledLinks(tl_id)
+                tl_internal = f":{tl_id}"
+                self.tl_lane_dict[tl_id] = {
+                    "vehicle": {
+                        "incoming": {
+                            "west-straight": [controlled_links[0][0][0]],
+                            "east-straight": [controlled_links[1][0][0]]
+                        },
+                        "inside": {
+                            "west-straight": [f"{tl_internal}_0"],
+                            "east-straight": [f"{tl_internal}_1"]
+                        },
+                        "outgoing": {
+                            "west-straight": [controlled_links[0][0][1]],
+                            "east-straight": [controlled_links[1][0][1]]
                         }
                     },
-                    "outgoing": {
-                        "north": {
-                            "main": [f"{tl_internal}_c0"]
+                    "pedestrian": {
+                        "incoming": {
+                            "north": {
+                                "main": [f"{tl_internal}_w0", f"{tl_internal}_w1"]
+                            }
+                        },
+                        "outgoing": {
+                            "north": {
+                                "main": [f"{tl_internal}_c0"]
+                            }
                         }
                     }
                 }
-            }
-            
-            # TODO: For vehicle incoming + outgoing, keep adding until the total length is near cutoff distance or we encounter another TL. 
-            # Do this for east-straight of the intersection as well.
-            # For pedestrians, add just one immediate lane on each side of the crossing. 
-            top_edge = f"edge_{tl_id.split('mid')[0]}top_{tl_id}"
-            bottom_edge = f"edge_{tl_id.split('mid')[0]}bottom_{tl_id}"
-            self.tl_lane_dict[tl_id]["pedestrian"]["incoming"]["north"]["main"].append(top_edge)
-            self.tl_lane_dict[tl_id]["pedestrian"]["incoming"]["north"]["main"].append(bottom_edge)
+                
+                # TODO: For vehicle incoming + outgoing, keep adding until the total length is near cutoff distance or we encounter another TL. 
+                # Do this for east-straight of the intersection as well.
+                # For pedestrians, add just one immediate lane on each side of the crossing. 
+                
+                if real_world: # Hard code for Craver
+                    if tl_id == '9727816850_c0_mid':
+                        self.tl_lane_dict['9727816850_c0_mid']["pedestrian"]["incoming"]["north"]["main"].extend(['edge_9727816851_9727816850_c0_mid', 'edge_9727816846_9727816850_c0_mid'])
+                    elif tl_id == '9727816623_c0_mid': 
+                        self.tl_lane_dict['9727816623_c0_mid']["pedestrian"]["incoming"]["north"]["main"].extend(['edge_9727816625_9727816623_c0_mid', 'edge_9666274798_9727816623_c0_mid'])
+                    elif tl_id == '9740157155_c0_mid':
+                        self.tl_lane_dict['9740157155_c0_mid']["pedestrian"]["incoming"]["north"]["main"].extend(['edge_9740157154_9740157155_c0_mid', 'edge_9666274886_9740157155_c0_mid'])
+                    elif tl_id == 'cluster_9740157181_9740483933_c0_mid':
+                        self.tl_lane_dict['cluster_9740157181_9740483933_c0_mid']["pedestrian"]["incoming"]["north"]["main"].extend(['edge_9655154530_cluster_9740157181_9740483933_c0_mid', 'edge_9740157180_cluster_9740157181_9740483933_c0_mid'])
+                    elif tl_id == '9740157194_c0_mid':
+                        self.tl_lane_dict['9740157194_c0_mid']["pedestrian"]["incoming"]["north"]["main"].extend(['edge_9740157195_9740157194_c0_mid', 'edge_9740157204_9740157194_c0_mid'])
+                    elif tl_id == '9740157209_c0_mid':
+                        self.tl_lane_dict['9740157209_c0_mid']["pedestrian"]["incoming"]["north"]["main"].extend(['edge_9740157210_9740157209_c0_mid', 'edge_9740484420_9740157209_c0_mid'])
+                    elif tl_id == '9740484527_c0_mid':
+                        self.tl_lane_dict['9740484527_c0_mid']["pedestrian"]["incoming"]["north"]["main"].extend(['edge_9740484528_9740484527_c0_mid', 'edge_9740484524_9740484527_c0_mid'])
+                else: 
+                    top_edge = f"edge_{tl_id.split('mid')[0]}top_{tl_id}"
+                    bottom_edge = f"edge_{tl_id.split('mid')[0]}bottom_{tl_id}"
+                    print(f"Top edge: {top_edge}, Bottom edge: {bottom_edge}")
+                    self.tl_lane_dict[tl_id]["pedestrian"]["incoming"]["north"]["main"].append(top_edge)
+                    self.tl_lane_dict[tl_id]["pedestrian"]["incoming"]["north"]["main"].append(bottom_edge)
 
     def close(self):
         if self.sumo_running:

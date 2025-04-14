@@ -151,7 +151,7 @@ class DesignEnv(gym.Env):
             for node in crosswalk_data['crossing_nodes']:
                 if node in networkx_graph.nodes():
                     crosswalk_data['pos'].append(networkx_graph.nodes[node]['pos'])
-
+        # print(f"Existing crosswalks: {existing_crosswalks}")
         return existing_crosswalks
 
     def _extract_networkx_graph(self,):
@@ -551,9 +551,29 @@ class DesignEnv(gym.Env):
             for cid, crosswalk_data in self.existing_crosswalks.items():
                 # End nodes are already present in the networkx graph, add a connecting edge between them.
                 bottom_pos, top_pos = crosswalk_data['pos'][0], crosswalk_data['pos'][-1]
+ 
                 # create a new middle pos
                 middle_x = (bottom_pos[0] + top_pos[0]) / 2
-                middle_y = (bottom_pos[1] + top_pos[1]) / 2 #TODO: Change to interpolation method
+
+                # hard code
+                if cid == ':9727816850_c0':
+                    middle_y = 2628.38
+                elif cid == ':9740157209_c0':
+                    middle_y = 2645.06
+                elif cid == ':9740157194_c0':
+                    middle_y = 2645.51
+                elif cid == ':cluster_9740157181_9740483933_c0':
+                    middle_y = 2647.24
+                elif cid == ':9740157155_c0':
+                    middle_x = 2565.50
+                    middle_y = 2647.35
+                else: 
+                    # # For y, If there are 3 nodes,take the y value from the middle node. They are mostly exactly in the middle.
+                    if len(crosswalk_data['pos']) == 3:
+                        middle_y = crosswalk_data['pos'][1][1]
+                    else: 
+                        middle_y = (bottom_pos[1] + top_pos[1]) / 2
+
                 middle_pos = (middle_x, middle_y)
 
                 # sanitize the id 
@@ -611,7 +631,7 @@ class DesignEnv(gym.Env):
             nodes = crosswalk_data['crossing_nodes'] # There will always be more than 2 nodes.
             middle_nodes.extend(nodes[1:-1]) # Add all nodes except first and last
                 
-        #print(f"Removing middle nodes: {middle_nodes}")
+        # print(f"Removing middle nodes: {middle_nodes}")
         cleanup_graph.remove_nodes_from(middle_nodes)
 
         # 1.
@@ -985,7 +1005,7 @@ class DesignEnv(gym.Env):
                                              disallow="pedestrian tram rail_urban rail rail_electric rail_fast ship cable_car subway", 
                                              speed="8.94", 
                                              )
-                
+
                 lane_element.text = "\n\t\t\t"
                 param_element = ET.SubElement(lane_element, 'param', key='origId', value=edge_id.split('#')[0].replace('-', '')) # remove the negative sign and #
                 param_element.tail = "\n\t\t"

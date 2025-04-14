@@ -2,8 +2,8 @@ def get_config():
     config = {
         # Simulation
         "sweep": False,  # Use wandb sweeps for hyperparameter tuning
-        "evaluate": False, 
-        "gui": False,  # Use SUMO GUI (default: False)
+        "evaluate": True, 
+        "gui": True,  # Use SUMO GUI (default: False)
          
         "vehicle_input_trips": "./simulation/original_vehtrips.xml",  # Original Input trips file
         "vehicle_output_trips": "./simulation/scaled_trips/scaled_vehtrips.xml",  # Output trips file
@@ -30,7 +30,7 @@ def get_config():
         "higher_gae_lambda": 0.97,  # GAE lambda for higher-level agent
         "higher_max_grad_norm": 0.75,  # Maximum gradient norm for gradient clipping
         "higher_vf_clip_param": 0.5,  # Value function clipping parameter
-        "higher_update_freq": 32,  # Number of action timesteps between each policy update. A low value incurs high variance for design agent.
+        "higher_update_freq": 2,  # Number of action timesteps between each policy update. A low value incurs high variance for design agent.
         "higher_lr": 0.0001,  # Learning rate for higher-level agent
         "higher_gamma": 0.99,  # Discount factor for higher-level agent
         "higher_K_epochs": 4,  # Number of epochs to update policy for higher-level agent
@@ -86,9 +86,9 @@ def get_config():
         "lower_auto_start": True,  # Automatically start the simulation
 
         # Evaluation
-        "eval_model_path": "./runs/xyz/saved_policies/best_eval_policy.pth",  # Path to the saved PPO model for evaluation. replace xyz.
-        "eval_lower_timesteps": 600,  # Number of timesteps to each episode. Warmup not counted.
-        "eval_lower_workers": 8,  # Parallelizes how many demands can be evaluated at the same time.
+        "eval_model_path": "./runs/Apr12_17-40-27/saved_policies/best_eval_policy.pth",  # Path to the saved PPO model for evaluation. replace xyz.
+        "eval_lower_timesteps": 50,  # Number of timesteps to each episode. Warmup not counted.
+        "eval_lower_workers": 2,  # Parallelizes how many demands can be evaluated at the same time.
         "eval_worker_device": "gpu",  # Policy during eval can be run in GPU 
     }
     return config

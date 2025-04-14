@@ -98,7 +98,8 @@ def parallel_eval_worker(rank,
                          eval_queue, 
                          extreme_edge_dict,
                          tl=False, 
-                         unsignalized=False):
+                         unsignalized=False,
+                         real_world=False):
     """
     - For the same demand, each worker runs n_iterations number of episodes and measures performance metrics.
     - Each episode runs on a different random seed.
@@ -138,7 +139,7 @@ def parallel_eval_worker(rank,
 
         # Run the worker (reset includes warmup)
         env = ControlEnv(control_args, eval_worker_config['run_dir'], worker_id=rank, network_iteration=eval_worker_config['network_iteration'])
-        state, _ = env.reset(extreme_edge_dict, eval_worker_config['num_proposals'], tl = tl)
+        state, _ = env.reset(extreme_edge_dict, eval_worker_config['num_proposals'], tl = tl, real_world=real_world)
         veh_waiting_time_this_episode = 0
         ped_waiting_time_this_episode = 0
         veh_unique_ids_this_episode = 0
