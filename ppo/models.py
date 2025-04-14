@@ -152,13 +152,13 @@ class MLP_ActorCritic(nn.Module):
         intersection_dist = Categorical(logits=intersection_logits)
         # midblock_probs = torch.sigmoid(midblock_logits)
         midblock_dist = Bernoulli(logits=midblock_logits)
-        print(f"\nMidblock dist: {midblock_dist}\n")
+        # print(f"\nMidblock dist: {midblock_dist}\n")
 
         # Actions in shape (B,1) for intersection, (B,num_proposals) for midblock
         intersection_action = actions[:, :1].squeeze(1).long() # Categorical expects long
         midblock_actions = actions[:, 1: 1 + num_proposals].float()
 
-        print(f"\nMidblock logits: {midblock_logits}, midblock actions: {midblock_actions.shape}\n")
+        # print(f"\nMidblock logits: {midblock_logits}, midblock actions: {midblock_actions.shape}\n")
 
         intersection_log_probs = intersection_dist.log_prob(intersection_action)
         # print(f"\nIntersection log probs: {intersection_log_probs}, shape: {intersection_log_probs.shape}")
@@ -640,7 +640,7 @@ class GAT_v2_ActorCritic(nn.Module):
                                        device = device)
 
             locations, thicknesses = samples.split(1, dim=-1)
-            print(f"\nBefore clamping: Locations: {locations}, Thicknesses: {thicknesses}")
+            # print(f"\nBefore clamping: Locations: {locations}, Thicknesses: {thicknesses}")
             
             original_proposals[b] = torch.cat([locations, thicknesses], dim=-1)
 
@@ -660,7 +660,7 @@ class GAT_v2_ActorCritic(nn.Module):
             locations = torch.clamp(locations, clamp_min, clamp_max)  
             
             thicknesses = torch.clamp(thicknesses, clamp_min, clamp_max) 
-            print(f"\nAfter clamping: Locations: {locations}, Thicknesses: {thicknesses}")
+            # print(f"\nAfter clamping: Locations: {locations}, Thicknesses: {thicknesses}")
 
             # --- Iterative Merging Until Separation --- Even the merged ones cannot be within 0.08 of each other.
             # Analogy: Deterministic environment physics.
@@ -714,7 +714,7 @@ class GAT_v2_ActorCritic(nn.Module):
             merged_proposals[b, actual_num_proposals:] = -1.0 # Pad rest with -1
 
             num_proposals[b] = actual_num_proposals # Store the actual count after merging
-            print(f"\nAfter Merging: {merged_proposals[b]}")
+            # print(f"\nAfter Merging: {merged_proposals[b]}")
 
             # Visualization is only meaningful during act (i.e., not during evaluation)
             if visualize and iteration is not None:
@@ -722,8 +722,8 @@ class GAT_v2_ActorCritic(nn.Module):
                 merged_markers = (merged_proposals[b, :actual_num_proposals, 0].squeeze().detach().cpu().numpy(), merged_proposals[b, :actual_num_proposals, 1].squeeze().detach().cpu().numpy())
                 self.visualize_gmm(gmm_batch[b], self.run_dir, markers=merged_markers, batch_index=b, thickness_range=(0, 1), location_range=(0, 1), iteration=iteration)
 
-        print(f"\noriginal_proposals: {original_proposals}")
-        print(f"\nnum_proposals: {num_proposals}")
+        # print(f"\noriginal_proposals: {original_proposals}")
+        # print(f"\nnum_proposals: {num_proposals}")
         # The higher ppo memory needs to store the proposals and log_probs without considering the merging operations.
         # The number of actual proposals is corresponding to the merged proposals.
         return original_proposals, merged_proposals, num_proposals, log_probs

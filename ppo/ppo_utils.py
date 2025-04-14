@@ -161,12 +161,12 @@ def collate_fn(data):
     Collate function for the higher-level agent
     """
     states_batch, actions_batch, old_logprobs_batch, advantages_batch, returns_batch, old_values_batch = zip(*data)
-    print(f"\nStates batch: {states_batch}")
-    print(f"\nActions batch: {actions_batch}")
-    print(f"\nOld logprobs batch: {old_logprobs_batch}")
-    print(f"\nAdvantages batch: {advantages_batch}")
-    print(f"\nReturns batch: {returns_batch}")
-    print(f"\nOld values batch: {old_values_batch}")
+    # print(f"\nStates batch: {states_batch}")
+    # print(f"\nActions batch: {actions_batch}")
+    # print(f"\nOld logprobs batch: {old_logprobs_batch}")
+    # print(f"\nAdvantages batch: {advantages_batch}")
+    # print(f"\nReturns batch: {returns_batch}")
+    # print(f"\nOld values batch: {old_values_batch}")
     states_batch = Batch.from_data_list(states_batch)  
 
     actions_batch = torch.stack(actions_batch, dim=0)

@@ -118,7 +118,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
     eval_ped_avg_wait = 200.0
     current_lr_higher = higher_ppo_args['lr']
 
-    for iteration in range(0, total_iterations):
+    for iteration in range(1, total_iterations + 1): #start from 1, else policy gets updated at step 0.
         print(f"\nStarting iteration: {iteration}/{total_iterations} with {higher_env.global_step} total steps so far\n")
 
         # Higher level agent takes node features, edge index, edge attributes and batch (to make single large graph) as input 
