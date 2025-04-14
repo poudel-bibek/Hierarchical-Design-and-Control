@@ -27,3 +27,6 @@ wandb/
 
 ./consolidated_control_results.pdf
 ./consolidated_design_results.pdf
+
+consolidated_control_results.pdf
+consolidated_design_results.pdf
