@@ -498,7 +498,7 @@ class GAT_v2_ActorCritic(nn.Module):
         # return gmms_batch, num_proposals_probs_batch
         return gmms_batch
     
-    def _sample_gmm(self, gmm_single, num_proposals, naive_stochastic = False, training=True, device=None):
+    def _sample_gmm(self, gmm_single, num_proposals, naive_stochastic=False, training=True, device=None):
         """
 
         Sampling from GMM has several issues of discussion.
@@ -541,8 +541,10 @@ class GAT_v2_ActorCritic(nn.Module):
                 # TODO: Implement potentially more sophisticated training sampling if needed
                 pass
 
-        else: # Test time: Hybrid sampling (Modes + Stochastic)
-            grid_size = 30  # Resolution for finding modes
+        else:
+            # print(f"\n\nInside _sample_gmm: Test time\n\n")
+            # Test time: Hybrid sampling (Modes + Stochastic)
+            grid_size = 20  # Resolution for finding modes
             loc_min, loc_max = 0.0, 1.0
             thick_min, thick_max = 0.0, 1.0
 
@@ -571,6 +573,7 @@ class GAT_v2_ActorCritic(nn.Module):
             )
             mode_indices = torch.nonzero(is_mode) # Shape: (num_modes_found, 2) [row, col] indices
             num_modes_found = mode_indices.shape[0]
+            # print(f"    _sample_gmm (Eval): Found {num_modes_found} modes on grid. Requesting {num_proposals} proposals.") # DEBUG
 
             # 4. Select top k modes
             selected_mode_samples = torch.empty((0, 2), device=device, dtype=torch.float32)
@@ -589,16 +592,21 @@ class GAT_v2_ActorCritic(nn.Module):
                 selected_mode_samples = torch.stack([mode_locations, mode_thicknesses], dim=-1)
                 num_modes_taken = selected_mode_samples.shape[0] # Update based on actual number taken
 
-            # 5. Sample remaining points stochastically
-            num_to_sample_stochastically = num_proposals - num_modes_taken
-            stochastic_samples = torch.empty((0, 2), device=device, dtype=torch.float32)
-            if num_to_sample_stochastically > 0:
-                stochastic_samples = gmm_single.sample((num_to_sample_stochastically,))
+            # Filter out samples with location < 0.1
+            # location_mask = selected_mode_samples[:, 0] >= 0.1
+            # selected_mode_samples = selected_mode_samples[location_mask]
+            # num_modes_taken = selected_mode_samples.shape[0]
+            
+            # # 5. Sample remaining points stochastically
+            # num_to_sample_stochastically = num_proposals - num_modes_taken
+            # stochastic_samples = torch.empty((0, 2), device=device, dtype=torch.float32)
+            # if num_to_sample_stochastically > 0:
+            #     stochastic_samples = gmm_single.sample((num_to_sample_stochastically,))
 
-            # 6. Combine samples
-            # torch.cat handles empty tensors gracefully
-            return torch.cat((selected_mode_samples, stochastic_samples), dim=0)
-
+            # # 6. Combine samples
+            # # torch.cat handles empty tensors gracefully
+            # return torch.cat((selected_mode_samples, stochastic_samples), dim=0)
+            return torch.cat((selected_mode_samples, torch.full((num_proposals - num_modes_taken, 2), -1.0, device=device)), dim=0)
 
     def act(self, states_batch, iteration, clamp_min, clamp_max, device, training=True, visualize=False):
         """
@@ -664,7 +672,9 @@ class GAT_v2_ActorCritic(nn.Module):
 
             # --- Iterative Merging Until Separation --- Even the merged ones cannot be within 0.08 of each other.
             # Analogy: Deterministic environment physics.
-            current_proposals = torch.cat([locations, thicknesses], dim=-1) # Start with clamped proposals
+            # current_proposals = torch.cat([locations, thicknesses], dim=-1) # Start with clamped proposals
+            # Filter out padding *after* clamping, *before* merging, using the original samples tensor
+            current_proposals = torch.cat([locations, thicknesses], dim=-1)[samples[:, 0] != -1.0] # TODO: This was a hacky fix.
 
             threshold = 0.08 # One standard deviation
             while True:

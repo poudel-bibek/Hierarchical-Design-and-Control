@@ -354,7 +354,7 @@ def eval(design_args,
                                                                 design_args['clamp_min'], 
                                                                 design_args['clamp_max'], 
                                                                 eval_device,
-                                                                training=False, # Get argmax on num_proposals and sample greedily on GMM
+                                                                training=False, # !important
                                                                 visualize=True) 
 
         # Convert tensor action to proposals
@@ -434,7 +434,7 @@ def main(config):
     mp.set_start_method('spawn') 
     if config['evaluate']: 
         # TODO: Load from saved config
-        
+
         # setup params
         device = torch.device("cuda") if config['eval_worker_device']=='gpu' and torch.cuda.is_available() else torch.device("cpu")
         design_args, control_args, higher_ppo_args, lower_ppo_args, eval_args = classify_and_return_args(config, device)
@@ -454,16 +454,16 @@ def main(config):
         eval_args['lower_state_dim'] = dummy_env.observation_space.shape
         
         # Evaluate the real-world design in the unsignalized setting. A control policy was never trained on the real-world design. 
-        real_world_design_unsignalized_results_path = eval(design_args, 
-                                                           control_args, 
-                                                           higher_ppo_args, 
-                                                           lower_ppo_args, 
-                                                           eval_args, 
-                                                           policy_path=None, 
-                                                           global_step="_final", 
-                                                           tl=True, 
-                                                           unsignalized=True, 
-                                                           real_world=True) 
+        # real_world_design_unsignalized_results_path = eval(design_args, 
+        #                                                    control_args, 
+        #                                                    higher_ppo_args, 
+        #                                                    lower_ppo_args, 
+        #                                                    eval_args, 
+        #                                                    policy_path=None, 
+        #                                                    global_step="_final", 
+        #                                                    tl=True, 
+        #                                                    unsignalized=True, 
+        #                                                    real_world=True) 
         
         # Evaluate the ``new design`` in the all three settings. The new design network has to be same across all three settings.
         new_design_ppo_results_path = eval(design_args, 
@@ -493,14 +493,14 @@ def main(config):
                                                     tl=True, 
                                                     unsignalized=True)
 
-        plot_control_results(new_design_unsignalized_results_path, 
-                          new_design_tl_results_path,
-                          new_design_ppo_results_path,
-                          in_range_demand_scales = eval_args['in_range_demand_scales'])
+        # plot_control_results(new_design_unsignalized_results_path, 
+        #                   new_design_tl_results_path,
+        #                   new_design_ppo_results_path,
+        #                   in_range_demand_scales = eval_args['in_range_demand_scales'])
         
-        plot_design_results(new_design_unsignalized_results_path, 
-                          real_world_design_unsignalized_results_path,
-                          in_range_demand_scales = eval_args['in_range_demand_scales'])
+        # plot_design_results(new_design_unsignalized_results_path, 
+        #                   real_world_design_unsignalized_results_path,
+        #                   in_range_demand_scales = eval_args['in_range_demand_scales'])
 
     elif config['sweep']:
         tuner = HyperParameterTuner(config, train)

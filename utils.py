@@ -1418,17 +1418,17 @@ def plot_consolidated_insights(sampled_actions_file_path, conflict_json_file_pat
     return fig
 
 # ###############
-real_world_design_unsignalized_results_path = './runs/Apr14_16-06-55/results/eval_Apr14_16-46-04/realworld_unsignalized.json'
-new_design_ppo_results_path = './runs/Apr14_16-06-55/results/eval_Apr14_16-46-04/best_eval_policy_ppo.json'
-new_design_tl_results_path = './runs/Apr14_16-06-55/results/eval_Apr14_16-46-04/best_eval_policy_tl.json'
-new_design_unsignalized_results_path = './runs/Apr14_16-06-55/results/eval_Apr14_16-46-04/best_eval_policy_unsignalized.json'
+# real_world_design_unsignalized_results_path = './runs/Apr14_09-23-45/results/eval_Apr14_17-39-39/realworld_unsignalized.json'
+# new_design_ppo_results_path = './runs/Apr14_09-23-45/results/eval_Apr14_17-39-39/best_eval_policy_ppo.json'
+# new_design_tl_results_path = './runs/Apr14_09-23-45/results/eval_Apr14_17-39-39/best_eval_policy_tl.json'
+# new_design_unsignalized_results_path = './runs/Apr14_09-23-45/results/eval_Apr14_17-39-39/best_eval_policy_unsignalized.json'
 
-irds = [1.0, 1.25, 1.5, 1.75, 2.0, 2.25]
-plot_control_results(new_design_unsignalized_results_path, 
-                    new_design_tl_results_path,
-                    new_design_ppo_results_path,
-                    in_range_demand_scales = irds)
+# irds = [1.0, 1.25, 1.5, 1.75, 2.0, 2.25]
+# plot_control_results(new_design_unsignalized_results_path, 
+#                     new_design_tl_results_path,
+#                     new_design_ppo_results_path,
+#                     in_range_demand_scales = irds)
 
-plot_design_results(new_design_unsignalized_results_path, 
-                    real_world_design_unsignalized_results_path,
-                    in_range_demand_scales = irds)
+# plot_design_results(new_design_unsignalized_results_path, 
+#                     real_world_design_unsignalized_results_path,
+#                     in_range_demand_scales = irds)
