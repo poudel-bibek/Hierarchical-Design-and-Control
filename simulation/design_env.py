@@ -98,14 +98,14 @@ class DesignEnv(gym.Env):
                                      'action_dim': self.lower_ppo_args['action_dim'],
                                      'kwargs': self.lower_ppo_args['model_kwargs']}
         self.info = {
-            'lower_avg_reward': None,
-            'lower_update_count': None,
-            'lower_policy_loss': None,
-            'lower_value_loss': None,
-            'lower_entropy_loss': None,
-            'lower_total_loss': None,
-            'lower_current_lr': None,
-            'lower_approx_kl': None,
+            'lower_avg_reward': float('-inf'),
+            'lower_update_count': 0,
+            'lower_policy_loss': float('inf'),
+            'lower_value_loss': float('inf'),
+            'lower_entropy_loss': float('inf'),
+            'lower_total_loss': float('inf'),
+            'lower_current_lr': 0.0,
+            'lower_approx_kl': 0.0,
         }
 
     @property

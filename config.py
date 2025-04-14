@@ -1,7 +1,7 @@
 def get_config():
     config = {
         # Simulation
-        "sweep": True,  # Use wandb sweeps for hyperparameter tuning
+        "sweep": False,  # Use wandb sweeps for hyperparameter tuning
         "evaluate": False, 
         "gui": False,  # Use SUMO GUI (default: False)
          
@@ -27,13 +27,13 @@ def get_config():
 
         # PPO Higher level agent params
         "higher_anneal_lr": True,  # Anneal learning rate
-        "higher_gae_lambda": 0.95,  # GAE lambda for higher-level agent
+        "higher_gae_lambda": 0.97,  # GAE lambda for higher-level agent
         "higher_max_grad_norm": 0.75,  # Maximum gradient norm for gradient clipping
         "higher_vf_clip_param": 0.5,  # Value function clipping parameter
-        "higher_update_freq": 16,  # Number of action timesteps between each policy update. A low value incurs high variance for design agent.
-        "higher_lr": 0.001,  # Learning rate for higher-level agent
+        "higher_update_freq": 32,  # Number of action timesteps between each policy update. A low value incurs high variance for design agent.
+        "higher_lr": 0.0001,  # Learning rate for higher-level agent
         "higher_gamma": 0.99,  # Discount factor for higher-level agent
-        "higher_K_epochs": 2,  # Number of epochs to update policy for higher-level agent
+        "higher_K_epochs": 4,  # Number of epochs to update policy for higher-level agent
         "higher_eps_clip": 0.2,  # Clip parameter for PPO for higher-level agent
         "higher_batch_size": 8,  # Batch size for higher-level agent
         "higher_dropout_rate": 0.25,  # Dropout rate for GATv2
