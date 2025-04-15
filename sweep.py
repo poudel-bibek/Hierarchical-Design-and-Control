@@ -54,7 +54,7 @@ class HyperParameterTuner:
                     'values': [0.97] #[0.95, 0.98, 0.99]
                 },
                 'higher_update_freq': {
-                    'values': [32, 64] #[8, 16, 32]
+                    'values': [32] #[8, 16, 32]
                 },
                 'higher_gamma': {
                     'values': [0.99] #, 0.99, 0.995]
@@ -81,7 +81,7 @@ class HyperParameterTuner:
                     'values': ["tanh", "relu"]
                 },
                 'initial_heads': { 
-                    'values': [4, 8]
+                    'values': [8, 16]
                 },
                 'higher_hidden_channels': { 
                     'values': [32, 64, 128]

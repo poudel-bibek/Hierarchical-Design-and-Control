@@ -30,7 +30,7 @@ def get_config():
         "higher_gae_lambda": 0.97,  # GAE lambda for higher-level agent
         "higher_max_grad_norm": 0.75,  # Maximum gradient norm for gradient clipping
         "higher_vf_clip_param": 0.5,  # Value function clipping parameter
-        "higher_update_freq": 16,  # Number of action timesteps between each policy update. A low value incurs high variance for design agent.
+        "higher_update_freq": 32,  # Number of action timesteps between each policy update. A low value incurs high variance for design agent.
         "higher_lr": 0.0001,  # Learning rate for higher-level agent
         "higher_gamma": 0.99,  # Discount factor for higher-level agent
         "higher_K_epochs": 4,  # Number of epochs to update policy for higher-level agent
@@ -71,7 +71,7 @@ def get_config():
         "lower_ent_coef": 0.01,  # Entropy coefficient
         "lower_vf_coef": 0.5,  # Value function coefficient
         "lower_batch_size": 64,  # Batch size
-        "lower_num_processes": 12,  # Number of parallel processes to use (agent has multiple workers)
+        "lower_num_processes": 10,  # Number of parallel processes to use (agent has multiple workers)
         "lower_model_size": "medium",  # Model size for CNN: 'small' or 'medium'
         "lower_dropout_rate": 0.25,  # Dropout rate for CNN
         "lower_action_dim": None, # will be set later

@@ -44,13 +44,11 @@ class ControlEnv(gym.Env):
         # Modify file paths to include the unique suffix. Each worker has their own environment and hence their own copy of the trips file.
         self.total_unique_ids_veh = []
         self.total_unique_ids_ped = []
-
         self.vehicle_output_trips = self.vehicle_output_trips.replace('.xml', f'{self.traci_label}.xml')
         self.pedestrian_output_trips = self.pedestrian_output_trips.replace('.xml', f'{self.traci_label}.xml')
 
         # This list has to be gotten from the latest network. Will be populated dynamically during reset
         self.tl_ids = ['cluster_172228464_482708521_9687148201_9687148202_#5more'] # Intersection will always be present.
-        
         self.previous_action = None
         self.num_proposals = 0
         # Number of simulation steps that should occur for each action. 
@@ -95,19 +93,28 @@ class ControlEnv(gym.Env):
 
     def _get_vehicle_direction(self, signal_state):
         # Define signal bits for left and right blinkers
-        VEH_SIGNAL_BLINKER_RIGHT = 0b1  # Bit 0
-        VEH_SIGNAL_BLINKER_LEFT = 0b10  # Bit 1
+        # VEH_SIGNAL_BLINKER_RIGHT = 0b1  # Bit 0
+        # VEH_SIGNAL_BLINKER_LEFT = 0b10  # Bit 1
 
         # Check if left blinker or right blinker is on
-        left_blinker = bool(signal_state & VEH_SIGNAL_BLINKER_LEFT)
-        right_blinker = bool(signal_state & VEH_SIGNAL_BLINKER_RIGHT)
+        left_blinker = bool(signal_state & 0b10)
+        right_blinker = bool(signal_state & 0b1)
 
-        if left_blinker and not right_blinker:
-            return "left"
-        elif right_blinker and not left_blinker:
-            return "right"
-        else:
-            return "center" # cases where both blinkers are on (emergency) or off
+        # if left_blinker and not right_blinker:
+        #     return "left"
+        # elif right_blinker and not left_blinker:
+        #     return "right"
+        # else:
+        #     return "center" # cases where both blinkers are on (emergency) or off
+        
+        # Direct mapping is faster than multiple conditionals
+        if left_blinker:
+            if right_blinker:
+                return "center"  # both on (emergency)
+            return "left"        # left only
+        elif right_blinker:
+            return "right"       # right only
+        return "center"          # both off
 
     def _step_operations(self, occupancy_map, print_map=False):
         """
@@ -171,24 +178,24 @@ class ControlEnv(gym.Env):
                             if distance > self.cutoff_distance:
                                 occupancy_map[tl_id]["vehicle"][group][direction_turn].remove(veh_id)
 
-        if print_map: 
-            print("\nOccupancy Map:")
-            for tl_id, tl_data in occupancy_map.items():
-                print(f"\nTraffic Light: {tl_id}")
-                for type in ["vehicle", "pedestrian"]:
-                    print(f"  {type.capitalize()}:")
+        # if print_map: 
+        #     print("\nOccupancy Map:")
+        #     for tl_id, tl_data in occupancy_map.items():
+        #         print(f"\nTraffic Light: {tl_id}")
+        #         for type in ["vehicle", "pedestrian"]:
+        #             print(f"  {type.capitalize()}:")
 
-                    for group in tl_data[type].keys():
-                        print(f"    {group.capitalize()}:")
-                        for direction, ids in tl_data[type][group].items():
-                            if type == "vehicle":
-                                print(f"      {direction.capitalize()}: {len(ids)} [{', '.join(ids)}]")
-                                for idx in ids:
-                                    distance = self._get_vehicle_distance_to_junction(tl_id, idx)
-                                    print(f"        {idx}: {distance:.2f}m")   
-                            else: 
-                                for area in ids.keys():
-                                    print(f"      {direction.capitalize(), area}: {len(ids[area])} [{', '.join(ids[area])}]")
+        #             for group in tl_data[type].keys():
+        #                 print(f"    {group.capitalize()}:")
+        #                 for direction, ids in tl_data[type][group].items():
+        #                     if type == "vehicle":
+        #                         print(f"      {direction.capitalize()}: {len(ids)} [{', '.join(ids)}]")
+        #                         for idx in ids:
+        #                             distance = self._get_vehicle_distance_to_junction(tl_id, idx)
+        #                             print(f"        {idx}: {distance:.2f}m")   
+        #                     else: 
+        #                         for area in ids.keys():
+        #                             print(f"      {direction.capitalize(), area}: {len(ids[area])} [{', '.join(ids[area])}]")
 
         return occupancy_map
 
@@ -1005,7 +1012,7 @@ class ControlEnv(gym.Env):
 
         # TODO: Should we consider vicinity for pedestrians as well?
         """
-        MWAQ_VEH_NORMALIZER = 8.0
+        MWAQ_VEH_NORMALIZER = 6.0
         MWAQ_PED_NORMALIZER = 10.0
         VEH_THRESHOLD_SPEED = 0.2 # m/s
         PED_THRESHOLD_SPEED = 0.5 # m/s # 0.1 is the threshold in SUMO by default (i.e. wait time is counted when speed is below 0.1 m/s)
@@ -1117,21 +1124,21 @@ class ControlEnv(gym.Env):
         # Clip the reward (In an appropriately chosen range) before returning. 
         clipped_reward = np.clip(reward, -100000, 100000)
 
-        if print_reward:
-            print(f"Intersection Reward Components:\n"
-                f"\tVehicle MWAQ: {norm_int_veh_mwaq} (exp: {final_int_veh})\n"
-                f"\tPedestrian MWAQ: {norm_int_ped_mwaq} (exp: {final_int_ped})")
+        # if print_reward:
+        #     print(f"Intersection Reward Components:\n"
+        #         f"\tVehicle MWAQ: {norm_int_veh_mwaq} (exp: {final_int_veh})\n"
+        #         f"\tPedestrian MWAQ: {norm_int_ped_mwaq} (exp: {final_int_ped})")
 
-            for tl_id in self.tl_ids[1:]:
-                print(f"Midblock TL {tl_id} Reward Components:\n"
-                    f"\tVehicle MWAQ: {norm_mb_veh_mwaq_per_tl[tl_id]}\n"
-                    f"\tPedestrian MWAQ: {norm_mb_ped_mwaq_per_tl[tl_id]}")
-            print(f"Midblock Overall L2 Norms:\n"
-                f"\tVehicle L2 Norm: {norm_mb_veh_l2} (exp: {final_mb_veh})\n"
-                f"\tPedestrian L2 Norm: {norm_mb_ped_l2} (exp: {final_mb_ped})")
-            # print(f"Switch penalty: {norm_switch_penalty}")
-            print(f"Total Reward: {reward}\n\n")
-            print(f"Clipped Reward: {clipped_reward}\n\n")
+        #     for tl_id in self.tl_ids[1:]:
+        #         print(f"Midblock TL {tl_id} Reward Components:\n"
+        #             f"\tVehicle MWAQ: {norm_mb_veh_mwaq_per_tl[tl_id]}\n"
+        #             f"\tPedestrian MWAQ: {norm_mb_ped_mwaq_per_tl[tl_id]}")
+        #     print(f"Midblock Overall L2 Norms:\n"
+        #         f"\tVehicle L2 Norm: {norm_mb_veh_l2} (exp: {final_mb_veh})\n"
+        #         f"\tPedestrian L2 Norm: {norm_mb_ped_l2} (exp: {final_mb_ped})")
+        #     # print(f"Switch penalty: {norm_switch_penalty}")
+        #     print(f"Total Reward: {reward}\n\n")
+        #     print(f"Clipped Reward: {clipped_reward}\n\n")
 
         return clipped_reward
 
