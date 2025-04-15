@@ -534,6 +534,7 @@ class ControlEnv(gym.Env):
         if tl: 
             if unsignalized: # Set all Midblock as green.
                 for i in range(self.steps_per_action): # Run simulation steps for the duration of the action
+                    self._update_pedestrian_existence_times()
                     current_phase = [1]*len(self.tl_ids) # random phase
                     # Midblock
                     for j in range(1, len(self.tl_ids)):
@@ -547,14 +548,17 @@ class ControlEnv(gym.Env):
 
                     # Count near-conflicts after each step (after each simulation step has been applied)
                     self.total_conflicts += self._count_near_conflicts(self.corrected_occupancy_map)
+                    self._get_pedestrian_arrival_times()
 
             else: # Apply action for TL (For evaluation)
                 for i in range(self.steps_per_action): # Run simulation steps for the duration of the action
+                    self._update_pedestrian_existence_times()
                     current_phase = [1]*len(self.tl_ids) # random phase
                     traci.simulationStep() # Step length is the simulation time that elapses when each time this is called.
                     self.step_count += 1
                     obs = self._get_observation(current_phase)
                     observation_buffer.append(obs)
+                    self._get_pedestrian_arrival_times()
         else:
             self.total_switches += sum(full_switch_state)
             # Only apply the action from policy if not TL.   
