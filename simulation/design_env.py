@@ -14,6 +14,7 @@ from .env_utils import *
 from .sim_setup import CONTROLLED_CROSSWALKS_DICT, return_horizontal_nodes
 from .worker import parallel_train_worker
 
+
 class DesignEnv(gym.Env):
     """
     Higher level agent.
@@ -657,6 +658,7 @@ class DesignEnv(gym.Env):
         #print(f"\nAfter cleanup: {len(cleanup_graph.nodes())} nodes, {len(cleanup_graph.edges())} edges\n")
         return cleanup_graph
     
+
     def _convert_to_torch_geometric(self, graph):
         """
         Converts the NetworkX graph to a PyTorch Geometric Data object.
@@ -671,8 +673,7 @@ class DesignEnv(gym.Env):
             data = graph.nodes[node_id]
             node_features.append([data['pos'][0], data['pos'][1]])
 
-        x = torch.tensor(node_features, dtype=torch.float)
-        x = self._normalize_features(x)
+        data, range_x, range_y = self._normalize_features(torch.tensor(node_features, dtype=torch.float))
         
         # Extract edge indices and attributes
         edge_index = []
@@ -680,20 +681,30 @@ class DesignEnv(gym.Env):
         for source_id, target_id, edge_data in graph.edges(data=True):
             source = node_id_to_index[source_id]
             target = node_id_to_index[target_id]
+
+            # The pedestrian network is undirected.
+            # To enable bidirectional message passing, we need to add both directions.
             edge_index.append([source, target])
-            edge_index.append([target, source]) # Add reverse edge (for undirected graph)
+            edge_index.append([target, source]) 
 
             # Get source node's x coordinate and add it to edge attribute.
-            # TODO: come back to this.
-            source_x = (graph.nodes[source_id]['pos'][0] - self.normalizer_x['min']) / (self.normalizer_x['max'] - self.normalizer_x['min'])
-            edge_attr.append([edge_data['width'], source_x])  # Add source x-coordinate alongside width
-            edge_attr.append([edge_data['width'], source_x])  # For the reverse edge as well.
-        
+            # # TODO: come back to this. DONE.
+            # source_x = (graph.nodes[source_id]['pos'][0] - self.normalizer_x['min']) / (self.normalizer_x['max'] - self.normalizer_x['min'])
+            # edge_attr.append([edge_data['width'], source_x])  # Add source x-coordinate alongside width
+            # edge_attr.append([edge_data['width'], source_x])  # For the reverse edge as well.
+
+            # Edge length (normalized)
+            norm_source_x, norm_source_y = (graph.nodes[source_id]['pos'][0]- self.normalizer_x['min'])/ range_x, (graph.nodes[source_id]['pos'][1]- self.normalizer_y['min'])/ range_y
+            norm_target_x, norm_target_y = (graph.nodes[target_id]['pos'][0]- self.normalizer_x['min'])/ range_x, (graph.nodes[target_id]['pos'][1]- self.normalizer_y['min'])/ range_y
+            edge_length = np.linalg.norm(np.array([norm_source_x, norm_source_y]) - np.array([norm_target_x, norm_target_y]))
+            edge_attr.append([edge_data['width'], edge_length])
+            edge_attr.append([edge_data['width'], edge_length])
+            
         edge_index = torch.tensor(edge_index, dtype=torch.long).t().contiguous()
         edge_attr = torch.tensor(edge_attr, dtype=torch.float)
 
         # Create PyTorch Geometric Data object
-        return Data(x=x, edge_index=edge_index, edge_attr=edge_attr)
+        return Data(x=data, edge_index=edge_index, edge_attr=edge_attr)
 
     def _normalize_features(self, features):
         """
@@ -703,11 +714,12 @@ class DesignEnv(gym.Env):
         """
         x_coords = features[:, 0]
         y_coords = features[:, 1]
+        range_x = self.normalizer_x['max'] - self.normalizer_x['min']
+        range_y = self.normalizer_y['max'] - self.normalizer_y['min']
+        normalized_x = (x_coords - self.normalizer_x['min']) / range_x
+        normalized_y = (y_coords - self.normalizer_y['min']) / range_y
 
-        normalized_x = (x_coords - self.normalizer_x['min']) / (self.normalizer_x['max'] - self.normalizer_x['min'])
-        normalized_y = (y_coords - self.normalizer_y['min']) / (self.normalizer_y['max'] - self.normalizer_y['min'])
-
-        return torch.stack([normalized_x, normalized_y], dim=1)
+        return torch.stack([normalized_x, normalized_y], dim=1), range_x, range_y
     
     def _get_original_veh_edge_config(self):
         """

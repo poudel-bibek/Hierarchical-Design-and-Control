@@ -41,9 +41,10 @@ def get_config():
         "higher_ent_coef": 0.01,  # Entropy coefficient for higher-level agent
         "higher_vf_coef": 0.5,  # Value function coefficient for higher-level agent
         "higher_in_channels": 2,  # Number of input features per node (x and y coordinates)
-        'higher_out_channels': 32, # Number of channels at the ouput of last GATv2 layer
-        'higher_hidden_channels': 64, # Number of hidden channels in between two GATv2 layers
+        "higher_hidden_channels": 64, # Number of hidden channels in between two GATv2 layers
+        'higher_out_channels': 64, # Number of channels at the ouput of last GATv2 layer
         "higher_activation": "tanh",  # Policy activation function
+        "higher_k": 12, # Number of nodes to keep for each graph
 
         # Design specific parameters
         "min_thickness": 1.0,  # Minimum thickness for crosswalks
@@ -150,6 +151,7 @@ def classify_and_return_args(train_config, device):
         'model_size': train_config['higher_model_size'],
         'dropout_rate': train_config['higher_dropout_rate'],
         'run_dir': None, # Will be set later.
+        'k': train_config['higher_k'],
     }
 
     lower_model_kwargs = { 

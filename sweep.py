@@ -81,14 +81,9 @@ class HyperParameterTuner:
                     'values': ["tanh", "relu"]
                 },
                 'initial_heads': { 
-                    'values': [8, 16]
+                    'values': [8]
                 },
-                'higher_hidden_channels': { 
-                    'values': [32, 64, 128]
-                },
-                'higher_out_channels': { 
-                    'values': [16, 32, 64]
-                },
+                
 
                 # Lower Level Agent (Control)
                 # 'lower_lr': {
