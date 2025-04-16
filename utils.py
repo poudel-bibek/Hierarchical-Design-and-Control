@@ -200,7 +200,7 @@ def scale_demand(input_file, output_file, scale_factor, demand_type):
     print(f"{demand_type.capitalize()} demand scaled by factor {scale_factor}.") # Output written to {output_file}")
     
     # Wait for the file writing operations to finish (it could be large)
-    time.sleep(2)
+    time.sleep(1)
     
 def visualize_observation(observation):
     """

@@ -406,6 +406,8 @@ class GAT_v2_ActorCritic(nn.Module):
         states_batch = states_batch.to(device)
         y = self.conv1(states_batch.x, states_batch.edge_index, states_batch.edge_attr)
         y = self.activation(y)
+        print(f"\nEdge attributes: {states_batch.edge_attr}")
+        print(f"\nAfter conv1: y.shape: {y.shape}")
 
         # The same edge_attr is used for both the first and second GAT layers. 
         # Preserving edge information: By passing the edge attributes to each layer, the model can maintain information about the edge features throughout the network depth. 
@@ -413,15 +415,15 @@ class GAT_v2_ActorCritic(nn.Module):
         # Residual-like connections for edges: In a sense, passing edge features to each layer creates a form of residual connection for edge information.         
         y = self.conv2(y, states_batch.edge_index, states_batch.edge_attr)
         y = self.activation(y)
-
+        print(f"\nAfter conv2: y.shape: {y.shape}")
         y = self.readout_layer(y, states_batch.batch)
-
+        print(f"\nAfter readout: y.shape: {y.shape}")
         # Shared MLP layers
         shared_y = self.actor_shared_layers(y)
-
+        print(f"\nAfter shared MLP: shared_y.shape: {shared_y.shape}")
         # GMM parameters. Constrain so that the GMM is within the boundary.
         means = torch.sigmoid(self.actor_means(self.actor_means_layers(shared_y)))  # Constrain means to [0,1]
-        
+        print(f"\nAfter means: means.shape: {means.shape}")
         # Scale and shift tanh to get log_stds in [-2.30, 0] range
         # tanh outputs [-1, 1], so we scale by 0.693 and shift by -2.303 to get [-3.0, -0.693], exp(-3.0) ≈ 0.05, exp(-0.693) ≈ 0.5
         # log_stds = torch.tanh(self.actor_log_std(self.actor_log_std_layers(shared_y))) * 0.693 - 2.303  # Results in std range [0.05, 0.5]

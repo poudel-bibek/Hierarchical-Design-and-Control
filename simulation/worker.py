@@ -89,7 +89,6 @@ def parallel_train_worker(rank,
     finally:
         if 'worker_env' in locals() and worker_env is not None:
             worker_env.close()
-            # time.sleep(5) # Keep this outside the finally block if it's not essential for cleanup
             del worker_env
             print(f"Worker {rank} environment closed.")
 
