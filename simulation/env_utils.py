@@ -350,8 +350,10 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
 
         # Handle top edges and top connection
         for edge_id, edge_data in list(iterative_edges['top'].items()): # convert to list first 
+            min_x = min(edge_data['from_x'], edge_data['to_x']) - TOL
+            max_x = max(edge_data['from_x'], edge_data['to_x']) + TOL
             # The directions are reversed in top and bottom. For top, greater than `to` and less than `from`.
-            if ((edge_data['to_x'] - TOL) < x_coord < (edge_data['from_x'] + TOL) and edge_id not in edges_to_remove): 
+            if (min_x < x_coord < max_x and edge_id not in edges_to_remove): 
 
                 # print(f"Top edge {edge_id} intersects mnode {m_node} at x={x_coord:.2f}.")
                 edges_to_remove.append(edge_id)
@@ -417,8 +419,10 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
 
         # Check bottom edges and bottom connection
         for edge_id, edge_data in list(iterative_edges['bottom'].items()):
+            min_x = min(edge_data['from_x'], edge_data['to_x']) - TOL
+            max_x = max(edge_data['from_x'], edge_data['to_x']) + TOL
             # For bottom, greater than `from` and less than `to`.
-            if ((edge_data['from_x'] - TOL) < x_coord < (edge_data['to_x'] + TOL) and edge_id not in edges_to_remove):
+            if (min_x < x_coord < max_x and edge_id not in edges_to_remove):
 
                 # print(f"Bottom edge {edge_id} intersects mnode {m_node} at x={x_coord:.2f}.")
                 edges_to_remove.append(edge_id) # Need to check both in top and bottom.
