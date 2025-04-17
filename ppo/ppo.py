@@ -243,8 +243,8 @@ class PPO:
                 # Minimize policy loss and value loss, maximize entropy loss.
                 # The signs are negated (wrt to the equation in the paper). This ensures that the optimizer maximizes the PPO objective by minimizing the loss function. It is correct and necessary.
                 loss = -policy_loss + self.vf_coef * value_loss - self.ent_coef * entropy_loss # Equation 9 in the paper
-                print(f"\nTotal Loss: {loss.item()}")
-                print("--------------------------------")
+                # print(f"\nTotal Loss: {loss.item()}")
+                # print("--------------------------------")
                 # Take gradient step
                 self.optimizer.zero_grad()
                 loss.backward()
@@ -261,9 +261,9 @@ class PPO:
                 # How much the new policy diverges from the old policy.
                 with torch.no_grad():
                     approx_kl = ((ratios - 1) - logratios).mean()
-                    print(f"\nApprox KL: {approx_kl.item()}")
-                    print("--------------------------------\n")
-                    # TODO: Early stopping (at the minibatch level) based on KL divergence? Do it in main.
+                    # print(f"\nApprox KL: {approx_kl.item()}")
+                    # print("--------------------------------\n")
+                    # # TODO: Early stopping (at the minibatch level) based on KL divergence? Do it in main.
 
 
         num_batches = len(dataloader)

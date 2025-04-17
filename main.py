@@ -245,7 +245,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
                 "higher/losses/entropy_loss": higher_loss['entropy_loss'],
                 "higher/losses/total_loss": higher_loss['total_loss'],
                 "higher/approx_kl": higher_loss['approx_kl'],
-                "evals/higher_avg_ped_arrival": eval_ped_avg_arrival,
+                "evals/avg_ped_arrival": eval_ped_avg_arrival,
 
                 "lower/avg_reward": info['lower_avg_reward'],
                 "lower/update_count": info['lower_update_count'],
@@ -405,7 +405,7 @@ def eval(design_args,
 
         while active_eval_workers:
             worker_demand_scale, result = eval_queue.get() #timeout=60) # Result is obtained after all iterations are complete
-            print(f"\nResult from worker with demand scale: {worker_demand_scale}: {result}\n")
+            # print(f"\nResult from worker with demand scale: {worker_demand_scale}: {result}\n")
             all_results[worker_demand_scale] = result
             active_eval_workers.remove(demand_scale_to_rank[worker_demand_scale])
 
