@@ -211,24 +211,24 @@ class ControlEnv(gym.Env):
         #                     if distance > self.cutoff_distance:
         #                         occupancy_map[tl_id]["vehicle"][group][direction_turn].remove(veh_id)
 
-        if print_map: 
-            print("\nOccupancy Map:")
-            for tl_id, tl_data in occupancy_map.items():
-                print(f"\nTraffic Light: {tl_id}")
-                for type in ["vehicle", "pedestrian"]:
-                    print(f"  {type.capitalize()}:")
+        # if print_map: 
+        #     print("\nOccupancy Map:")
+        #     for tl_id, tl_data in occupancy_map.items():
+        #         print(f"\nTraffic Light: {tl_id}")
+        #         for type in ["vehicle", "pedestrian"]:
+        #             print(f"  {type.capitalize()}:")
 
-                    for group in tl_data[type].keys():
-                        print(f"    {group.capitalize()}:")
-                        for direction, ids in tl_data[type][group].items():
-                            if type == "vehicle":
-                                print(f"      {direction.capitalize()}: {len(ids)} [{', '.join(ids)}]")
-                                for idx in ids:
-                                    distance = self._get_vehicle_distance_to_junction(tl_id, idx)
-                                    print(f"        {idx}: {distance:.2f}m")   
-                            else: 
-                                for area in ids.keys():
-                                    print(f"      {direction.capitalize(), area}: {len(ids[area])} [{', '.join(ids[area])}]")
+        #             for group in tl_data[type].keys():
+        #                 print(f"    {group.capitalize()}:")
+        #                 for direction, ids in tl_data[type][group].items():
+        #                     if type == "vehicle":
+        #                         print(f"      {direction.capitalize()}: {len(ids)} [{', '.join(ids)}]")
+        #                         for idx in ids:
+        #                             distance = self._get_vehicle_distance_to_junction(tl_id, idx)
+        #                             print(f"        {idx}: {distance:.2f}m")   
+        #                     else: 
+        #                         for area in ids.keys():
+        #                             print(f"      {direction.capitalize(), area}: {len(ids[area])} [{', '.join(ids[area])}]")
 
         return occupancy_map
     
@@ -822,62 +822,62 @@ class ControlEnv(gym.Env):
         # Normalize with running mean and std
         observation = np.asarray(observation, dtype=np.float32)
 
-        # Breakdown print of observation components with sub-step info
-        # Determine sub-step within the current action if possible
-        try:
-            substep = (self.step_count - 1) % self.steps_per_action + 1
-            print(f"\nSub-step within action: {substep}/{self.steps_per_action}")
-        except Exception:
-            pass
-        offset = 0
-        # Phase information
-        phase_len = len(current_phase)
-        print("Phase:", ' '.join(str(int(x)) for x in observation[offset:offset+phase_len]))
-        offset += phase_len
-        # Intersection vehicle incoming
-        inc_len = len(self.direction_turn_intersection_incoming)
-        inc_vals = observation[offset:offset+inc_len]
-        print("Intersection veh incoming:", ' '.join(f"{x:.4f}" for x in inc_vals))
-        offset += inc_len
-        # Intersection vehicle inside
-        inside_len = len(self.direction_turn_intersection_inside)
-        inside_vals = observation[offset:offset+inside_len]
-        print("Intersection veh inside:", ' '.join(f"{x:.4f}" for x in inside_vals))
-        offset += inside_len
-        # Intersection vehicle outgoing
-        out_len = len(self.directions)
-        out_vals = observation[offset:offset+out_len]
-        print("Intersection veh outgoing:", ' '.join(f"{x:.4f}" for x in out_vals))
-        offset += out_len
-        # Intersection pedestrian incoming
-        ped_in_len = len(self.directions)
-        ped_in_vals = observation[offset:offset+ped_in_len]
-        print("Intersection ped incoming:", ' '.join(f"{x:.4f}" for x in ped_in_vals))
-        offset += ped_in_len
-        # Intersection pedestrian outgoing
-        ped_out_len = len(self.directions)
-        ped_out_vals = observation[offset:offset+ped_out_len]
-        print("Intersection ped outgoing:", ' '.join(f"{x:.4f}" for x in ped_out_vals))
-        offset += ped_out_len
-        # Midblock traffic lights breakdown
-        for idx_tl in range(1, len(self.tl_ids)):
-            tl_id = self.tl_ids[idx_tl]
-            # Vehicles incoming
-            mb_inc = observation[offset:offset+len(self.direction_turn_midblock)]
-            offset += len(self.direction_turn_midblock)
-            # Vehicles inside
-            mb_ins = observation[offset:offset+len(self.direction_turn_midblock)]
-            offset += len(self.direction_turn_midblock)
-            # Vehicles outgoing
-            mb_out = observation[offset:offset+len(self.direction_turn_midblock)]
-            offset += len(self.direction_turn_midblock)
-            # Pedestrians incoming
-            mb_p_in = observation[offset]
-            offset += 1
-            # Pedestrians outgoing
-            mb_p_out = observation[offset]
-            offset += 1
-            print(f"Midblock {tl_id}: veh inc [{' '.join(f'{x:.4f}' for x in mb_inc)}] | veh inside [{' '.join(f'{x:.4f}' for x in mb_ins)}] | veh out [{' '.join(f'{x:.4f}' for x in mb_out)}] | ped inc {mb_p_in:.4f} | ped out {mb_p_out:.4f}")
+        # # Breakdown print of observation components with sub-step info
+        # # Determine sub-step within the current action if possible
+        # try:
+        #     substep = (self.step_count - 1) % self.steps_per_action + 1
+        #     print(f"\nSub-step within action: {substep}/{self.steps_per_action}")
+        # except Exception:
+        #     pass
+        # offset = 0
+        # # Phase information
+        # phase_len = len(current_phase)
+        # print("Phase:", ' '.join(str(int(x)) for x in observation[offset:offset+phase_len]))
+        # offset += phase_len
+        # # Intersection vehicle incoming
+        # inc_len = len(self.direction_turn_intersection_incoming)
+        # inc_vals = observation[offset:offset+inc_len]
+        # print("Intersection veh incoming:", ' '.join(f"{x:.4f}" for x in inc_vals))
+        # offset += inc_len
+        # # Intersection vehicle inside
+        # inside_len = len(self.direction_turn_intersection_inside)
+        # inside_vals = observation[offset:offset+inside_len]
+        # print("Intersection veh inside:", ' '.join(f"{x:.4f}" for x in inside_vals))
+        # offset += inside_len
+        # # Intersection vehicle outgoing
+        # out_len = len(self.directions)
+        # out_vals = observation[offset:offset+out_len]
+        # print("Intersection veh outgoing:", ' '.join(f"{x:.4f}" for x in out_vals))
+        # offset += out_len
+        # # Intersection pedestrian incoming
+        # ped_in_len = len(self.directions)
+        # ped_in_vals = observation[offset:offset+ped_in_len]
+        # print("Intersection ped incoming:", ' '.join(f"{x:.4f}" for x in ped_in_vals))
+        # offset += ped_in_len
+        # # Intersection pedestrian outgoing
+        # ped_out_len = len(self.directions)
+        # ped_out_vals = observation[offset:offset+ped_out_len]
+        # print("Intersection ped outgoing:", ' '.join(f"{x:.4f}" for x in ped_out_vals))
+        # offset += ped_out_len
+        # # Midblock traffic lights breakdown
+        # for idx_tl in range(1, len(self.tl_ids)):
+        #     tl_id = self.tl_ids[idx_tl]
+        #     # Vehicles incoming
+        #     mb_inc = observation[offset:offset+len(self.direction_turn_midblock)]
+        #     offset += len(self.direction_turn_midblock)
+        #     # Vehicles inside
+        #     mb_ins = observation[offset:offset+len(self.direction_turn_midblock)]
+        #     offset += len(self.direction_turn_midblock)
+        #     # Vehicles outgoing
+        #     mb_out = observation[offset:offset+len(self.direction_turn_midblock)]
+        #     offset += len(self.direction_turn_midblock)
+        #     # Pedestrians incoming
+        #     mb_p_in = observation[offset]
+        #     offset += 1
+        #     # Pedestrians outgoing
+        #     mb_p_out = observation[offset]
+        #     offset += 1
+        #     print(f"Midblock {tl_id}: veh inc [{' '.join(f'{x:.4f}' for x in mb_inc)}] | veh inside [{' '.join(f'{x:.4f}' for x in mb_ins)}] | veh out [{' '.join(f'{x:.4f}' for x in mb_out)}] | ped inc {mb_p_in:.4f} | ped out {mb_p_out:.4f}")
         
         return observation
 
@@ -1640,8 +1640,8 @@ class ControlEnv(gym.Env):
                     self.tl_lane_dict[tl_id]["pedestrian"]["incoming"]["north"]["main"].append(top_edge)
                     self.tl_lane_dict[tl_id]["pedestrian"]["incoming"]["north"]["main"].append(bottom_edge)
         
-        print("TL lane dict:")
-        pprint.pprint(self.tl_lane_dict)
+        # print("TL lane dict:")
+        # pprint.pprint(self.tl_lane_dict)
 
     def close(self):
         if self.sumo_running:

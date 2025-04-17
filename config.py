@@ -3,7 +3,7 @@ def get_config():
         # Simulation
         "sweep": True,  # Use wandb sweeps for hyperparameter tuning
         "evaluate": False, 
-        "gui": True,  # Use SUMO GUI (default: False)
+        "gui": False,  # Use SUMO GUI (default: False)
          
         "vehicle_input_trips": "./simulation/original_vehtrips.xml",  # Original Input trips file
         "vehicle_output_trips": "./simulation/scaled_trips/scaled_vehtrips.xml",  # Output trips file
@@ -72,7 +72,7 @@ def get_config():
         "lower_ent_coef": 0.01,  # Entropy coefficient
         "lower_vf_coef": 0.5,  # Value function coefficient
         "lower_batch_size": 64,  # Batch size
-        "lower_num_processes": 1,  # Number of parallel processes to use (agent has multiple workers)
+        "lower_num_processes": 10,  # Number of parallel processes to use (agent has multiple workers)
         "lower_model_size": "medium",  # Model size for CNN: 'small' or 'medium'
         "lower_dropout_rate": 0.25,  # Dropout rate for CNN
         "lower_action_dim": None, # will be set later
