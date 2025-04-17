@@ -586,7 +586,7 @@ class ControlEnv(gym.Env):
             obs = self._get_observation(current_phase)
             observation_buffer.append(obs)
             self._get_pedestrian_arrival_times()
-            time.sleep(1.0)
+            # time.sleep(1.0)
             
         # outside the loop
         # Do before reward calculation

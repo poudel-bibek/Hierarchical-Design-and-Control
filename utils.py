@@ -197,7 +197,7 @@ def scale_demand(input_file, output_file, scale_factor, demand_type):
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write(pretty_xml_str)
     
-    print(f"{demand_type.capitalize()} demand scaled by factor {scale_factor}.") # Output written to {output_file}")
+    # print(f"{demand_type.capitalize()} demand scaled by factor {scale_factor}.") # Output written to {output_file}")
     
     # Wait for the file writing operations to finish (it could be large)
     time.sleep(1)

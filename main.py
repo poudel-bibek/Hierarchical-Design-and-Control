@@ -360,13 +360,13 @@ def eval(design_args,
         # Convert tensor action to proposals
         merged_proposals = merged_proposals.cpu().numpy()  # Convert to numpy array if it's not already
         proposals = merged_proposals[0][:num_proposals]  # Only consider the actual proposals
-        print(f"\nProposals: {proposals}")
+        # print(f"\nProposals: {proposals}")
         
         # Apply the action to output the latest SUMO network file
         higher_env._apply_action(proposals, iteration) # Pass the actual proposals derived above
         sumo_net_file = higher_env.current_net_file_path #f"{higher_env.network_dir}/network_iteration_{iteration}.net.xml"
 
-    print(f"\nSUMO network file: {sumo_net_file}")
+    # print(f"\nSUMO network file: {sumo_net_file}")
     create_new_sumocfg(higher_ppo_args['model_kwargs']['run_dir'], iteration)
 
     # number of times the n_workers have to be repeated to cover all eval demands
