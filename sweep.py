@@ -41,7 +41,7 @@ class HyperParameterTuner:
 
             'method': method, 
             'metric': {
-                'name': 'avg_ped_arrival', # Using avg_eval like in bayes
+                'name': 'evals/avg_ped_arrival', # Using avg_eval like in bayes
                 'goal': 'minimize'  # Minimize average evaluation time
                 },
 
