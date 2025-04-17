@@ -1,17 +1,17 @@
 import math
 import time 
 import traci
-import torch
+import sumolib
 import random
 import gymnasium as gym
 import numpy as np
+import pprint
 from utils import scale_demand
 from .env_utils import *
 from .sim_setup import *
 
 class ControlEnv(gym.Env):
-    
-    def __init__(self, control_args, run_dir, worker_id=None, network_iteration=None):
+    def __init__(self, control_args, run_dir, worker_id=None, network_iteration=None, current_net_file_path=None):
         """
         Lower level agent.
         Parallelizable environment, includes features:  
@@ -46,6 +46,8 @@ class ControlEnv(gym.Env):
         self.total_unique_ids_ped = []
         self.vehicle_output_trips = self.vehicle_output_trips.replace('.xml', f'{self.traci_label}.xml')
         self.pedestrian_output_trips = self.pedestrian_output_trips.replace('.xml', f'{self.traci_label}.xml')
+        if current_net_file_path:
+            self.net = sumolib.net.readNet(current_net_file_path)
 
         # This list has to be gotten from the latest network. Will be populated dynamically during reset
         self.tl_ids = ['cluster_172228464_482708521_9687148201_9687148202_#5more'] # Intersection will always be present.
@@ -209,24 +211,24 @@ class ControlEnv(gym.Env):
         #                     if distance > self.cutoff_distance:
         #                         occupancy_map[tl_id]["vehicle"][group][direction_turn].remove(veh_id)
 
-        # if print_map: 
-        #     print("\nOccupancy Map:")
-        #     for tl_id, tl_data in occupancy_map.items():
-        #         print(f"\nTraffic Light: {tl_id}")
-        #         for type in ["vehicle", "pedestrian"]:
-        #             print(f"  {type.capitalize()}:")
+        if print_map: 
+            print("\nOccupancy Map:")
+            for tl_id, tl_data in occupancy_map.items():
+                print(f"\nTraffic Light: {tl_id}")
+                for type in ["vehicle", "pedestrian"]:
+                    print(f"  {type.capitalize()}:")
 
-        #             for group in tl_data[type].keys():
-        #                 print(f"    {group.capitalize()}:")
-        #                 for direction, ids in tl_data[type][group].items():
-        #                     if type == "vehicle":
-        #                         print(f"      {direction.capitalize()}: {len(ids)} [{', '.join(ids)}]")
-        #                         for idx in ids:
-        #                             distance = self._get_vehicle_distance_to_junction(tl_id, idx)
-        #                             print(f"        {idx}: {distance:.2f}m")   
-        #                     else: 
-        #                         for area in ids.keys():
-        #                             print(f"      {direction.capitalize(), area}: {len(ids[area])} [{', '.join(ids[area])}]")
+                    for group in tl_data[type].keys():
+                        print(f"    {group.capitalize()}:")
+                        for direction, ids in tl_data[type][group].items():
+                            if type == "vehicle":
+                                print(f"      {direction.capitalize()}: {len(ids)} [{', '.join(ids)}]")
+                                for idx in ids:
+                                    distance = self._get_vehicle_distance_to_junction(tl_id, idx)
+                                    print(f"        {idx}: {distance:.2f}m")   
+                            else: 
+                                for area in ids.keys():
+                                    print(f"      {direction.capitalize(), area}: {len(ids[area])} [{', '.join(ids[area])}]")
 
         return occupancy_map
     
@@ -584,6 +586,7 @@ class ControlEnv(gym.Env):
             obs = self._get_observation(current_phase)
             observation_buffer.append(obs)
             self._get_pedestrian_arrival_times()
+            time.sleep(1.0)
             
         # outside the loop
         # Do before reward calculation
@@ -708,7 +711,7 @@ class ControlEnv(gym.Env):
         # print(f"Full switch state: {full_switch_state}\n")
         return switch_state, []
 
-    def _get_observation(self, current_phase, print_map=False):
+    def _get_observation(self, current_phase, print_map=True):
         """
         * Per step observation size = 120
         * Assume max_proposals = 10
@@ -818,7 +821,64 @@ class ControlEnv(gym.Env):
         
         # Normalize with running mean and std
         observation = np.asarray(observation, dtype=np.float32)
-        # print(f"\nObservation: shape: {observation.shape}") 
+
+        # Breakdown print of observation components with sub-step info
+        # Determine sub-step within the current action if possible
+        try:
+            substep = (self.step_count - 1) % self.steps_per_action + 1
+            print(f"\nSub-step within action: {substep}/{self.steps_per_action}")
+        except Exception:
+            pass
+        offset = 0
+        # Phase information
+        phase_len = len(current_phase)
+        print("Phase:", ' '.join(str(int(x)) for x in observation[offset:offset+phase_len]))
+        offset += phase_len
+        # Intersection vehicle incoming
+        inc_len = len(self.direction_turn_intersection_incoming)
+        inc_vals = observation[offset:offset+inc_len]
+        print("Intersection veh incoming:", ' '.join(f"{x:.4f}" for x in inc_vals))
+        offset += inc_len
+        # Intersection vehicle inside
+        inside_len = len(self.direction_turn_intersection_inside)
+        inside_vals = observation[offset:offset+inside_len]
+        print("Intersection veh inside:", ' '.join(f"{x:.4f}" for x in inside_vals))
+        offset += inside_len
+        # Intersection vehicle outgoing
+        out_len = len(self.directions)
+        out_vals = observation[offset:offset+out_len]
+        print("Intersection veh outgoing:", ' '.join(f"{x:.4f}" for x in out_vals))
+        offset += out_len
+        # Intersection pedestrian incoming
+        ped_in_len = len(self.directions)
+        ped_in_vals = observation[offset:offset+ped_in_len]
+        print("Intersection ped incoming:", ' '.join(f"{x:.4f}" for x in ped_in_vals))
+        offset += ped_in_len
+        # Intersection pedestrian outgoing
+        ped_out_len = len(self.directions)
+        ped_out_vals = observation[offset:offset+ped_out_len]
+        print("Intersection ped outgoing:", ' '.join(f"{x:.4f}" for x in ped_out_vals))
+        offset += ped_out_len
+        # Midblock traffic lights breakdown
+        for idx_tl in range(1, len(self.tl_ids)):
+            tl_id = self.tl_ids[idx_tl]
+            # Vehicles incoming
+            mb_inc = observation[offset:offset+len(self.direction_turn_midblock)]
+            offset += len(self.direction_turn_midblock)
+            # Vehicles inside
+            mb_ins = observation[offset:offset+len(self.direction_turn_midblock)]
+            offset += len(self.direction_turn_midblock)
+            # Vehicles outgoing
+            mb_out = observation[offset:offset+len(self.direction_turn_midblock)]
+            offset += len(self.direction_turn_midblock)
+            # Pedestrians incoming
+            mb_p_in = observation[offset]
+            offset += 1
+            # Pedestrians outgoing
+            mb_p_out = observation[offset]
+            offset += 1
+            print(f"Midblock {tl_id}: veh inc [{' '.join(f'{x:.4f}' for x in mb_inc)}] | veh inside [{' '.join(f'{x:.4f}' for x in mb_ins)}] | veh out [{' '.join(f'{x:.4f}' for x in mb_out)}] | ped inc {mb_p_in:.4f} | ped out {mb_p_out:.4f}")
+        
         return observation
 
     def _apply_action(self, action, current_action_step, switch_state):
@@ -1417,6 +1477,37 @@ class ControlEnv(gym.Env):
 
         return observation, {} # info is empty
 
+    def _straight_links(self, ctrl_links):
+        west_in = east_in = west_out = east_out = None
+
+        for phase in ctrl_links:
+            for frm, to, via in phase:
+                if via == "" or not (frm.endswith("_0") and to.endswith("_0")):
+                    continue                        # skip ped rows & turns
+
+                if frm.startswith("-"):            # vehicle coming from WEST
+                    west_in  = frm
+                    west_out = to                  # <-- keep WEST tag
+                else:                              # coming from EAST
+                    east_in  = frm
+                    east_out = to                  # <-- keep EAST tag
+
+        if None in (west_in, east_in, west_out, east_out):
+            raise RuntimeError("Could not find all four straight vehicle links")
+
+        return west_in, east_in, west_out, east_out
+
+    # helper – returns True if the lane is “verticalish”
+    def _is_vertical(self, lane, thresh=30):                  # thresh = degrees from 90°
+        x0, y0 = lane.getShape()[0]
+        x1, y1 = lane.getShape()[-1]
+        dx, dy = x1 - x0, y1 - y0
+        if dx == dy == 0:                               # zero‑length, ignore
+            return True
+        angle = abs(math.degrees(math.atan2(dy, dx)))   #   0° = east, 90° = north
+        angle = min(angle, 180 - angle)                 # mirror so 90° is “up/down”
+        return angle >= 90 - thresh                     # within thresh of vertical
+
     def dynamically_populate_edges_lanes(self, extreme_edge_dict, real_world=False):
         """
         Get midblock TLs lanes/edges for occupancy map to use. i.e., update self.tl_lane_dict with latest network iteration.
@@ -1428,7 +1519,6 @@ class ControlEnv(gym.Env):
         - Sometimes the returned controlled links are empty. Because for pedestrians, we are using a single direction, the other direction is not present.
         """
     
-
         # For each midblock traffic light (everything except the intersection)
         for tl_id in self.tl_ids:
             if tl_id == 'cluster_172228464_482708521_9687148201_9687148202_#5more':
@@ -1441,22 +1531,23 @@ class ControlEnv(gym.Env):
             if tl_id in self.tl_lane_dict:
                 continue
             else: 
-                # controlled_lanes = traci.trafficlight.getControlledLanes(tl_id)
                 controlled_links = traci.trafficlight.getControlledLinks(tl_id)
+                west_in, east_in, west_out, east_out = self._straight_links(controlled_links)
+
                 tl_internal = f":{tl_id}"
                 self.tl_lane_dict[tl_id] = {
                     "vehicle": {
                         "incoming": {
-                            "west-straight": [controlled_links[0][0][0]],
-                            "east-straight": [controlled_links[1][0][0]]
+                            "west-straight": [west_in],
+                            "east-straight": [east_in]
                         },
                         "inside": {
                             "west-straight": [f"{tl_internal}_0"],
                             "east-straight": [f"{tl_internal}_1"]
                         },
                         "outgoing": {
-                            "west-straight": [controlled_links[0][0][1]],
-                            "east-straight": [controlled_links[1][0][1]]
+                            "west-straight": [west_out],
+                            "east-straight": [east_out]
                         }
                     },
                     "pedestrian": {
@@ -1473,10 +1564,60 @@ class ControlEnv(gym.Env):
                     }
                 }
                 
-                # TODO: For vehicle incoming + outgoing, keep adding until the total length is near cutoff distance or we encounter another TL. 
-                # Do this for east-straight of the intersection as well.
-                # For pedestrians, add just one immediate lane on each side of the crossing. 
-                
+                # TODO: For ONLY vehicle incoming + outgoing, keep adding until the total length becomes just higher than cutoff distance or we encounter another TL. DONE
+                # Do this for east-straight (only for outgoing) of the intersection as well.
+                for group in ["incoming", "outgoing"]:
+                    for dir_key in ["west-straight", "east-straight"]:
+
+                        expanded   = self.tl_lane_dict[tl_id]["vehicle"][group][dir_key].copy()
+                        seed_sign  = expanded[0].split('_')[0].startswith('-')   # True if '‑'
+                        total_dist = self.net.getLane(expanded[-1]).getLength()
+                        visited    = set(expanded)
+
+
+                        while total_dist < self.cutoff_distance:
+                            last_lane_obj = self.net.getLane(expanded[-1])
+                            successors    = (last_lane_obj.getIncoming()
+                                            if group == "incoming"
+                                            else last_lane_obj.getOutgoingLanes())
+
+                            next_lane_id  = None
+                            for ln in successors:
+                                lid = ln.getID()
+
+                                # 1) skip lanes we have already taken
+                                # 2) skip “verticalish” lanes
+                                # 3) keep the original sign (− for westbound, + for eastbound)
+                                if (lid in visited or
+                                    self._is_vertical(ln) or
+                                    lid.split('_')[0].startswith('-') != seed_sign):
+                                    continue
+
+                                next_lane_id = lid
+                                break          # only take **one** successor each step
+
+                            # No suitable successor found → stop expanding
+                            if next_lane_id is None or "iter" in next_lane_id:
+                                break
+
+                            # -------------------------------------------------------------
+                            # If the successor’s *from* (or *to*) node is a **different**
+                            # traffic‑light, we stop **before** adding it.
+                            # -------------------------------------------------------------
+                            next_node = (self.net.getLane(next_lane_id).getEdge().getFromNode()
+                                        if group == "incoming"
+                                        else self.net.getLane(next_lane_id).getEdge().getToNode())
+
+                            if next_node.getID() in self.tl_ids and next_node.getID() != tl_id:
+                                break      # reached another TL – do NOT cross it
+
+                            # Otherwise: append, mark visited, update distance, continue
+                            expanded.append(next_lane_id)
+                            visited.add(next_lane_id)
+                            total_dist += self.net.getLane(next_lane_id).getLength()
+
+                        self.tl_lane_dict[tl_id]["vehicle"][group][dir_key] = expanded
+
                 if real_world: # Hard code for Craver
                     if tl_id == '9727816850_c0_mid':
                         self.tl_lane_dict['9727816850_c0_mid']["pedestrian"]["incoming"]["north"]["main"].extend(['edge_9727816851_9727816850_c0_mid', 'edge_9727816846_9727816850_c0_mid'])
@@ -1498,6 +1639,9 @@ class ControlEnv(gym.Env):
                     # print(f"Top edge: {top_edge}, Bottom edge: {bottom_edge}")
                     self.tl_lane_dict[tl_id]["pedestrian"]["incoming"]["north"]["main"].append(top_edge)
                     self.tl_lane_dict[tl_id]["pedestrian"]["incoming"]["north"]["main"].append(bottom_edge)
+        
+        print("TL lane dict:")
+        pprint.pprint(self.tl_lane_dict)
 
     def close(self):
         if self.sumo_running:

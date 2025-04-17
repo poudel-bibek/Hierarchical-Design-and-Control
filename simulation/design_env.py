@@ -108,6 +108,7 @@ class DesignEnv(gym.Env):
             'lower_current_lr': 0.0,
             'lower_approx_kl': 0.0,
         }
+        self.current_net_file_path = None
 
     @property
     def action_space(self):
@@ -269,7 +270,8 @@ class DesignEnv(gym.Env):
                     higher_reward_normalizer,
                     self.extreme_edge_dict,
                     self.lower_ppo_args['device'],
-                    iteration)
+                    iteration,
+                    self.current_net_file_path)
                 )
             p.start()
             lower_processes.append(p)
@@ -280,7 +282,7 @@ class DesignEnv(gym.Env):
 
         while active_lower_workers:
             print(f"Active workers: {active_lower_workers}")
-            rank, memory, design_reward = lower_queue.get(timeout=60)
+            rank, memory, design_reward = lower_queue.get(timeout=120)
 
             if memory is None:
                 print(f"Worker {rank} None received\n")
@@ -1216,7 +1218,7 @@ class DesignEnv(gym.Env):
         traffic_light_tree.write(f'{iteration_prefix}.tll.xml', encoding='utf-8', xml_declaration=True)
 
         # Generate the final net file using netconvert
-        output_file = f'{self.network_dir}/network_iteration_{iteration}.net.xml'
+        self.current_net_file_path = f'{self.network_dir}/network_iteration_{iteration}.net.xml'
         netconvert_log_file = f'{self.run_dir}/netconvert_log.txt'
         command = (
             f"netconvert "
@@ -1225,7 +1227,7 @@ class DesignEnv(gym.Env):
             f"--connection-files={iteration_prefix}.con.xml "
             f"--type-files={iteration_prefix}.typ.xml "
             f"--tllogic-files={iteration_prefix}.tll.xml " # using TLL file (against advice from Jakob)
-            f"--output-file={output_file} "
+            f"--output-file={self.current_net_file_path} "
             f"--log={netconvert_log_file}"
         )
 

@@ -364,7 +364,7 @@ def eval(design_args,
         
         # Apply the action to output the latest SUMO network file
         higher_env._apply_action(proposals, iteration) # Pass the actual proposals derived above
-        sumo_net_file = f"{higher_env.network_dir}/network_iteration_{iteration}.net.xml"
+        sumo_net_file = higher_env.current_net_file_path #f"{higher_env.network_dir}/network_iteration_{iteration}.net.xml"
 
     print(f"\nSUMO network file: {sumo_net_file}")
     create_new_sumocfg(higher_ppo_args['model_kwargs']['run_dir'], iteration)
@@ -397,7 +397,7 @@ def eval(design_args,
             }
             p = mp.Process(
                 target=parallel_eval_worker,
-                args=(rank, worker_config, eval_queue, higher_env.extreme_edge_dict, tl, unsignalized, real_world))
+                args=(rank, worker_config, eval_queue, sumo_net_file, higher_env.extreme_edge_dict, tl, unsignalized, real_world))
             
             p.start()
             eval_processes.append(p)

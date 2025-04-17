@@ -19,7 +19,8 @@ def parallel_train_worker(rank,
                          higher_reward_normalizer,
                          extreme_edge_dict,
                          worker_device, 
-                         network_iteration):
+                         network_iteration,
+                         current_net_file_path):
     """
     At every iteration, a number of workers will each parallelly carry out one episode in control environment.
     - Worker environment runs in CPU (SUMO runs in CPU).
@@ -34,7 +35,7 @@ def parallel_train_worker(rank,
     np.random.seed(worker_seed)
     torch.manual_seed(worker_seed)
 
-    worker_env = ControlEnv(control_args, run_dir, worker_id=rank, network_iteration=network_iteration)
+    worker_env = ControlEnv(control_args, run_dir, worker_id=rank, network_iteration=network_iteration, current_net_file_path=current_net_file_path)
     memory_transfer_freq = control_args['memory_transfer_freq']  # Get from config
     local_memory = Memory() # A worker instance must have their own memory 
 
@@ -95,6 +96,7 @@ def parallel_train_worker(rank,
 def parallel_eval_worker(rank, 
                          eval_worker_config, 
                          eval_queue, 
+                         current_net_file_path,
                          extreme_edge_dict,
                          tl=False, 
                          unsignalized=False,
@@ -137,7 +139,7 @@ def parallel_eval_worker(rank,
         lower_state_normalizer = eval_worker_config['lower_state_normalizer']
 
         # Run the worker (reset includes warmup)
-        env = ControlEnv(control_args, eval_worker_config['run_dir'], worker_id=rank, network_iteration=eval_worker_config['network_iteration'])
+        env = ControlEnv(control_args, eval_worker_config['run_dir'], worker_id=rank, network_iteration=eval_worker_config['network_iteration'], current_net_file_path=current_net_file_path)
         state, _ = env.reset(extreme_edge_dict, eval_worker_config['num_proposals'], tl = tl, real_world=real_world)
         veh_waiting_time_this_episode = 0
         ped_waiting_time_this_episode = 0
