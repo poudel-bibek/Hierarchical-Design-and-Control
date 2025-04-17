@@ -54,7 +54,7 @@ class HyperParameterTuner:
                     'values': [0.97] #[0.95, 0.98, 0.99]
                 },
                 'higher_update_freq': {
-                    'values': [32] #[8, 16, 32]
+                    'values': [4] #[8, 16, 32]
                 },
                 'higher_gamma': {
                     'values': [0.99] #, 0.99, 0.995]

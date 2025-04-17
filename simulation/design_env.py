@@ -240,7 +240,7 @@ class DesignEnv(gym.Env):
         # Convert tensor action to proposals
         padded_proposals = padded_proposals.cpu().numpy()  # Convert to numpy array if it's not already
         proposals = padded_proposals[0][:num_proposals]  # Only consider the actual proposals
-        print(f"\nProposals: {proposals}")
+        # print(f"\nProposals: {proposals}")
 
         # Apply the action to output the latest SUMO network file as well as modify the iterative_torch_graph.
         self._apply_action(proposals, iteration)
@@ -1127,14 +1127,34 @@ class DesignEnv(gym.Env):
         # All tags that refer to the old edges should now refer to the new edges (if the refering edges fall to the left, they will refer to the new left edge and vice versa) 
         # They have the edges attribute (which are edges to the right) and outlineShape attribute (the shape of the crossing): 
         # outlineShape seems hard to specify, lets not specify and see what it does. They mention it as optional here: https://github.com/eclipse-sumo/sumo/issues/11668
-        for m_node in m_node_mapping:
-            e1 = m_node_mapping[m_node]['top']['from']
+        for m_node, mapping_data in m_node_mapping.items():
+            # Retrieve the 'from' edge for the top side
+            e1 = mapping_data['top']['from']
+            # if e1 is None:
+            #     print(f"[ERROR crossing] iteration={iteration}, m_node={m_node} - 'from' edge is None; mapping_data={mapping_data}")
+            #     # Additional debug for None 'from' edge
+            #     pos = networkx_graph.nodes[m_node].get('pos')
+            #     print(f"[DEBUG crossing] m_node '{m_node}' position: {pos}")
+            #     bottom_map = mapping_data['bottom']
+            #     print(f"[DEBUG crossing] mapping_data['bottom']: {bottom_map}")
+            #     # Debug horizontal segments on current graph
+            #     horiz_seg = self._get_horizontal_segment_ped(
+            #         self.horizontal_nodes_top_ped, 
+            #         self.horizontal_nodes_bottom_ped, 
+            #         networkx_graph
+            #     )
+            #     print(f"[DEBUG crossing] horizontal_segment top: {horiz_seg['top']}")
+            #     print(f"[DEBUG crossing] horizontal_segment bottom: {horiz_seg['bottom']}")
+            #     print(f"[DEBUG crossing] horizontal_nodes_top: {self.horizontal_nodes_top_ped}")
+            #     print(f"[DEBUG crossing] horizontal_nodes_bottom: {self.horizontal_nodes_bottom_ped}")
+            #     continue
+            
             if '-' in e1:
                 e2 = e1.replace('-', '')
             else:
                 e2 = '-' + e1
             width = networkx_graph.nodes[m_node].get('width')
-            crossing_attribs = {'node': m_node, 'edges': e1 + ' ' + e2, 'priority': '1', 'width': str(width), 'linkIndex': '2' } # Width/ Thickness needs to come from the model.
+            crossing_attribs = {'node': m_node, 'edges': e1 + ' ' + e2, 'priority': '1', 'width': str(width), 'linkIndex': '2'} # Width/ Thickness needs to come from the model.
             crossing_element = ET.Element('crossing', crossing_attribs)
             crossing_element.text = None  # Ensure there's no text content
             crossing_element.tail = "\n\t\t"

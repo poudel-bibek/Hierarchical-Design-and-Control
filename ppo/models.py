@@ -142,7 +142,7 @@ class MLP_ActorCritic(nn.Module):
         
         TODO: Remove the bias due to number of proposals.
         """
-        print("Evaluating... with num_proposals: ", num_proposals)
+        # print("Evaluating... with num_proposals: ", num_proposals)
         action_logits = self.actor(states)
         intersection_logits = action_logits[:, :4]
         midblock_logits = action_logits[:, 4: 4 + num_proposals]

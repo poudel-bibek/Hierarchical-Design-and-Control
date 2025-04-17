@@ -30,7 +30,7 @@ def get_config():
         "higher_gae_lambda": 0.97,  # GAE lambda for higher-level agent
         "higher_max_grad_norm": 0.75,  # Maximum gradient norm for gradient clipping
         "higher_vf_clip_param": 0.5,  # Value function clipping parameter
-        "higher_update_freq": 4,  # Number of action timesteps between each policy update. A low value incurs high variance for design agent.
+        "higher_update_freq": 32,  # Number of action timesteps between each policy update. A low value incurs high variance for design agent.
         "higher_lr": 0.0001,  # Learning rate for higher-level agent
         "higher_gamma": 0.99,  # Discount factor for higher-level agent
         "higher_K_epochs": 4,  # Number of epochs to update policy for higher-level agent
@@ -44,7 +44,7 @@ def get_config():
         "higher_hidden_channels": 64, # Number of hidden channels in between two GATv2 layers
         'higher_out_channels': 64, # Number of channels at the ouput of last GATv2 layer
         "higher_activation": "tanh",  # Policy activation function
-        "higher_k": 12, # Number of nodes to keep for each graph
+        "higher_k": 16, # Number of nodes to keep for each graph
 
         # Design specific parameters
         "min_thickness": 1.0,  # Minimum thickness for crosswalks
