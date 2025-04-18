@@ -985,7 +985,7 @@ class ControlEnv(gym.Env):
         print(f"Average arrival time per pedestrian: {average_arrival_time_per_ped}") # Generally in the range of 100 seconds.
         
         # Vehicle
-        design_reward -= num_proposals*2.0 # Maximum number of proposals is 10. So -50.
+        design_reward -= num_proposals*2.0 # Maximum number of proposals is 10. So -20.
 
         # General 
 
