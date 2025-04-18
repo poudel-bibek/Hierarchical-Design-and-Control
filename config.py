@@ -44,7 +44,7 @@ def get_config():
         "higher_hidden_channels": 64, # Number of hidden channels in between two GATv2 layers
         'higher_out_channels': 64, # Number of channels at the ouput of last GATv2 layer
         "higher_activation": "tanh",  # Policy activation function
-        "higher_k": 16, # Number of nodes to keep for each graph
+        "higher_readout_k": 16, # Number of nodes to keep for each graph
 
         # Design specific parameters
         "min_thickness": 1.0,  # Minimum thickness for crosswalks
@@ -151,7 +151,7 @@ def classify_and_return_args(train_config, device):
         'model_size': train_config['higher_model_size'],
         'dropout_rate': train_config['higher_dropout_rate'],
         'run_dir': None, # Will be set later.
-        'k': train_config['higher_k'],
+        'readout_k': train_config['higher_readout_k'],
     }
 
     lower_model_kwargs = { 

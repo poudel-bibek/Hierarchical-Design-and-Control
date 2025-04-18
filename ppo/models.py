@@ -243,7 +243,7 @@ class GAT_v2_ActorCritic(nn.Module):
         self.initial_heads = kwargs.get('initial_heads')
         self.second_heads = kwargs.get('second_heads')
         self.edge_dim = kwargs.get('edge_dim')
-        self.k = kwargs.get('k') # Number of nodes to keep for each graph
+        self.readout_k = kwargs.get('readout_k') # Number of nodes to keep for each graph
         self.dropout_rate = 0.0 # kwargs.get('dropout_rate', 0.2)
     
         if kwargs.get('activation') == "elu":
@@ -299,7 +299,7 @@ class GAT_v2_ActorCritic(nn.Module):
         # shared
         actor_shared_layers = []
         # input_size_actor_shared = self.out_channels * self.second_heads # For global mean pooling
-        input_size_actor_shared = self.out_channels * self.second_heads * self.k # For custom global sort pooling
+        input_size_actor_shared = self.out_channels * self.second_heads * self.readout_k # For custom global sort pooling
         # print(f"Input size actor shared: {input_size_actor_shared}")
         for h in actor_shared_hidden_sizes:
             actor_shared_layers.append(layer_init(nn.Linear(input_size_actor_shared, h)))
@@ -370,7 +370,7 @@ class GAT_v2_ActorCritic(nn.Module):
         # critic
         critic_layers = []
         # input_size_critic = self.out_channels * self.second_heads
-        input_size_critic = self.out_channels * self.second_heads * self.k
+        input_size_critic = self.out_channels * self.second_heads * self.readout_k
         for h in critic_hidden_sizes:
             critic_layers.append(layer_init(nn.Linear(input_size_critic, h)))
             # Add layer norm, batch norm, dropout, etc.
@@ -392,7 +392,7 @@ class GAT_v2_ActorCritic(nn.Module):
         """
         # print(f"\nReadout layer input: {x}, x.shape: {x.shape}")
         # pool = global_mean_pool(x, batch)
-        pool = self.custom_global_sort_pool(x, batch, k=self.k) # k = how many nodes to keep?
+        pool = self.custom_global_sort_pool(x, batch, k=self.readout_k) # k = how many nodes to keep?
         # print(f"\nReadout layer output: {pool}, pool.shape: {pool.shape}")
         return pool
 

@@ -18,7 +18,7 @@ class HyperParameterTuner:
         finally:
             wandb.finish() 
 
-    def create_sweep_config(self, method='bayes'): # options: random, grid, bayes
+    def create_sweep_config(self, method='grid'): # options: random, grid, bayes
         """
         If using random, max and min values are required.
         We do not want to get weird weights such as 0.192 for various params. Hence not using random search.
@@ -46,85 +46,21 @@ class HyperParameterTuner:
                 },
 
             'parameters': {
-                # Higher Level Agent (Design)
-                'higher_lr': {
-                    'values': [1e-4, 5e-4] #[5e-5, 1e-4, 5e-4, 1e-3]
-                },
-                'higher_gae_lambda': {
-                    'values': [0.97] #[0.95, 0.98, 0.99]
-                },
-                'higher_update_freq': {
-                    'values': [4] #[8, 16, 32]
-                },
-                'higher_gamma': {
-                    'values': [0.99] #, 0.99, 0.995]
-                },
-                'higher_K_epochs': {
-                    'values': [8]
-                },
-                'higher_eps_clip': {
-                    'values': [0.2]
-                },
-                'higher_ent_coef': {
-                    'values': [0.01]
-                },
-                'higher_vf_coef': {
-                    'values':  [0.5]
-                },
-                'higher_vf_clip_param': {
-                    'values': [0.5]
-                },
-                'higher_batch_size': {
-                    'values': [4, 8] #[16, 32, 64]
-                },
-                'higher_activation': {
-                    'values': ["tanh", "relu"]
-                },
-                'initial_heads': { 
-                    'values': [8]
-                },
-                
-
-                # Lower Level Agent (Control)
-                # 'lower_lr': {
-                #     'values': [5e-5, 1e-4, 2e-4]
-                # },
-                # 'lower_gae_lambda': {
-                #     'values': [0.95, 0.98, 0.99]
-                # },
-                # 'lower_update_freq': {
-                #     'values': [512, 1024, 2048]
-                # },
-                # 'lower_gamma': {
-                #     'values': [0.98, 0.99, 0.995]
-                # },
-                # 'lower_K_epochs': {
-                #     'values': [2, 4, 8]
-                # },
-                # 'lower_eps_clip': {
-                #     'values': [0.15, 0.2, 0.25]
-                # },
-                # 'lower_ent_coef': {
-                #     'values': [0.005, 0.01, 0.02]
-                # },
-                # 'lower_vf_coef': {
-                #     'values': [0.4, 0.5, 0.6]
-                # },
-                # 'lower_vf_clip_param': {
-                #     'values': [0.4, 0.5, 0.6]
-                # },
-                # 'lower_batch_size': {
-                #     'values': [32, 64, 128]
-                # },
-                # 'lower_dropout_rate': {
-                #     'values': [0.1, 0.2, 0.3]
-                # },
-                # 'lower_model_size': {
-                #     'values': ['medium']
-                # },
-                # 'lower_activation': {
-                #     'values': ["tanh", "relu"]
-                # },
+                'higher_lr': { 'values': [1e-5, 1e-4] },
+                'lower_lr': { 'values': [1e-5, 1e-4] },
+                # HRL Interaction / Update Frequencies
+                'higher_update_freq': { 'values': [32, 64] },
+                'lower_update_freq': { 'values': [1024, 2048] },
+                'num_mixtures': { 'values': [5, 7, 10] },
+                'higher_readout_k': { 'values': [16, 32] },
+                # --- Higher-Level Specific ---
+                'higher_batch_size': {'values': [4, 8]},
+                'higher_eps_clip': {'values': [0.1, 0.2, 0.3]},
+                'higher_ent_coef': {'values': [0.005, 0.01, 0.02]},
+                # --- Lower-Level Specific ---
+                'lower_batch_size': {'values': [32, 64]},
+                'lower_eps_clip': {'values': [0.1, 0.2, 0.3]},
+                'lower_ent_coef': {'values': [0.005, 0.01, 0.02]},
             }
         }
         

@@ -1266,6 +1266,16 @@ class DesignEnv(gym.Env):
                 if attempt == max_attempts:
                     print("Failed all attempts to run netconvert")
                     raise
+    
+    def _build_routes(self, iteration, ped_trips_file, veh_trips_file):
+        net   = self.current_net_file_path
+        trips = [ped_trips_file, veh_trips_file]
+        routes = f"{self.network_dir}/routes_iteration_{iteration}.rou.xml"
+        cmd = ["duarouter", "-n", net, "-o", routes, "--repair", "--ignore-errors"]
+        for t in trips:
+            cmd.extend(["-t", t])
+        subprocess.check_call(cmd)
+        return routes
 
     def _initialize_normalizers(self, pedestrian_networkx_graph):
         """
