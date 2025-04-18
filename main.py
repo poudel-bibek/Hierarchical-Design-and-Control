@@ -234,7 +234,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
 
         # logging at every iteration (every time sample is drawn)
         if is_sweep:
-            wandb.log({
+            wandb.log(data = {
                 "iteration": iteration,
                 "global_step": higher_env.global_step,
                 "higher/avg_reward": higher_reward,
@@ -257,7 +257,8 @@ def train(train_config, is_sweep=False, sweep_config=None):
                 "lower/approx_kl": info['lower_approx_kl'],
                 "evals/lower_ped_avg_wait": eval_ped_avg_wait,
                 "evals/lower_veh_avg_wait": eval_veh_avg_wait,
-                "evals/lower_avg_eval": lower_avg_eval })
+                "evals/lower_avg_eval": lower_avg_eval }, 
+                step=higher_env.global_step)
         else:
             writer.add_scalar('Iteration', iteration, higher_env.global_step)
             writer.add_scalar('Higher/Average_Reward', higher_reward, higher_env.global_step)
