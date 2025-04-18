@@ -982,14 +982,15 @@ class ControlEnv(gym.Env):
         average_arrival_time_per_ped = total_ped_arrival_time / (len(self.pedestrian_arrival_times) + 1e-6) # Avoid division by zero (due to some bad-faith design)
         design_reward -= average_arrival_time_per_ped
         print(f"Total pedestrian arrival time: {total_ped_arrival_time}")
-        print(f"Average arrival time per pedestrian: {average_arrival_time_per_ped}")
+        print(f"Average arrival time per pedestrian: {average_arrival_time_per_ped}") # Generally in the range of 100 seconds.
         
         # Vehicle
-        design_reward -= num_proposals*5.0
+        design_reward -= num_proposals*2.0 # Maximum number of proposals is 10. So -50.
 
         # General 
 
-
+        # Normalize
+        design_reward = design_reward / 100.0
         return design_reward
     
     def _get_control_reward(self, corrected_occupancy_map, switch_state, pressure_dict=None):
