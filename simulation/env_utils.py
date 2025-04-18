@@ -356,17 +356,17 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
             # The directions are reversed in top and bottom. For top, greater than `to` and less than `from`.
             if (min_x < x_coord < max_x and edge_id not in edges_to_remove): 
                 
-                # If too close to an edge endpoint, shift x_coord inward by TOL instead of skipping
-                if abs(x_coord - min_x) < TOL: # distances to the edge ends.
-                    print(f"\n\nTop edge {edge_id} Before: {x_coord}.")
-                    x_coord = min_x + TOL
-                    print(f"Top edge {edge_id} After: {x_coord}.\n\n")
-                    breakpoint()
-                elif abs(x_coord - max_x) < TOL:
-                    print(f"\n\nTop edge {edge_id} Before: {x_coord}.")
-                    x_coord = max_x - TOL
-                    print(f"Top edge {edge_id} After: {x_coord}.\n\n")
-                    breakpoint()
+                # # If too close to an edge endpoint, shift x_coord inward by TOL instead of skipping
+                # if abs(x_coord - min_x) < TOL: # distances to the edge ends.
+                #     print(f"\n\nTop edge {edge_id} Before: {x_coord}.")
+                #     x_coord = min_x + TOL
+                #     print(f"Top edge {edge_id} After: {x_coord}.\n\n")
+                #     breakpoint()
+                # elif abs(x_coord - max_x) < TOL:
+                #     print(f"\n\nTop edge {edge_id} Before: {x_coord}.")
+                #     x_coord = max_x - TOL
+                #     print(f"Top edge {edge_id} After: {x_coord}.\n\n")
+                #     breakpoint()
 
                 # print(f"Top edge {edge_id} intersects mnode {m_node} at x={x_coord:.2f}.")
                 edges_to_remove.append(edge_id)
@@ -436,18 +436,18 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
             max_x = max(edge_data['from_x'], edge_data['to_x']) + TOL
             # For bottom, greater than `from` and less than `to`.
             if (min_x < x_coord < max_x and edge_id not in edges_to_remove):
-                # If too close to an edge endpoint, shift x_coord inward by TOL instead of skipping
-                if abs(x_coord - min_x) < TOL: # distances to the edge ends.
-                    print(f"\n\nBottom edge {edge_id} Before: {x_coord}.")
-                    x_coord = min_x + TOL
-                    print(f"Bottom edge {edge_id} After: {x_coord}.\n\n")
-                    breakpoint()
-                elif abs(x_coord - max_x) < TOL:
-                    print(f"\n\nBottom edge {edge_id} Before: {x_coord}.")
-                    x_coord = max_x - TOL
-                    print(f"Bottom edge {edge_id} After: {x_coord}.\n\n")
-                    breakpoint()
-                    
+                # # If too close to an edge endpoint, shift x_coord inward by TOL instead of skipping
+                # if abs(x_coord - min_x) < TOL: # distances to the edge ends.
+                #     print(f"\n\nBottom edge {edge_id} Before: {x_coord}.")
+                #     x_coord = min_x + TOL
+                #     print(f"Bottom edge {edge_id} After: {x_coord}.\n\n")
+                #     breakpoint()
+                # elif abs(x_coord - max_x) < TOL:
+                #     print(f"\n\nBottom edge {edge_id} Before: {x_coord}.")
+                #     x_coord = max_x - TOL
+                #     print(f"Bottom edge {edge_id} After: {x_coord}.\n\n")
+                #     breakpoint()
+
                 # print(f"Bottom edge {edge_id} intersects mnode {m_node} at x={x_coord:.2f}.")
                 edges_to_remove.append(edge_id) # Need to check both in top and bottom.
                 

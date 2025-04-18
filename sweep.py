@@ -18,7 +18,7 @@ class HyperParameterTuner:
         finally:
             wandb.finish() 
 
-    def create_sweep_config(self, method='grid'): # options: random, grid, bayes
+    def create_sweep_config(self, method='random'): # options: random, grid, bayes
         """
         If using random, max and min values are required.
         We do not want to get weird weights such as 0.192 for various params. Hence not using random search.
