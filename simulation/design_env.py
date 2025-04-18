@@ -323,6 +323,7 @@ class DesignEnv(gym.Env):
                     self.action_timesteps = 0
                     print(f"Size of lower memories after update: {len(lower_memories.actions)}")
 
+                    # This contains the info of the last time it gets updated. While it could be updated multiple times during single step.
                     self.info = {
                         'lower_avg_reward': avg_lower_reward,
                         'lower_update_count': self.lower_update_count,
@@ -333,7 +334,7 @@ class DesignEnv(gym.Env):
                         'lower_current_lr': current_lr_lower if self.control_args['lower_anneal_lr'] else self.lower_ppo_args['lr'],
                         'lower_approx_kl': lower_loss['approx_kl'],
                     }      
-                        
+
          # Clean up. The join() method ensures that the main program waits for all processes to complete before continuing.
         for p in lower_processes:
             p.join() 
@@ -1266,16 +1267,6 @@ class DesignEnv(gym.Env):
                 if attempt == max_attempts:
                     print("Failed all attempts to run netconvert")
                     raise
-    
-    def _build_routes(self, iteration, ped_trips_file, veh_trips_file):
-        net   = self.current_net_file_path
-        trips = [ped_trips_file, veh_trips_file]
-        routes = f"{self.network_dir}/routes_iteration_{iteration}.rou.xml"
-        cmd = ["duarouter", "-n", net, "-o", routes, "--repair", "--ignore-errors"]
-        for t in trips:
-            cmd.extend(["-t", t])
-        subprocess.check_call(cmd)
-        return routes
 
     def _initialize_normalizers(self, pedestrian_networkx_graph):
         """
