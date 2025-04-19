@@ -3,7 +3,7 @@ def get_config():
         # Simulation
         "sweep": True,  # Use wandb sweeps for hyperparameter tuning
         "evaluate": False, 
-        "gui": False,  # Use SUMO GUI (default: False)
+        "gui": True,  # Use SUMO GUI (default: False)
          
         "vehicle_input_trips": "./simulation/original_vehtrips.xml",  # Original Input trips file
         "vehicle_output_trips": "./simulation/scaled_trips/scaled_vehtrips.xml",  # Output trips file
@@ -21,7 +21,7 @@ def get_config():
         # PPO (general params)
         "seed": None,  # Random seed (default: None)
         "gpu": True,  # Use GPU if available (default: use CPU)
-        "total_timesteps": 10000000,  # Total number of timesteps the simulation will run
+        "total_timesteps": 5000000,  # Total number of timesteps the simulation will run
         "eval_freq": 1,  # Evaluate both higher and lower-level policies and their normalizers after every n updates of the higher policy (0 to disable). 
         # Also decides how often to evaluate
 
@@ -72,13 +72,13 @@ def get_config():
         "lower_ent_coef": 0.01,  # Entropy coefficient
         "lower_vf_coef": 0.5,  # Value function coefficient
         "lower_batch_size": 64,  # Batch size
-        "lower_num_processes": 8,  # Number of parallel processes to use (agent has multiple workers)
+        "lower_num_processes": 10,  # Number of parallel processes to use (agent has multiple workers)
         "lower_model_size": "medium",  # Model size for CNN: 'small' or 'medium'
         "lower_dropout_rate": 0.25,  # Dropout rate for CNN
         "lower_action_dim": None, # will be set later
         "lower_in_channels": 1, # in_channels for cnn
         "lower_activation": "tanh",  # Policy activation function
-        "lower_max_timesteps": 460,  # Maximum number of steps in one episode (make this multiple of 16*10)
+        "lower_max_timesteps": 360,  # Maximum number of steps in one episode (make this multiple of 16*10)
         "lower_memory_transfer_freq": 16,  # Frequency of memory transfer from worker to main process 
         "lower_per_timestep_state_dim": 11 + 32 + 8 * 10,  # Number of features per timestep (corresponding to max_proposals = 10), calculation in _get_observation function.
         "lower_step_length": 1.0,  # Real-world time in seconds per simulation timestep (default: 1.0). 

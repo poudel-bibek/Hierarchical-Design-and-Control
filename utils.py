@@ -4,6 +4,7 @@ import time
 import json
 import torch
 import logging
+import random
 import numpy as np
 import seaborn as sns
 from scipy import stats
@@ -201,7 +202,150 @@ def scale_demand(input_file, output_file, scale_factor, demand_type):
     
     # Wait for the file writing operations to finish (it could be large)
     time.sleep(1)
-    
+
+def clear_elements(parent, tag):
+    """
+    Helper to clear out old elements.
+    """
+    for elem in parent.findall(tag):
+        parent.remove(elem)
+
+def scale_demand_sliced_window(input_file, output_file, scale_factor, demand_type, window_size):
+    """
+    Scale the demand in a randomly-sampled time window of the input file.
+    window_size: max episode length (in seconds), including any warm‐up.
+    A random t_start is chosen in [0, ORIGINAL_TIME_SPAN - window_size],
+    and only trips/persons with depart in [t_start, t_start + window_size)
+    are kept, re‐timed, and scaled.
+    """
+    ORIGINAL_TIME_SPAN = 3600  # full duration of the real‐world data
+
+    # 1) pick a random window
+    t_start = random.uniform(0, ORIGINAL_TIME_SPAN - window_size)
+    # print(f"\nt_start: {t_start}\n")
+    t_end = t_start + window_size
+
+    # 2) load XML and prepare root
+    tree = ET.parse(input_file)
+    root = tree.getroot()
+
+    if demand_type == "vehicle":
+        # remove all original trips, we'll re-add only the windowed ones
+        clear_elements(root, "trip")
+
+        # reload from input to filter
+        full_tree = ET.parse(input_file)
+        full_root = full_tree.getroot()
+        all_trips = full_root.findall("trip")
+
+        # first pass: collect trips inside window, shift & scale depart
+        windowed = []
+        for trip in all_trips:
+            depart = float(trip.get("depart"))
+            if t_start <= depart < t_end:
+                # clone element
+                new_trip = ET.Element("trip", trip.attrib)
+                # shift so window start → 0, then scale down
+                shifted = depart - t_start
+                new_depart = shifted / scale_factor
+                new_trip.set("depart", f"{new_depart:.2f}")
+                windowed.append(new_trip)
+                root.append(new_trip)
+
+        # replicate across scale_factor slices
+        original_count = len(windowed)
+        for i in range(1, int(scale_factor)):
+            for trip in windowed[:original_count]:
+                dup = ET.Element("trip")
+                for attr, val in trip.attrib.items():
+                    if attr == "id":
+                        dup.set(attr, f"{val}_{i}")
+                    elif attr == "depart":
+                        depart_val = float(val)
+                        # spread duplicates over the window
+                        offset = window_size * i / scale_factor
+                        dup.set(attr, f"{depart_val + offset:.2f}")
+                    else:
+                        dup.set(attr, val)
+                root.append(dup)
+
+    elif demand_type == "pedestrian":
+        # find the <routes> parent (or root if missing)
+        routes_parent = root.find(".//routes") or root
+        clear_elements(routes_parent, "person")
+
+        # reload to filter
+        full_tree = ET.parse(input_file)
+        full_root = full_tree.getroot()
+        all_persons = full_root.findall(".//person")
+
+        windowed = []
+        # first pass: filter, shift, scale
+        for person in all_persons:
+            depart = float(person.get("depart"))
+            if t_start <= depart < t_end:
+                new_person = ET.Element("person", person.attrib)
+                shifted = depart - t_start
+                new_depart = shifted / scale_factor
+                new_person.set("depart", f"{new_depart:.2f}")
+
+                # copy children, fixing 'from' if needed
+                for child in person:
+                    new_child = ET.SubElement(new_person, child.tag, child.attrib)
+                    if child.tag == "walk" and "from" not in child.attrib:
+                        edges = child.get("edges", "").split()
+                        if edges:
+                            new_child.set("from", edges[0])
+                        else:
+                            logging.warning(
+                                f"Walk element for {new_person.get('id')} missing both 'from' and 'edges'."
+                            )
+                windowed.append(new_person)
+                routes_parent.append(new_person)
+
+        # replicate
+        original_count = len(windowed)
+        for i in range(1, int(scale_factor)):
+            for person in windowed[:original_count]:
+                dup = ET.Element("person")
+                for attr, val in person.attrib.items():
+                    if attr == "id":
+                        dup.set(attr, f"{val}_{i}")
+                    elif attr == "depart":
+                        depart_val = float(val)
+                        offset = window_size * i / scale_factor
+                        dup.set(attr, f"{depart_val + offset:.2f}")
+                    else:
+                        dup.set(attr, val)
+
+                # copy children
+                for child in person:
+                    new_child = ET.SubElement(dup, child.tag, child.attrib)
+                    if child.tag == "walk" and "from" not in child.attrib:
+                        edges = child.get("edges", "").split()
+                        if edges:
+                            new_child.set("from", edges[0])
+                        else:
+                            logging.warning(
+                                f"Walk element for {dup.get('id')} missing both 'from' and 'edges'."
+                            )
+                routes_parent.append(dup)
+
+    else:
+        raise ValueError("Invalid demand_type: must be 'vehicle' or 'pedestrian'")
+
+    # 3) serialize & write out
+    xml_str = ET.tostring(root, encoding="unicode")
+    dom = xml.dom.minidom.parseString(xml_str)
+    pretty = "\n".join(line for line in dom.toprettyxml(indent="    ").split("\n") if line.strip())
+
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    with open(output_file, "w", encoding="utf-8") as f:
+        f.write(pretty)
+
+    # ensure write has settled
+    time.sleep(1)
+
 def visualize_observation(observation):
     """
     Visualize each timestep observation as image (save as png).
