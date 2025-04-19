@@ -6,6 +6,7 @@ import torch.nn as nn
 from matplotlib import cm
 import matplotlib.pyplot as plt
 import torch.nn.functional as F
+from torch_geometric.data import Batch
 from torch_geometric.nn import GATv2Conv
 from torch_geometric.utils import to_dense_batch
 from torch_geometric.nn import global_mean_pool
@@ -134,45 +135,43 @@ class MLP_ActorCritic(nn.Module):
         # print(f"\nAction Log probability: {log_prob}, shape: {log_prob.shape}")
         return combined_action.int(), log_prob
 
-
-    def evaluate(self, states, actions, num_proposals, device=None):
+    def evaluate(self, states, actions, num_proposals_batch, device=None):
         """
         Evaluate a batch of states and pre-sampled actions. 
         number of proposals remains same for all parallel actors that collect experiences. 
         
         TODO: Remove the bias due to number of proposals.
         """
-        # print("Evaluating... with num_proposals: ", num_proposals)
-        action_logits = self.actor(states)
-        intersection_logits = action_logits[:, :4]
-        midblock_logits = action_logits[:, 4: 4 + num_proposals]
+        # print(f"Evaluating... with num_proposals: {num_proposals_batch}, shape: {num_proposals_batch.shape}")
+        action_logits = self.actor(states) # [B, 4 + max_proposals]
+        intersection_logits = action_logits[:, :4] # [B, 4]
+        midblock_logits_all = action_logits[:, 4:] # [B, max_proposals - 4]
 
-        # Distributions
-        # intersection_probs = torch.softmax(intersection_logits, dim=1)
+        # Intersection
         intersection_dist = Categorical(logits=intersection_logits)
-        # midblock_probs = torch.sigmoid(midblock_logits)
-        midblock_dist = Bernoulli(logits=midblock_logits)
-        # print(f"\nMidblock dist: {midblock_dist}\n")
-
-        # Actions in shape (B,1) for intersection, (B,num_proposals) for midblock
         intersection_action = actions[:, :1].squeeze(1).long() # Categorical expects long
-        midblock_actions = actions[:, 1: 1 + num_proposals].float()
+        intersection_log_prob = intersection_dist.log_prob(intersection_action)
+        intersection_entropy = intersection_dist.entropy()
 
-        # print(f"\nMidblock logits: {midblock_logits}, midblock actions: {midblock_actions.shape}\n")
+        batch_size = states.size(0)
+        midblock_log_probs  = torch.zeros(batch_size, device=states.device)
+        midblock_entropies = torch.zeros(batch_size, device=states.device)
 
-        intersection_log_probs = intersection_dist.log_prob(intersection_action)
-        # print(f"\nIntersection log probs: {intersection_log_probs}, shape: {intersection_log_probs.shape}")
-        midblock_log_probs = midblock_dist.log_prob(midblock_actions)
-        # print(f"\nMidblock log probs: {midblock_log_probs}, shape: {midblock_log_probs.shape}")
-        action_log_probs = intersection_log_probs + midblock_log_probs.sum(dim=1)
-        # print(f"\nAction log probs: {action_log_probs}, shape: {action_log_probs.shape}")
+        # Midblock, per sample
+        for i, num_proposals in enumerate(num_proposals_batch.tolist()):
+            sample_logits = midblock_logits_all[i, :num_proposals]
+            sample_actions = actions[i, 1:1+num_proposals].float() # First action was taken by intersection
+            sample_dist = Bernoulli(logits=sample_logits)
+            # print(f"Sample log probs: {sample_dist.log_prob(sample_actions)}, shape: {sample_dist.log_prob(sample_actions).shape}")
+            midblock_log_probs[i] = sample_dist.log_prob(sample_actions).sum() # sum over all num_proposals actions
+            # print(f"After summing: {midblock_log_probs[i]}, shape: {midblock_log_probs[i].shape}")
+            # print(f"Sample entropy: {sample_dist.entropy()}, shape: {sample_dist.entropy().shape}")
+            midblock_entropies[i] = sample_dist.entropy().sum() # sum over all num_proposals actions
+            # print(f"After summing: {midblock_entropies[i]}, shape: {midblock_entropies[i].shape}")
 
-        # Entropies
-        # print(f"Entropies: intersection: {intersection_dist.entropy()}, midblock: {midblock_dist.entropy().sum(dim=1)}")
-        total_entropy = intersection_dist.entropy() + midblock_dist.entropy().sum(dim=1)
-        # print(f"Total entropy: {total_entropy}, shape: {total_entropy.shape}")
+        action_log_probs = intersection_log_prob + midblock_log_probs
+        total_entropy = intersection_entropy + midblock_entropies
 
-        # Critic value
         state_values = self.critic(states)
         return action_log_probs, state_values, total_entropy
 
@@ -495,7 +494,7 @@ class GAT_v2_ActorCritic(nn.Module):
         - edge attributes (edge_attr) = Edge features (num_edges, edge_dim)
         - batch (batch)
         """
-        states_batch = states_batch.to(device)
+        # states_batch = states_batch.to(device)
         y = self.conv1(states_batch.x, states_batch.edge_index, states_batch.edge_attr)
         y = self.activation(y)
         # print(f"\nEdge attributes: {states_batch.edge_attr}")
@@ -532,9 +531,10 @@ class GAT_v2_ActorCritic(nn.Module):
         # print(f"\nMeans: {means.shape}, Log-stds: {log_stds.shape}, Mix logits: {mix_logits.shape}")
         return means, log_stds, mix_logits
     
-    def critic(self, states_batch):
+    def critic(self, states_batch, device):
         """
         """
+        states_batch = states_batch.to(device)
         y = self.conv1(states_batch.x, states_batch.edge_index, states_batch.edge_attr)
         y = self.activation(y)
         y = self.conv2(y, states_batch.edge_index, states_batch.edge_attr)
@@ -568,7 +568,7 @@ class GAT_v2_ActorCritic(nn.Module):
 
         # num_proposals_probs_batch = F.softmax(num_proposals_logits, dim=-1)
         # print(f"\nProposal probabilities: {num_proposals_probs_batch}")
-        
+        # print(f"\nInside get_gmm_distribution: Higher states batch: {states_batch}")
         means, log_stds, mix_logits = self.actor(states_batch, device=device)
         # print(f"\nMeans: {means}, Log-stds: {log_stds}, Mix logits: {mix_logits}")
 
@@ -703,7 +703,7 @@ class GAT_v2_ActorCritic(nn.Module):
             # return torch.cat((selected_mode_samples, stochastic_samples), dim=0)
             return torch.cat((selected_mode_samples, torch.full((num_proposals - num_modes_taken, 2), -1.0, device=device)), dim=0)
 
-    def act(self, states_batch, iteration, clamp_min, clamp_max, device, training=True, visualize=False):
+    def act(self, states, iteration, clamp_min, clamp_max, device, training=True, visualize=False):
         """
         Sample actions from the GMM (propose upto max_proposals number of crosswalks).
         Policy gradient methods require the log probabilities of the actions to be returned as well.
@@ -713,7 +713,7 @@ class GAT_v2_ActorCritic(nn.Module):
         Utilizing the implicit stochasticity in sampling during training.
         However, at test, sample greedily at each mode.
         """
-
+        states_batch = Batch.from_data_list([states]).to(device)
         # properly batch the data using Batch.from_data_list() before sending here. 
         # gmm_batch, num_proposals_probs_batch = self.get_gmm_distribution(states_batch.to(device))
         gmm_batch = self.get_gmm_distribution(states_batch, device=device)
@@ -833,7 +833,7 @@ class GAT_v2_ActorCritic(nn.Module):
         # The number of actual proposals is corresponding to the merged proposals.
         return original_proposals, merged_proposals, num_proposals, log_probs
     
-    def evaluate(self, states_batch, actions_batch, device = None):
+    def evaluate(self, states_batch, actions_batch, device=None):
         """
         states_batch (Batch): Batch of states, each state a Data object.
         actions_batch (Tensor): Batch of actions [batch_size, max_proposals, 2]. 
@@ -844,8 +844,8 @@ class GAT_v2_ActorCritic(nn.Module):
             state_values (Tensor): Values of the states.
             entropy (Tensor)
         """
-    
-        state_values = self.critic(states_batch.to(device))
+        # print(f"\nInside evaluate: Higher states batch: {states_batch}")
+        state_values = self.critic(states_batch, device=device)
         # Get distribution (internally passes through actor)
         gmm_batch = self.get_gmm_distribution(states_batch, device=device)
         

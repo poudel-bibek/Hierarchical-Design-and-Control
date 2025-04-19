@@ -118,7 +118,8 @@ class PPO:
 
         # states = torch.stack(memories.states, dim=0)
 
-        actions = torch.stack(memories.actions, dim=0)
+        actions = torch.stack(memories.actions, dim=0) # Each action is padded to max_proposals
+        num_proposals = torch.tensor(memories.num_proposals, dtype=torch.int32) # should just work for both agent types
         old_values = torch.tensor(memories.values, dtype=torch.float32)
         old_logprobs = torch.tensor(memories.logprobs, dtype=torch.float32)
         rewards = torch.tensor(memories.rewards, dtype=torch.float32)
@@ -157,17 +158,17 @@ class PPO:
 
         if self.agent_type == 'lower':
             states = torch.stack(memories.states, dim=0)
-            dataset = TensorDataset(states, actions, old_logprobs, advantages, returns, old_values)
+            dataset = TensorDataset(states, actions, num_proposals, old_logprobs, advantages, returns, old_values)
             dataloader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
         else:  # higher level agent
             states = memories.states  # Already a list of DataBatch objects
-            dataset = GraphDataset(states, actions, old_logprobs, advantages, returns, old_values)
+            dataset = GraphDataset(states, actions, num_proposals, old_logprobs, advantages, returns, old_values)
             # Make sure batch_size does not exceed the number of items in the dataset
-            actual_batch_size = min(self.batch_size, len(dataset))
-            if actual_batch_size == 0:
-                print("Warning: Empty dataset for PPO update. Skipping update.")
-                return {} # Return empty dict or handle as appropriate
-            dataloader = DataLoader(dataset, batch_size=actual_batch_size, shuffle=True, collate_fn=collate_fn)
+            # actual_batch_size = min(self.batch_size, len(dataset))
+            # if actual_batch_size == 0:
+            #     print("Warning: Empty dataset for PPO update. Skipping update.")
+            #     return {} # Return empty dict or handle as appropriate
+            dataloader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True, collate_fn=collate_fn)
 
 
         avg_policy_loss = 0
@@ -180,9 +181,10 @@ class PPO:
         for _ in range(self.K_epochs):
             for batch_data in dataloader:
 
-                states_batch, actions_batch, old_logprobs_batch, advantages_batch, returns_batch, old_values_batch = batch_data
+                states_batch, actions_batch, num_proposals_batch, old_logprobs_batch, advantages_batch, returns_batch, old_values_batch = batch_data
                 states_batch = states_batch.to(self.device) # Move DataBatch to device
                 actions_batch = actions_batch.to(self.device)
+                num_proposals_batch = num_proposals_batch.to(self.device)
                 old_logprobs_batch = old_logprobs_batch.to(self.device)
                 advantages_batch = advantages_batch.to(self.device)
                 returns_batch = returns_batch.to(self.device)
@@ -195,7 +197,7 @@ class PPO:
 
                 # Evaluating old actions and values using current policy network
                 if self.agent_type == 'lower':
-                    logprobs, state_values, dist_entropy = self.policy.evaluate(states_batch, actions_batch, num_proposals, device = self.device) # Removed .to(self.device) for states_batch and actions_batch as they are moved above
+                    logprobs, state_values, dist_entropy = self.policy.evaluate(states_batch, actions_batch, num_proposals_batch, device = self.device) # Removed .to(self.device) for states_batch and actions_batch as they are moved above
                 else: # higher agent
                     logprobs, state_values, dist_entropy = self.policy.evaluate(states_batch, actions_batch, device = self.device) 
 

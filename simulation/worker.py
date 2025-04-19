@@ -1,9 +1,6 @@
-import os
-import time
 import random
 import numpy as np
 import torch
-from ppo.ppo import PPO
 from ppo.ppo_utils import Memory
 from simulation.control_env import ControlEnv
 
@@ -14,6 +11,7 @@ def parallel_train_worker(rank,
                          train_queue, 
                          worker_seed,
                          num_proposals,
+                         max_proposals,
                          lower_state_normalizer, 
                          lower_reward_normalizer,
                          higher_reward_normalizer,
@@ -29,6 +27,8 @@ def parallel_train_worker(rank,
     - A shared policy_old (dict copy passed here) is used for importance sampling.
     - 1 memory transfer happens every memory_transfer_freq * action_duration sim steps.
     """
+    num_proposals = num_proposals.detach().cpu().numpy().item()
+    # print(f"Num proposals: {num_proposals}")
 
     # Set seed for this worker
     random.seed(worker_seed)
@@ -55,17 +55,20 @@ def parallel_train_worker(rank,
 
                 state = state.detach().cpu().numpy() # 2D
                 action = action.detach().cpu().numpy() # 1D
+                # print(f"Action: {action}")
+                padded_action = np.pad(action, (0, max_proposals - action.shape[0]), constant_values=-1)
+                # print(f"Padded action: {padded_action}")
                 value = value.item() # Scalar
                 logprob = logprob.item() # Scalar
 
             # Perform action
             # These reward and next_state are for the action_duration timesteps.
-            next_state, control_reward, done, truncated, _ = worker_env.train_step(action) # need the returned state to be 2D
+            next_state, control_reward, done, truncated, _ = worker_env.train_step(action) # need the returned state to be 2D. pass the unpadded action
             control_reward = lower_reward_normalizer.normalize(torch.tensor([control_reward], dtype=torch.float32)).item()
             ep_reward += control_reward
 
             # Store data in memory
-            local_memory.append(state, action, value, logprob, control_reward, done) 
+            local_memory.append(state, padded_action, num_proposals, value, logprob, control_reward, done) # pass the padded action
             steps_since_update += 1
 
             if steps_since_update >= memory_transfer_freq or done or truncated:
@@ -79,7 +82,7 @@ def parallel_train_worker(rank,
                 break
         
         # Higher level agent's reward can only be obtained after the lower level workers have finished
-        design_reward_tensor = worker_env._get_design_reward(num_proposals).clone().detach().to(dtype=torch.float32, device='cpu')
+        design_reward_tensor = torch.tensor([worker_env._get_design_reward(num_proposals)], dtype=torch.float32) # Wrap in list
         design_reward = higher_reward_normalizer.normalize(design_reward_tensor).item()
         print(f"Design reward: {design_reward}")
 

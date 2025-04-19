@@ -109,6 +109,7 @@ class DesignEnv(gym.Env):
             'lower_approx_kl': 0.0,
         }
         self.current_net_file_path = None
+        self.lower_memories = Memory()
 
     @property
     def action_space(self):
@@ -265,6 +266,7 @@ class DesignEnv(gym.Env):
                     lower_queue,
                     worker_seed,
                     num_proposals,
+                    self.max_proposals,
                     lower_state_normalizer,
                     lower_reward_normalizer,
                     higher_reward_normalizer,
@@ -277,7 +279,7 @@ class DesignEnv(gym.Env):
             lower_processes.append(p)
             active_lower_workers.append(rank)
         
-        lower_memories = Memory()
+        # lower_memories = Memory()
         design_rewards = []
 
         while active_lower_workers:
@@ -291,12 +293,13 @@ class DesignEnv(gym.Env):
             else:
                 current_action_timesteps = len(memory.states)
                 print(f"Memory from worker {rank} received. Memory size: {current_action_timesteps}\n")
-                lower_memories.actions.extend(torch.from_numpy(np.asarray(memory.actions)))
-                lower_memories.states.extend(torch.from_numpy(np.asarray(memory.states)))
-                lower_memories.values.extend(memory.values)
-                lower_memories.logprobs.extend(memory.logprobs)
-                lower_memories.rewards.extend(memory.rewards)
-                lower_memories.is_terminals.extend(memory.is_terminals)
+                self.lower_memories.states.extend(torch.from_numpy(np.asarray(memory.states)))
+                self.lower_memories.actions.extend(torch.from_numpy(np.asarray(memory.actions)))
+                self.lower_memories.num_proposals.extend(torch.from_numpy(np.asarray(memory.num_proposals)))
+                self.lower_memories.values.extend(memory.values)
+                self.lower_memories.logprobs.extend(memory.logprobs)
+                self.lower_memories.rewards.extend(memory.rewards)
+                self.lower_memories.is_terminals.extend(memory.is_terminals)
 
                 self.action_timesteps += current_action_timesteps
                 self.global_step += current_action_timesteps * self.control_args['lower_action_duration']
@@ -305,23 +308,23 @@ class DesignEnv(gym.Env):
 
                 # Update PPO every n times (or close to n) action has been taken 
                 if self.action_timesteps >= self.control_args['lower_update_freq']:
-                    print(f"Updating Lower PPO with {len(lower_memories.actions)} memories") 
+                    print(f"Updating Lower PPO with {len(self.lower_memories.actions)} memories") 
                     self.lower_update_count += 1
 
                     # Anneal after every update
                     if self.control_args['lower_anneal_lr']:
                         current_lr_lower = self.lower_ppo.update_learning_rate(iteration, self.total_updates_lower)
 
-                    avg_lower_reward = sum(lower_memories.rewards) / len(lower_memories.rewards)
+                    avg_lower_reward = sum(self.lower_memories.rewards) / len(self.lower_memories.rewards)
                     print(f"\nAverage Lower Reward (across all memories): {avg_lower_reward}\n")
 
-                    lower_loss = self.lower_ppo.update(lower_memories, num_proposals)
+                    lower_loss = self.lower_ppo.update(self.lower_memories, num_proposals)
 
                     # Reset all memories
-                    del lower_memories
-                    lower_memories = Memory() 
+                    del self.lower_memories
+                    self.lower_memories = Memory() 
                     self.action_timesteps = 0
-                    print(f"Size of lower memories after update: {len(lower_memories.actions)}")
+                    print(f"Size of lower memories after update: {len(self.lower_memories.actions)}")
 
                     # This contains the info of the last time it gets updated. While it could be updated multiple times during single step.
                     self.info = {

@@ -118,14 +118,16 @@ class Memory:
     def __init__(self,):
         self.states = []
         self.actions = []
+        self.num_proposals = []
         self.values = []
         self.logprobs = []
         self.rewards = []
         self.is_terminals = []
         
-    def append(self, state, action, value, logprob, reward, done):
+    def append(self, state, action, num_proposals, value, logprob, reward, done):
         self.states.append(state)
-        self.actions.append(action) 
+        self.actions.append(action)
+        self.num_proposals.append(num_proposals)
         self.values.append(value) 
         self.logprobs.append(logprob)
         self.rewards.append(reward) # scalars
@@ -136,13 +138,15 @@ class GraphDataset(torch.utils.data.Dataset):
     """
     Graph data loading helper for the higher-level agent
     """
-    def __init__(self, states, actions, logprobs, advantages, returns, old_values):
+    def __init__(self, states, actions, num_proposals, logprobs, advantages, returns, old_values):
         self.states = states 
         self.actions = actions
+        self.num_proposals = num_proposals
         self.logprobs = logprobs
         self.advantages = advantages
         self.returns = returns
         self.old_values = old_values
+
     def __len__(self):
         return len(self.states)
 
@@ -150,6 +154,7 @@ class GraphDataset(torch.utils.data.Dataset):
         return (
             self.states[idx],
             self.actions[idx],
+            self.num_proposals[idx],
             self.logprobs[idx],
             self.advantages[idx],
             self.returns[idx],
@@ -160,7 +165,7 @@ def collate_fn(data):
     """
     Collate function for the higher-level agent
     """
-    states_batch, actions_batch, old_logprobs_batch, advantages_batch, returns_batch, old_values_batch = zip(*data)
+    states_batch, actions_batch, num_proposals_batch, old_logprobs_batch, advantages_batch, returns_batch, old_values_batch = zip(*data)
     # print(f"\nStates batch: {states_batch}")
     # print(f"\nActions batch: {actions_batch}")
     # print(f"\nOld logprobs batch: {old_logprobs_batch}")
@@ -168,16 +173,22 @@ def collate_fn(data):
     # print(f"\nReturns batch: {returns_batch}")
     # print(f"\nOld values batch: {old_values_batch}")
     states_batch = Batch.from_data_list(states_batch)  
-
     actions_batch = torch.stack(actions_batch, dim=0)
+    num_proposals_batch = torch.stack(num_proposals_batch, dim=0)
     old_logprobs_batch = torch.stack(old_logprobs_batch, dim=0)
 
     # Stack advantages and returns (already scalar tensors)
     advantages_batch = torch.stack(advantages_batch)  # Shape is (batch_size,)
     returns_batch = torch.stack(returns_batch)        # Shape is (batch_size,)
     old_values_batch = torch.stack(old_values_batch)  # Shape is (batch_size,)
-    return states_batch, actions_batch, old_logprobs_batch, advantages_batch, returns_batch, old_values_batch
-
+    # print(f"\nStates batch: {states_batch}")
+    # print(f"\nActions batch: {actions_batch}")
+    # print(f"\nNum proposals batch: {num_proposals_batch}")
+    # print(f"\nOld logprobs batch: {old_logprobs_batch}")
+    # print(f"\nAdvantages batch: {advantages_batch}")
+    # print(f"\nReturns batch: {returns_batch}")
+    # print(f"\nOld values batch: {old_values_batch}")
+    return states_batch, actions_batch, num_proposals_batch, old_logprobs_batch, advantages_batch, returns_batch, old_values_batch
 
 
 # 1. Legendre Quadrature 

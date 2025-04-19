@@ -9,7 +9,6 @@ from ppo.ppo import PPO
 from ppo.ppo_utils import Memory, WelfordNormalizer
 from config import get_config, classify_and_return_args
 import torch.multiprocessing as mp
-from torch_geometric.data import Batch
 from sweep import HyperParameterTuner
 from torch.utils.tensorboard import SummaryWriter
 from utils import *
@@ -96,7 +95,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
     higher_ppo.policy_old = higher_ppo.policy_old.to(device)
     higher_ppo.policy = higher_ppo.policy.to(device)
 
-    higher_state = Batch.from_data_list([higher_env.reset()]) # Batch the data before sending to the model.
+    higher_state = higher_env.reset()
     print(f"\nHigher state at reset: {higher_state}")
     higher_memories = Memory()
 
@@ -134,7 +133,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
         
         # Since the higher agent internally takes a step where a number of parallel lower agents take their own steps, 
         # We return things relevant to both the higher and lower agents. First, for higher.
-        higher_next_state, higher_reward, higher_done, info = higher_env.step(merged_proposals, # Act on the enrironment with merged proposals
+        higher_next_state, higher_reward, higher_done, info = higher_env.step(merged_proposals, # Act on the environment with merged proposals
                                                                                      num_proposals, 
                                                                                      iteration,
                                                                                      SEED,
@@ -145,14 +144,15 @@ def train(train_config, is_sweep=False, sweep_config=None):
         
         # Get value from critic network
         with torch.no_grad():
-            critic_output = higher_ppo.policy_old.critic(higher_state)
+            critic_output = higher_ppo.policy_old.critic(higher_state, device=device)
             print(f"Critic output shape: {critic_output.shape}")
             print(f"Critic output: {critic_output}")
             # The critic returns a tensor of shape [1], so we can directly call .item()
             higher_value = critic_output.item()
-        
-        # Append to memory, the original proposals. Get reward based on merged proposals.
-        higher_memories.append(higher_state, original_proposals, higher_value, higher_logprob, higher_reward, higher_done) 
+        # print(f"\n\n\nNum proposals: {num_proposals}\n\n\n")
+        # Append to memory, the original proposals. Get reward based on merged proposals. Merging operation = environment physics.
+        # Add num_proposals for code re-use and consistency but dont make use of it in the higher agent.
+        higher_memories.append(higher_state, original_proposals, num_proposals, higher_value, higher_logprob, higher_reward, higher_done) 
 
         if iteration % design_args['higher_update_freq'] == 0:
             print(f"Updating Higher PPO with {len(higher_memories.actions)} memories") 
@@ -283,7 +283,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
             writer.add_scalar('Evaluation/Avg_Ped_Wait', eval_ped_avg_wait, higher_env.global_step)
             writer.add_scalar('Evaluation/Avg_Eval', lower_avg_eval, higher_env.global_step)
 
-        higher_state = Batch.from_data_list([higher_next_state]) # Convert Data object back to Batch
+        higher_state = higher_next_state
 
     if is_sweep:
         wandb.finish()
@@ -341,7 +341,7 @@ def eval(design_args,
     shared_lower_policy.eval()
     higher_policy.eval()
     lower_state_normalizer.eval()
-    higher_state = Batch.from_data_list([higher_env.reset()]) # At reset, we get the original real-world configuration.
+    higher_state = higher_env.reset() # At reset, we get the original real-world configuration.
 
     if real_world:
         iteration = "0"
