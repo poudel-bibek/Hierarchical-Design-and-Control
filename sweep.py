@@ -62,13 +62,6 @@ class HyperParameterTuner:
                 'lower_eps_clip': {'values': [0.1, 0.2, 0.3]},
                 'lower_ent_coef': {'values': [0.005, 0.01, 0.02]},
             },
-
-            'early_terminate': {
-                'type':  'threshold',
-                'name':  'higher/approx_kl',   # must match the key you log
-                'value': 0.01,                 # cancel if approx_kl > 0.04 …
-                'min_iter': 3                  # … after at least 3 calls to wandb.log
-            }
         }
         
         return wandb.sweep(sweep_config, entity="fluidic-city", project=self.project)
