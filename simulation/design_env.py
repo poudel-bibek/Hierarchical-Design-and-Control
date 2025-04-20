@@ -280,15 +280,16 @@ class DesignEnv(gym.Env):
             active_lower_workers.append(rank)
         
         # lower_memories = Memory()
-        design_rewards = []
-
+        design_rewards_norm = []
+        design_rewards_unnorm = [] # Unnormalized reward for logging.
         while active_lower_workers:
             print(f"Active workers: {active_lower_workers}")
-            rank, memory, design_reward = lower_queue.get(timeout=120)
+            rank, memory, design_reward_unnorm, design_reward_norm = lower_queue.get(timeout=120) 
 
             if memory is None:
                 print(f"Worker {rank} None received\n")
-                design_rewards.append(design_reward)
+                design_rewards_norm.append(design_reward_norm) # Store the normalized reward
+                design_rewards_unnorm.append(design_reward_unnorm) # Store the unnormalized reward
                 active_lower_workers.remove(rank)
             else:
                 current_action_timesteps = len(memory.states)
@@ -349,14 +350,16 @@ class DesignEnv(gym.Env):
 
         # Higher level agent's reward can only be obtained after the lower level workers have finished
         # It is also averaged across the various lower level workers.
-        average_design_reward = np.mean(design_rewards)
-        print(f"\nAverage design reward: {average_design_reward}\n")
+        average_design_reward_norm = np.mean(design_rewards_norm)
+        average_design_reward_unnorm = np.mean(design_rewards_unnorm)
+        print(f"\nAverage design reward (Normalized): {average_design_reward_norm}\n")
+        print(f"\nAverage design reward (Unnormalized): {average_design_reward_unnorm}\n")
         iterative_torch_graph = self._convert_to_torch_geometric(self.iterative_networkx_graph)
         next_state = Data(x=iterative_torch_graph.x,
                            edge_index=iterative_torch_graph.edge_index,
                            edge_attr=iterative_torch_graph.edge_attr)
                       
-        return next_state, average_design_reward, done, self.info
+        return next_state, average_design_reward_norm, average_design_reward_unnorm, done, self.info
 
     def _apply_action(self, proposals, iteration):
         """

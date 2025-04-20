@@ -133,7 +133,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
         
         # Since the higher agent internally takes a step where a number of parallel lower agents take their own steps, 
         # We return things relevant to both the higher and lower agents. First, for higher.
-        higher_next_state, higher_reward, higher_done, info = higher_env.step(merged_proposals, # Act on the environment with merged proposals
+        higher_next_state, higher_reward_norm, higher_reward_unnorm, higher_done, info = higher_env.step(merged_proposals, # Act on the environment with merged proposals
                                                                                      num_proposals, 
                                                                                      iteration,
                                                                                      SEED,
@@ -152,7 +152,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
         # print(f"\n\n\nNum proposals: {num_proposals}\n\n\n")
         # Append to memory, the original proposals. Get reward based on merged proposals. Merging operation = environment physics.
         # Add num_proposals for code re-use and consistency but dont make use of it in the higher agent.
-        higher_memories.append(higher_state, original_proposals, num_proposals, higher_value, higher_logprob, higher_reward, higher_done) 
+        higher_memories.append(higher_state, original_proposals, num_proposals, higher_value, higher_logprob, higher_reward_norm, higher_done) 
 
         if iteration % design_args['higher_update_freq'] == 0:
             print(f"Updating Higher PPO with {len(higher_memories.actions)} memories") 
@@ -202,7 +202,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
                 print(f"Evaluation results: \n\tHigher: {eval_ped_avg_arrival} \n\tLower: {lower_avg_eval}")
 
             # save the policies at every update
-            if avg_higher_reward > best_higher_reward:
+            if avg_higher_reward > best_higher_reward: 
                 save_policy(higher_ppo.policy, 
                             higher_env.lower_ppo.policy, 
                             lower_state_normalizer, 
@@ -237,7 +237,8 @@ def train(train_config, is_sweep=False, sweep_config=None):
             wandb.log(data = {
                 "iteration": iteration,
                 "global_step": higher_env.global_step,
-                "higher/avg_reward": higher_reward,
+                "higher/avg_reward (normalized)": higher_reward_norm,
+                "higher/avg_reward (unnormalized)": higher_reward_unnorm,
                 "higher/update_count": higher_update_count,
                 "higher/current_lr": current_lr_higher if train_config['higher_anneal_lr'] else higher_ppo_args['lr'],
                 "higher/losses/policy_loss": higher_loss['policy_loss'],

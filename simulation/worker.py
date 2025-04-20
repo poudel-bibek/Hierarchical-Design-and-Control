@@ -63,17 +63,17 @@ def parallel_train_worker(rank,
 
             # Perform action
             # These reward and next_state are for the action_duration timesteps.
-            next_state, control_reward, done, truncated, _ = worker_env.train_step(action) # need the returned state to be 2D. pass the unpadded action
-            control_reward = lower_reward_normalizer.normalize(torch.tensor([control_reward], dtype=torch.float32)).item()
-            ep_reward += control_reward
+            next_state, control_reward_unnorm, done, truncated, _ = worker_env.train_step(action) # need the returned state to be 2D. pass the unpadded action
+            control_reward_norm = lower_reward_normalizer.normalize(torch.tensor([control_reward_unnorm], dtype=torch.float32)).item()
+            ep_reward += control_reward_norm
 
             # Store data in memory
-            local_memory.append(state, padded_action, num_proposals, value, logprob, control_reward, done) # pass the padded action
+            local_memory.append(state, padded_action, num_proposals, value, logprob, control_reward_norm, done) # pass the padded action
             steps_since_update += 1
 
             if steps_since_update >= memory_transfer_freq or done or truncated:
                 # Put local memory in the queue for the main process to collect
-                train_queue.put((rank, local_memory, None))
+                train_queue.put((rank, local_memory, None, None))
                 local_memory = Memory()  # Reset local memory
                 steps_since_update = 0
 
@@ -82,13 +82,14 @@ def parallel_train_worker(rank,
                 break
         
         # Higher level agent's reward can only be obtained after the lower level workers have finished
-        design_reward_tensor = torch.tensor([worker_env._get_design_reward(num_proposals)], dtype=torch.float32) # Wrap in list
-        design_reward = higher_reward_normalizer.normalize(design_reward_tensor).item()
-        print(f"Design reward: {design_reward}")
+        design_reward = worker_env._get_design_reward(num_proposals)
+        design_reward_tensor = torch.tensor([design_reward], dtype=torch.float32) # Wrap in list
+        design_reward_norm = higher_reward_normalizer.normalize(design_reward_tensor).item()
+        print(f"Design reward: {design_reward_norm}")
 
         # In PPO, we do not make use of the total reward. We only use the rewards collected in the memory.
-        print(f"Worker {rank} finished. Control Episode Reward: {round(ep_reward, 2)}. Design Reward: {round(design_reward, 2)}. Worker puts None in queue.")
-        train_queue.put((rank, None, design_reward))  # Signal that this worker is done 
+        print(f"Worker {rank} finished. Control Episode Reward: {round(ep_reward, 2)}. Design Reward (Normalized): {round(design_reward_norm, 2)}. Worker puts None in queue.")
+        train_queue.put((rank, None, design_reward, design_reward_norm))  # Signal that this worker is done 
 
     finally:
         if 'worker_env' in locals() and worker_env is not None:

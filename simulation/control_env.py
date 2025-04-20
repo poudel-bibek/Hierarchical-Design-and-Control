@@ -990,7 +990,7 @@ class ControlEnv(gym.Env):
         # General 
 
         # Normalize
-        design_reward = design_reward / 100.0
+        # design_reward = design_reward / 100.0 # Extra Normalization
         return design_reward
     
     def _get_control_reward(self, corrected_occupancy_map, switch_state, pressure_dict=None):

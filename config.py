@@ -21,7 +21,7 @@ def get_config():
         # PPO (general params)
         "seed": None,  # Random seed (default: None)
         "gpu": True,  # Use GPU if available (default: use CPU)
-        "total_timesteps": 5000000,  # Total number of timesteps the simulation will run
+        "total_timesteps": 8000000,  # Total number of timesteps the simulation will run
         "eval_freq": 1,  # Evaluate both higher and lower-level policies and their normalizers after every n updates of the higher policy (0 to disable). 
         # Also decides how often to evaluate
 
@@ -78,18 +78,18 @@ def get_config():
         "lower_action_dim": None, # will be set later
         "lower_in_channels": 1, # in_channels for cnn
         "lower_activation": "tanh",  # Policy activation function
-        "lower_max_timesteps": 360,  # Maximum number of steps in one episode (make this multiple of 16*10)
+        "lower_max_timesteps": 460,  # Maximum number of steps in one episode (make this multiple of 16*10)
         "lower_memory_transfer_freq": 16,  # Frequency of memory transfer from worker to main process 
         "lower_per_timestep_state_dim": 11 + 32 + 8 * 10,  # Number of features per timestep (corresponding to max_proposals = 10), calculation in _get_observation function.
         "lower_step_length": 1.0,  # Real-world time in seconds per simulation timestep (default: 1.0). 
         "lower_action_duration": 10,  # Number of simulation timesteps for each action (default: 10)
-        "lower_warmup_steps": [100, 240],  # Number of steps to run before collecting data
+        "lower_warmup_steps": [40, 140],  # Number of steps to run before collecting data
         "lower_auto_start": True,  # Automatically start the simulation
 
         # Evaluation
         "eval_model_path": "./runs/Apr14_09-23-45/saved_policies/best_eval_policy.pth",  # Path to the saved PPO model for evaluation. replace xyz.
-        "eval_lower_timesteps": 500,  # Number of timesteps to each episode. Warmup not counted.
-        "eval_lower_workers": 8,  # Parallelizes how many demands can be evaluated at the same time.
+        "eval_lower_timesteps": 460,  # Number of timesteps to each episode. Warmup not counted.
+        "eval_lower_workers": 10,  # Parallelizes how many demands can be evaluated at the same time.
         "eval_worker_device": "gpu",  # Policy during eval can be run in GPU 
     }
     return config
