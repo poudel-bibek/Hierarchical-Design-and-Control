@@ -858,20 +858,27 @@ def plot_design_results(*json_paths, in_range_demand_scales):
     x_min, x_max = unique_scales.min(), unique_scales.max()
     x_margin = 0.05 * (x_max - x_min)
 
+    # Remove top/right spines and set x-axis limits
     for ax in panels:
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
-        ax.grid(True, axis='y') # Only horizontal grid lines
         ax.set_xlim(x_min - x_margin, x_max + x_margin)
-        ax.set_xticks(unique_scales, minor=True)
-        ax.grid(which='minor', axis='x', linestyle='--', linewidth=0.8, alpha=0.7, zorder=-5)
-        ax.grid(which='major', axis='x', linestyle='--', linewidth=0.8, alpha=0.7, zorder=-5) # Also show major x-grid
 
+    # Shade out-of-range demand scales before drawing gridlines
     vmin, vmax = min(in_range_demand_scales), max(in_range_demand_scales)
     for ax in panels:
-        xlim = ax.get_xlim() # Get current limits AFTER setting them
-        ax.axvspan(xlim[0], vmin, facecolor='grey', alpha=0.2, zorder=-2) 
-        ax.axvspan(vmax, xlim[1], facecolor='grey', alpha=0.2, zorder=-2) 
+        xlim = ax.get_xlim()  # axis limits already set
+        ax.axvspan(xlim[0], vmin, facecolor='grey', alpha=0.25, zorder=-2)
+        ax.axvspan(vmax, xlim[1], facecolor='grey', alpha=0.25, zorder=-2)
+
+    # Draw gridlines on top of shading
+    for ax in panels:
+        ax.grid(True, axis='y')  # Only horizontal grid lines
+        ax.set_xticks(unique_scales, minor=True)
+        ax.grid(which='minor', axis='x', linestyle='--', linewidth=0.8,
+                alpha=0.7, zorder=-5)
+        ax.grid(which='major', axis='x', linestyle='--', linewidth=0.8,
+                alpha=0.7, zorder=-5)
 
     legend_handles = []
     labels = ['Design Agent', 'Real-world'] # Assuming order matches json_paths
