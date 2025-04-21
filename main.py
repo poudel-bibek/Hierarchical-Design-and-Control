@@ -39,10 +39,6 @@ def train(train_config, is_sweep=False, sweep_config=None):
     current_time = datetime.now().strftime('%b%d_%H-%M-%S')
     run_dir = os.path.join('runs', current_time)
     os.makedirs(run_dir, exist_ok=True)
-    config_path = os.path.join(run_dir, f'config_{current_time}.json')
-    save_config(train_config, config_path)
-    print(f"\nConfiguration saved to {config_path}")
-
     design_args, control_args, higher_ppo_args, lower_ppo_args, eval_args = classify_and_return_args(train_config, device)
 
     # Print stats from dummy environment
@@ -116,6 +112,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
     eval_veh_avg_wait = 200.0
     eval_ped_avg_wait = 200.0
     current_lr_higher = higher_ppo_args['lr']
+    save_config(higher_ppo_args, lower_ppo_args, control_args, design_args, run_dir)
 
     for iteration in range(1, total_iterations + 1): #start from 1, else policy gets updated at step 0.
         print(f"\nStarting iteration: {iteration}/{total_iterations} with {higher_env.global_step} total steps so far\n")
@@ -162,12 +159,8 @@ def train(train_config, is_sweep=False, sweep_config=None):
                 current_lr_higher = higher_ppo.update_learning_rate(higher_update_count, total_updates_higher)
 
             avg_higher_reward = sum(higher_memories.rewards) / len(higher_memories.rewards)
-            print(f"\nAverage Higher Reward (across all memories): {avg_higher_reward}\n")
-
             higher_loss = higher_ppo.update(higher_memories)
-
-            # Reset memory
-            del higher_memories
+            del higher_memories # Reset memory
             higher_memories = Memory()
 
             # eval the policies every now and then. 
@@ -247,7 +240,6 @@ def train(train_config, is_sweep=False, sweep_config=None):
                 "higher/losses/total_loss": higher_loss['total_loss'],
                 "higher/approx_kl": higher_loss['approx_kl'],
                 "evals/avg_ped_arrival": eval_ped_avg_arrival,
-
                 "lower/avg_reward": info['lower_avg_reward'],
                 "lower/update_count": info['lower_update_count'],
                 "lower/current_lr": info['lower_current_lr'],
@@ -262,7 +254,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
                 step=higher_env.global_step)
         else:
             writer.add_scalar('Iteration', iteration, higher_env.global_step)
-            writer.add_scalar('Higher/Average_Reward', higher_reward, higher_env.global_step)
+            writer.add_scalar('Higher/Average_Reward', avg_higher_reward, higher_env.global_step)
             writer.add_scalar('Higher/Update_Count', higher_update_count, higher_env.global_step)
             writer.add_scalar('Higher/Current_LR', current_lr_higher if train_config['higher_anneal_lr'] else higher_ppo_args['lr'], higher_env.global_step)
             writer.add_scalar('Higher/Losses/Policy_Loss', higher_loss['policy_loss'], higher_env.global_step)
@@ -271,7 +263,6 @@ def train(train_config, is_sweep=False, sweep_config=None):
             writer.add_scalar('Higher/Losses/Total_Loss', higher_loss['total_loss'], higher_env.global_step)
             writer.add_scalar('Higher/Approx_KL', higher_loss['approx_kl'], higher_env.global_step)
             writer.add_scalar('Evaluation/Avg_Ped_Arrival', eval_ped_avg_arrival, higher_env.global_step)
-
             writer.add_scalar('Lower/Average_Reward', info['lower_avg_reward'], higher_env.global_step)
             writer.add_scalar('Lower/Update_Count', info['lower_update_count'], higher_env.global_step)
             writer.add_scalar('Lower/Current_LR', info['lower_current_lr'], higher_env.global_step)
@@ -468,6 +459,13 @@ def main(config):
                                                            real_world=True) 
         
         # Evaluate the ``new design`` in the all three settings. The new design network has to be same across all three settings.
+        # Load the policy params (model sizes etc) from the config file. 
+        config_file_path = os.path.join(run_dir_parent, 'config.json')
+        with open(config_file_path, 'r') as f:
+            saved_config = json.load(f)['hyperparameters']
+        higher_ppo_args = saved_config['higher_ppo_args']
+        lower_ppo_args = saved_config['lower_ppo_args']
+
         new_design_ppo_results_path = eval(design_args, 
                                            control_args, 
                                            higher_ppo_args, 

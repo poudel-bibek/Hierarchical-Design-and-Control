@@ -1,9 +1,9 @@
 def get_config():
     config = {
         # Simulation
-        "sweep": True,  # Use wandb sweeps for hyperparameter tuning
-        "evaluate": False, 
-        "gui": False,  # Use SUMO GUI (default: False)
+        "sweep": False,  # Use wandb sweeps for hyperparameter tuning
+        "evaluate": True, 
+        "gui": True,  # Use SUMO GUI (default: False)
          
         "vehicle_input_trips": "./simulation/original_vehtrips.xml",  # Original Input trips file
         "vehicle_output_trips": "./simulation/scaled_trips/scaled_vehtrips.xml",  # Output trips file
@@ -87,7 +87,7 @@ def get_config():
         "lower_auto_start": True,  # Automatically start the simulation
 
         # Evaluation
-        "eval_model_path": "./runs/Apr14_09-23-45/saved_policies/best_eval_policy.pth",  # Path to the saved PPO model for evaluation. replace xyz.
+        "eval_model_path": "./runs/Apr20_12-57-48/saved_policies/best_eval_policy.pth",  # Path to the saved PPO model for evaluation. replace xyz.
         "eval_lower_timesteps": 460,  # Number of timesteps to each episode. Warmup not counted.
         "eval_lower_workers": 8,  # Parallelizes how many demands can be evaluated at the same time.
         "eval_worker_device": "gpu",  # Policy during eval can be run in GPU 
@@ -200,7 +200,7 @@ def classify_and_return_args(train_config, device):
 
     if train_config['evaluate']:
         # during evaluation
-        eval_n_iterations = 5
+        eval_n_iterations = 10 # For the sliced window demand approach, we need more iterations.
         in_range_demand_scales = [1.0, 1.25, 1.5, 1.75, 2.0, 2.25] 
         out_of_range_demand_scales = [0.5, 0.75, 2.5, 2.75]
     else: 

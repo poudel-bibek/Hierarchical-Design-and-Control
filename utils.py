@@ -19,12 +19,18 @@ from matplotlib.ticker import MaxNLocator, MultipleLocator
 import xml.etree.ElementTree as ET
 from matplotlib.gridspec import GridSpec
 
-def save_config(config, save_path):
+def save_config(higher_ppo_args, lower_ppo_args, control_args, design_args, run_dir):
     """
     Save hyperparameters to json.
     """
+    save_path = os.path.join(run_dir, 'config.json')
     config_to_save = {
-        "hyperparameters": config,
+        "hyperparameters": {
+            "higher_ppo_args": higher_ppo_args,
+            "lower_ppo_args": lower_ppo_args,
+            "control_args": control_args,
+            "design_args": design_args,
+        },
     }
     with open(save_path, 'w') as f:
         json.dump(config_to_save, f, indent=4)
