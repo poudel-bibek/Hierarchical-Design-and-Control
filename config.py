@@ -72,7 +72,7 @@ def get_config():
         "lower_ent_coef": 0.01,  # Entropy coefficient
         "lower_vf_coef": 0.5,  # Value function coefficient
         "lower_batch_size": 64,  # Batch size
-        "lower_num_processes": 8,  # Number of parallel processes to use (agent has multiple workers)
+        "lower_num_processes": 10,  # Number of parallel processes to use (agent has multiple workers)
         "lower_model_size": "medium",  # Model size for CNN: 'small' or 'medium'
         "lower_dropout_rate": 0.25,  # Dropout rate for CNN
         "lower_action_dim": None, # will be set later
@@ -165,7 +165,7 @@ def classify_and_return_args(train_config, device):
     higher_ppo_args = {
         'model_dim': train_config['higher_in_channels'],
         'action_dim': train_config['max_proposals'],  # Action dimension
-        'device': device,
+        'device': str(device),
         'lr': train_config['higher_lr'],
         'gamma': train_config['higher_gamma'],
         'K_epochs': train_config['higher_K_epochs'],
@@ -183,7 +183,7 @@ def classify_and_return_args(train_config, device):
     lower_ppo_args = {
         'model_dim': train_config['lower_in_channels'], 
         'action_dim': train_config['max_proposals'] + 4, # 4 for intersection action and max_proposals for midblock actions.
-        'device': device,
+        'device': str(device),
         'lr': train_config['lower_lr'],
         'gamma': train_config['lower_gamma'],
         'K_epochs': train_config['lower_K_epochs'],
