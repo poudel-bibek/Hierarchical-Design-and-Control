@@ -461,10 +461,12 @@ def main(config):
         # Evaluate the ``new design`` in the all three settings. The new design network has to be same across all three settings.
         # Load the policy params (model sizes etc) from the config file. 
         config_file_path = os.path.join(run_dir_parent, 'config.json')
+        print(f"Config file path: {config_file_path}")
         with open(config_file_path, 'r') as f:
             saved_config = json.load(f)['hyperparameters']
         higher_ppo_args = saved_config['higher_ppo_args']
         lower_ppo_args = saved_config['lower_ppo_args']
+        higher_ppo_args['model_kwargs']['run_dir'] = run_dir_parent
 
         new_design_ppo_results_path = eval(design_args, 
                                            control_args, 
@@ -493,12 +495,12 @@ def main(config):
                                                     tl=True, 
                                                     unsignalized=True)
 
-        plot_control_results(new_design_unsignalized_results_path, 
+        plot_control_results_new_style(new_design_unsignalized_results_path, 
                           new_design_tl_results_path,
                           new_design_ppo_results_path,
                           in_range_demand_scales = eval_args['in_range_demand_scales'])
         
-        plot_design_results(new_design_unsignalized_results_path, 
+        plot_design_results_new_style(new_design_unsignalized_results_path, 
                           real_world_design_unsignalized_results_path,
                           in_range_demand_scales = eval_args['in_range_demand_scales'])
 
