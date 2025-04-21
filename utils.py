@@ -1353,20 +1353,20 @@ def graph_to_video():
 
 
 # ###############
-run_dir = "Apr20_12-57-48"
-eval_dir = "eval_Apr21_10-10-39"
-real_world_design_unsignalized_results_path = f'./runs/{run_dir}/results/{eval_dir}/realworld_unsignalized.json'
-new_design_ppo_results_path = f'./runs/{run_dir}/results/{eval_dir}/best_eval_policy_ppo.json'
-new_design_tl_results_path = f'./runs/{run_dir}/results/{eval_dir}/best_eval_policy_tl.json'
-new_design_unsignalized_results_path = f'./runs/{run_dir}/results/{eval_dir}/best_eval_policy_unsignalized.json'
+# run_dir = "Apr20_12-57-48"
+# eval_dir = "eval_Apr21_10-10-39"
+# real_world_design_unsignalized_results_path = f'./runs/{run_dir}/results/{eval_dir}/realworld_unsignalized.json'
+# new_design_ppo_results_path = f'./runs/{run_dir}/results/{eval_dir}/best_eval_policy_ppo.json'
+# new_design_tl_results_path = f'./runs/{run_dir}/results/{eval_dir}/best_eval_policy_tl.json'
+# new_design_unsignalized_results_path = f'./runs/{run_dir}/results/{eval_dir}/best_eval_policy_unsignalized.json'
 
-irds = [1.0, 1.25, 1.5, 1.75, 2.0, 2.25]
+# irds = [1.0, 1.25, 1.5, 1.75, 2.0, 2.25]
 
-plot_design_results(new_design_unsignalized_results_path, 
-                    real_world_design_unsignalized_results_path,
-                    in_range_demand_scales = irds)
+# plot_design_results(new_design_unsignalized_results_path, 
+#                     real_world_design_unsignalized_results_path,
+#                     in_range_demand_scales = irds)
 
-plot_control_results(new_design_unsignalized_results_path,
-                                 new_design_tl_results_path,
-                                 new_design_ppo_results_path,
-                                 in_range_demand_scales = irds)
+# plot_control_results(new_design_unsignalized_results_path,
+#                                  new_design_tl_results_path,
+#                                  new_design_ppo_results_path,
+#                                  in_range_demand_scales = irds)
