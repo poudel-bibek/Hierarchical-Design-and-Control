@@ -1386,7 +1386,7 @@ class ControlEnv(gym.Env):
 
         if self.auto_start:
             sumo_cmd = ["sumo-gui" if self.use_gui else "sumo", 
-                        "--verbose",
+                        # "--verbose",
                         "--start" , 
                         "--quit-on-end", 
                         "-c", f"{self.run_dir}/Craver_traffic_lights_iterative.sumocfg", 
@@ -1394,7 +1394,7 @@ class ControlEnv(gym.Env):
                         "--route-files", f"{self.vehicle_output_trips},{self.pedestrian_output_trips}"]
         else:
             sumo_cmd = ["sumo-gui" if self.use_gui else "sumo", 
-                        "--verbose",  
+                        # "--verbose",  
                         "--quit-on-end", 
                         "-c", f"{self.run_dir}/Craver_traffic_lights_iterative.sumocfg", 
                         "--step-length", str(self.step_length),
@@ -1471,7 +1471,7 @@ class ControlEnv(gym.Env):
                     # No reward calculation
                     # self.step_count += 1 # We are not counting the warmup steps in the total simulation steps
 
-        print(f"\n{warmup} steps of warmup ended.")
+        # print(f"\n{warmup} steps of warmup ended.")
         observation_buffer = observation_buffer[-self.steps_per_action:] # Only keep the observation of thelast action
         observation = np.asarray(observation_buffer, dtype=np.float32)
         #print(f"\nObservation (in reset): {observation.shape}")

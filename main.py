@@ -145,8 +145,8 @@ def train(train_config, is_sweep=False, sweep_config=None):
         # Get value from critic network
         with torch.no_grad():
             critic_output = higher_ppo.policy_old.critic(higher_state, device=device)
-            print(f"Critic output shape: {critic_output.shape}")
-            print(f"Critic output: {critic_output}")
+            # print(f"Critic output shape: {critic_output.shape}")
+            # print(f"Critic output: {critic_output}")
             # The critic returns a tensor of shape [1], so we can directly call .item()
             higher_value = critic_output.item()
         # print(f"\n\n\nNum proposals: {num_proposals}\n\n\n")

@@ -309,7 +309,7 @@ class DesignEnv(gym.Env):
 
                 # Update PPO every n times (or close to n) action has been taken 
                 if self.action_timesteps >= self.control_args['lower_update_freq']:
-                    print(f"Updating Lower PPO with {len(self.lower_memories.actions)} memories") 
+                    # print(f"Updating Lower PPO with {len(self.lower_memories.actions)} memories") 
                     self.lower_update_count += 1
 
                     # Anneal after every update
@@ -317,7 +317,7 @@ class DesignEnv(gym.Env):
                         current_lr_lower = self.lower_ppo.update_learning_rate(iteration, self.total_updates_lower)
 
                     avg_lower_reward = sum(self.lower_memories.rewards) / len(self.lower_memories.rewards)
-                    print(f"\nAverage Lower Reward (across all memories): {avg_lower_reward}\n")
+                    # print(f"\nAverage Lower Reward (across all memories): {avg_lower_reward}\n")
 
                     lower_loss = self.lower_ppo.update(self.lower_memories, num_proposals)
 
@@ -325,7 +325,7 @@ class DesignEnv(gym.Env):
                     del self.lower_memories
                     self.lower_memories = Memory() 
                     self.action_timesteps = 0
-                    print(f"Size of lower memories after update: {len(self.lower_memories.actions)}")
+                    # print(f"Size of lower memories after update: {len(self.lower_memories.actions)}")
 
                     # This contains the info of the last time it gets updated. While it could be updated multiple times during single step.
                     self.info = {
@@ -342,7 +342,7 @@ class DesignEnv(gym.Env):
          # Clean up. The join() method ensures that the main program waits for all processes to complete before continuing.
         for p in lower_processes:
             p.join() 
-        print(f"All processes joined\n\n")
+        # print(f"All processes joined\n\n")
 
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
@@ -352,8 +352,8 @@ class DesignEnv(gym.Env):
         # It is also averaged across the various lower level workers.
         average_design_reward_norm = np.mean(design_rewards_norm)
         average_design_reward_unnorm = np.mean(design_rewards_unnorm)
-        print(f"\nAverage design reward (Normalized): {average_design_reward_norm}\n")
-        print(f"\nAverage design reward (Unnormalized): {average_design_reward_unnorm}\n")
+        # print(f"\nAverage design reward (Normalized): {average_design_reward_norm}\n")
+        # print(f"\nAverage design reward (Unnormalized): {average_design_reward_unnorm}\n")
         iterative_torch_graph = self._convert_to_torch_geometric(self.iterative_networkx_graph)
         next_state = Data(x=iterative_torch_graph.x,
                            edge_index=iterative_torch_graph.edge_index,
