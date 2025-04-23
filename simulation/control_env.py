@@ -86,7 +86,7 @@ class ControlEnv(gym.Env):
         # Normalization parameters (100m cutoff distance with 5m veh and 2.5m gap = approx 13 vehicles)
         self.max_pressure_vehicle = 15
         self.max_pressure_pedestrian = 25 # arbitrary
-        self.cutoff_distance = 100
+        self.cutoff_distance = 50.0
 
         # For safety conflict tracking (only in unsignalized)
         self.recorded_conflicts = set()  # Set of unique conflict identifiers to prevent double-counting
@@ -1154,7 +1154,7 @@ class ControlEnv(gym.Env):
 
         # TODO: Should we consider vicinity for pedestrians as well?
         """
-        MWAQ_VEH_NORMALIZER = 6.0
+        MWAQ_VEH_NORMALIZER = 8.0
         MWAQ_PED_NORMALIZER = 10.0
         VEH_THRESHOLD_SPEED = 0.2 # m/s
         PED_THRESHOLD_SPEED = 0.5 # m/s # 0.1 is the threshold in SUMO by default (i.e. wait time is counted when speed is below 0.1 m/s)
