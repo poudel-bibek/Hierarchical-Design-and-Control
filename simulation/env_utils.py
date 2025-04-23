@@ -307,18 +307,17 @@ def get_initial_veh_edge_config(edges_dict, node_coords):
                 }
     return veh_edges
 
+
 def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_edg_file, original_nod_file, conn_root):
     """
     Find which vehicle edges to remove and which to add (use x-coordinate of middle node to find intersecting edges that are split) .
     Update the connection root to reflect the new connections.
     """
-    # The tolerance is used to limit attaching too close to the ends of the edges. (And not to expand the range of the edge.)
-    TOL = 0.01  # Tolerance. 0.01 SUMO units ≈ 10 mm
 
-    # Create a dictionary of node coordinates 
-    node_coords = {}
-    for node in ET.parse(original_nod_file).getroot().findall('node'):
-        node_coords[node.get('id')] = float(node.get('x'))
+    # build a lookup of every vehicle node’s x-coordinate 
+    vehicle_nodes_x = {n.get('id'): float(n.get('x'))
+                       for n in ET.parse(original_nod_file).getroot().findall('node')}
+    node_coords = vehicle_nodes_x.copy()
 
     edges_dict = {edge.get('id'): edge for edge in ET.parse(original_edg_file).getroot().findall('edge')}
     iterative_edges = get_initial_veh_edge_config(edges_dict, node_coords) # Initialize iterative_edges with initial edge config.
@@ -345,29 +344,18 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
     # As multiple middle nodes can intersect with the same vehicle edge, the splitting of one old edge into multiple new edges has to happen iteratively (splitting one edge at a time).
     # In the same process, the connections (in the conn file) need to change as we go. i.e., Find intersects for each middle node and then update the conn file.
     # The old edge in a connection could either be a 'to' or a 'from' edge. 
-    for i in range(len(middle_nodes_to_add)):
-        m_node = middle_nodes_to_add[i]
+    for i, m_node in enumerate(middle_nodes_to_add):
         x_coord = networkx_graph.nodes[m_node]['pos'][0]
 
         # Handle top edges and top connection
+        # TOP (traffic flows right → left, i.e. from_x > to_x)
         for edge_id, edge_data in list(iterative_edges['top'].items()): # convert to list first 
             min_x = min(edge_data['from_x'], edge_data['to_x']) 
             max_x = max(edge_data['from_x'], edge_data['to_x']) 
+
             # The directions are reversed in top and bottom. For top, greater than `to` and less than `from`.
             if (min_x < x_coord < max_x and edge_id not in edges_to_remove): 
                 
-                # # If too close to an edge endpoint, shift x_coord inward by TOL instead of skipping
-                # if abs(x_coord - min_x) < TOL: # distances to the edge ends.
-                #     print(f"\n\nTop edge {edge_id} Before: {x_coord}.")
-                #     x_coord = min_x + TOL
-                #     print(f"Top edge {edge_id} After: {x_coord}.\n\n")
-                #     breakpoint()
-                # elif abs(x_coord - max_x) < TOL:
-                #     print(f"\n\nTop edge {edge_id} Before: {x_coord}.")
-                #     x_coord = max_x - TOL
-                #     print(f"Top edge {edge_id} After: {x_coord}.\n\n")
-                #     breakpoint()
-
                 # print(f"Top edge {edge_id} intersects mnode {m_node} at x={x_coord:.2f}.")
                 edges_to_remove.append(edge_id)
     
@@ -430,24 +418,17 @@ def get_new_veh_edges_connections(middle_nodes_to_add, networkx_graph, original_
                         conn_root.append(new_connection)
                         conn_root.remove(connection) # remove old connection
 
+        # reset x‑coord before processing bottom edges
+        x_coord = networkx_graph.nodes[m_node]['pos'][0]
+
         # Check bottom edges and bottom connection
         for edge_id, edge_data in list(iterative_edges['bottom'].items()):
-            min_x = min(edge_data['from_x'], edge_data['to_x']) - TOL
-            max_x = max(edge_data['from_x'], edge_data['to_x']) + TOL
+            min_x = min(edge_data['from_x'], edge_data['to_x']) 
+            max_x = max(edge_data['from_x'], edge_data['to_x'])
+
             # For bottom, greater than `from` and less than `to`.
             if (min_x < x_coord < max_x and edge_id not in edges_to_remove):
-                # # If too close to an edge endpoint, shift x_coord inward by TOL instead of skipping
-                # if abs(x_coord - min_x) < TOL: # distances to the edge ends.
-                #     print(f"\n\nBottom edge {edge_id} Before: {x_coord}.")
-                #     x_coord = min_x + TOL
-                #     print(f"Bottom edge {edge_id} After: {x_coord}.\n\n")
-                #     breakpoint()
-                # elif abs(x_coord - max_x) < TOL:
-                #     print(f"\n\nBottom edge {edge_id} Before: {x_coord}.")
-                #     x_coord = max_x - TOL
-                #     print(f"Bottom edge {edge_id} After: {x_coord}.\n\n")
-                #     breakpoint()
-
+                
                 # print(f"Bottom edge {edge_id} intersects mnode {m_node} at x={x_coord:.2f}.")
                 edges_to_remove.append(edge_id) # Need to check both in top and bottom.
                 
