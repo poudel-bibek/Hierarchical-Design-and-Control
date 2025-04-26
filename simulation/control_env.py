@@ -1010,12 +1010,7 @@ class ControlEnv(gym.Env):
         design_reward -= num_proposals*2.0 # Maximum number of proposals is 10. So -20.
 
         # General 
-
-        # Normalize
-        # design_reward = design_reward / 100.0 # Extra Normalization
-
-        # shift so it can be positive
-        design_reward = 100.0 - design_reward
+        
         return design_reward
     
     def _get_control_reward(self, corrected_occupancy_map, switch_state, pressure_dict=None):
@@ -1290,7 +1285,7 @@ class ControlEnv(gym.Env):
         reward = -1 * (final_int_veh + final_int_ped + final_mb_veh + final_mb_ped)
 
         # Clip the reward (In an appropriately chosen range) before returning. 
-        clipped_reward = np.clip(reward, -10000, 10000)
+        clipped_reward = np.clip(reward, -4000, 4000) # IMPORTANT: If alpha is changed, this range needs to be changed as well.
 
         # if print_reward:
         #     print(f"Intersection Reward Components:\n"
