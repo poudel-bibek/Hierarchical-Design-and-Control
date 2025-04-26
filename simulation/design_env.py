@@ -315,6 +315,7 @@ class DesignEnv(gym.Env):
                 print(f"Action timesteps: {self.action_timesteps}, global step: {self.global_step}")
                 del memory #https://pytorch.org/docs/stable/multiprocessing.html
 
+
                 # Update PPO every n times (or close to n) action has been taken 
                 if self.action_timesteps >= self.control_args['lower_update_freq']:
                     # print(f"Updating Lower PPO with {len(self.lower_memories.actions)} memories") 
@@ -351,8 +352,6 @@ class DesignEnv(gym.Env):
                     }      
 
         # TODO: Update the normalizer stats for all 3.
-
-
 
 
         # Clean up. The join() method ensures that the main program waits for all processes to complete before continuing.
