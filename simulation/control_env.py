@@ -120,7 +120,7 @@ class ControlEnv(gym.Env):
             return "right"       # right only
         return "center"          # both off
 
-    def _step_operations(self, occupancy_map, vehicle_pos_map, print_map=True):
+    def _step_operations(self, occupancy_map, vehicle_pos_map, print_map=False):
         """
         Some corrections have to be done to the occupancy map every step.
         1. Pedestrians wanting to cross, and pedestrians already crossed both are going to be in the same area in simulation. This mechanism helps distinguish between them. 
@@ -226,24 +226,24 @@ class ControlEnv(gym.Env):
         #                     if distance > self.midblock_cutoff_distance:
         #                         occupancy_map[tl_id]["vehicle"][group][direction_turn].remove(veh_id)
 
-        if print_map: 
-            print("\nOccupancy Map:")
-            for tl_id, tl_data in occupancy_map.items():
-                print(f"\nTraffic Light: {tl_id}")
-                for type in ["vehicle"]:#, "pedestrian"]:
-                    print(f"  {type.capitalize()}:")
+        # if print_map: 
+        #     print("\nOccupancy Map:")
+        #     for tl_id, tl_data in occupancy_map.items():
+        #         print(f"\nTraffic Light: {tl_id}")
+        #         for type in ["vehicle"]:#, "pedestrian"]:
+        #             print(f"  {type.capitalize()}:")
 
-                    for group in tl_data[type].keys():
-                        print(f"    {group.capitalize()}:")
-                        for direction, ids in tl_data[type][group].items():
-                            if type == "vehicle":
-                                print(f"      {direction.capitalize()}: {len(ids)} [{', '.join(ids)}]")
-                                for idx in ids:
-                                    distance = self._get_vehicle_distance_to_junction(tl_id, idx)
-                                    print(f"        {idx}: {distance:.2f}m")   
-                            else: 
-                                for area in ids.keys():
-                                    print(f"      {direction.capitalize(), area}: {len(ids[area])} [{', '.join(ids[area])}]")
+        #             for group in tl_data[type].keys():
+        #                 print(f"    {group.capitalize()}:")
+        #                 for direction, ids in tl_data[type][group].items():
+        #                     if type == "vehicle":
+        #                         print(f"      {direction.capitalize()}: {len(ids)} [{', '.join(ids)}]")
+        #                         for idx in ids:
+        #                             distance = self._get_vehicle_distance_to_junction(tl_id, idx)
+        #                             print(f"        {idx}: {distance:.2f}m")   
+        #                     else: 
+        #                         for area in ids.keys():
+        #                             print(f"      {direction.capitalize(), area}: {len(ids[area])} [{', '.join(ids[area])}]")
 
         return occupancy_map
     
