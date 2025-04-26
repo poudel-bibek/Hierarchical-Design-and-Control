@@ -281,6 +281,8 @@ class DesignEnv(gym.Env):
         # lower_memories = Memory()
         design_rewards_norm = []
         design_rewards_unnorm = [] # Unnormalized reward for logging.
+        lower_rewards_norm = []
+        lower_rewards_unnorm = []
         while active_lower_workers:
             print(f"Active workers: {active_lower_workers}")
             rank, memory, design_reward_unnorm = lower_queue.get(timeout=120) 
@@ -299,35 +301,30 @@ class DesignEnv(gym.Env):
                 self.lower_memories.values.extend(memory.values)
                 self.lower_memories.logprobs.extend(memory.logprobs)
                 self.lower_memories.is_terminals.extend(memory.is_terminals)
-                 
-                lower_rewards_norm = []
-                lower_rewards_unnorm = []
+
+                lower_rewards_unnorm.extend(memory.rewards)
+                current_memory_norm = [self.lower_reward_normalizer.normalize([r]).item() for r in memory.rewards]
                 
-                for r in memory.rewards:
-                    r_norm = self.lower_reward_normalizer.normalize([r]).item()
-                    lower_rewards_norm.append(r_norm)
-                    lower_rewards_unnorm.append(r)
                 # supply normalized rewards for gradient updates
-                self.lower_memories.rewards.extend(lower_rewards_norm)
+                lower_rewards_norm.extend(current_memory_norm)
+                self.lower_memories.rewards.extend(current_memory_norm)
 
                 self.action_timesteps += current_action_timesteps
                 self.global_step += current_action_timesteps * self.control_args['lower_action_duration']
                 print(f"Action timesteps: {self.action_timesteps}, global step: {self.global_step}")
                 del memory #https://pytorch.org/docs/stable/multiprocessing.html
 
-
                 # Update PPO every n times (or close to n) action has been taken 
                 if self.action_timesteps >= self.control_args['lower_update_freq']:
                     # print(f"Updating Lower PPO with {len(self.lower_memories.actions)} memories") 
                     self.lower_update_count += 1
 
+                    avg_lower_reward_unnorm = sum(lower_rewards_unnorm) / len(lower_rewards_unnorm)
+                    avg_lower_reward_norm = sum(lower_rewards_norm) / len(lower_rewards_norm)
+                
                     # Anneal after every update
                     if self.control_args['lower_anneal_lr']:
                         current_lr_lower = self.lower_ppo.update_learning_rate(iteration, self.total_updates_lower)
-
-                    avg_lower_reward_unnorm = sum(lower_rewards_unnorm) / len(lower_rewards_unnorm)
-                    avg_lower_reward_norm = sum(lower_rewards_norm) / len(lower_rewards_norm)
-                    # print(f"\nAverage Lower Reward (across all memories): {avg_lower_reward}\n")
 
                     lower_loss = self.lower_ppo.update(self.lower_memories, num_proposals)
 
@@ -335,8 +332,8 @@ class DesignEnv(gym.Env):
                     del self.lower_memories
                     self.lower_memories = Memory() 
                     lower_rewards_norm = []
+                    lower_rewards_unnorm = []
                     self.action_timesteps = 0
-                    # print(f"Size of lower memories after update: {len(self.lower_memories.actions)}")
 
                     # This contains the info of the last time it gets updated. While it could be updated multiple times during single step.
                     self.info = {
