@@ -60,11 +60,8 @@ def train(train_config, is_sweep=False, sweep_config=None):
 
     # use the dummy env shapes to init normalizers
     lower_obs_shape = dummy_envs['lower'].observation_space.shape
-    eval_args['lower_state_dim'] = lower_obs_shape
-    lower_state_normalizer = WelfordNormalizer(lower_obs_shape)
-    lower_reward_normalizer = WelfordNormalizer(1)
-    higher_reward_normalizer = WelfordNormalizer(1) # No state normalizer for design agent.
 
+    eval_args['lower_state_dim'] = lower_obs_shape
     dummy_envs['lower'].close() 
     dummy_envs['higher'].close()
 
@@ -87,7 +84,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
     higher_ppo = PPO(**higher_ppo_args)
     higher_env = DesignEnv(design_args, control_args, lower_ppo_args, run_dir)
     higher_env.total_updates_lower = total_updates_lower
-
+    higher_env.lower_state_normalizer = WelfordNormalizer(lower_obs_shape)
     higher_ppo.policy_old = higher_ppo.policy_old.to(device)
     higher_ppo.policy = higher_ppo.policy.to(device)
 
@@ -132,12 +129,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
         # We return things relevant to both the higher and lower agents. First, for higher.
         higher_next_state, higher_reward_norm, higher_reward_unnorm, higher_done, info = higher_env.step(merged_proposals, # Act on the environment with merged proposals
                                                                                      num_proposals, 
-                                                                                     iteration,
-                                                                                     SEED,
-                                                                                     lower_state_normalizer,
-                                                                                     lower_reward_normalizer,
-                                                                                     higher_reward_normalizer,
-                                                                                     )
+                                                                                     iteration)
         
         # Get value from critic network
         with torch.no_grad():
@@ -168,7 +160,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
                 policy_path = os.path.join(design_args['save_dir'], f'saved_policies/policy_at_{higher_env.global_step}.pth')
                 save_policy(higher_ppo.policy, 
                             higher_env.lower_ppo.policy, 
-                            lower_state_normalizer, 
+                            higher_env.lower_state_normalizer, 
                             higher_env.normalizer_x, 
                             higher_env.normalizer_y, 
                             policy_path)
@@ -240,7 +232,8 @@ def train(train_config, is_sweep=False, sweep_config=None):
                 "higher/losses/total_loss": higher_loss['total_loss'],
                 "higher/approx_kl": higher_loss['approx_kl'],
                 "evals/avg_ped_arrival": eval_ped_avg_arrival,
-                "lower/avg_reward": info['lower_avg_reward'],
+                "lower/avg_reward (normalized)": info['lower_avg_reward_norm'],
+                "lower/avg_reward (unnormalized)": info['lower_avg_reward_unnorm'],
                 "lower/update_count": info['lower_update_count'],
                 "lower/current_lr": info['lower_current_lr'],
                 "lower/losses/policy_loss": info['lower_policy_loss'],
@@ -264,7 +257,8 @@ def train(train_config, is_sweep=False, sweep_config=None):
             writer.add_scalar('Higher/Losses/Total_Loss', higher_loss['total_loss'], higher_env.global_step)
             writer.add_scalar('Higher/Approx_KL', higher_loss['approx_kl'], higher_env.global_step)
             writer.add_scalar('Evaluation/Avg_Ped_Arrival', eval_ped_avg_arrival, higher_env.global_step)
-            writer.add_scalar('Lower/Average_Reward', info['lower_avg_reward'], higher_env.global_step)
+            writer.add_scalar('Lower/Average_Reward (normalized)', info['lower_avg_reward_norm'], higher_env.global_step)
+            writer.add_scalar('Lower/Average_Reward (unnormalized)', info['lower_avg_reward_unnorm'], higher_env.global_step)
             writer.add_scalar('Lower/Update_Count', info['lower_update_count'], higher_env.global_step)
             writer.add_scalar('Lower/Current_LR', info['lower_current_lr'], higher_env.global_step)
             writer.add_scalar('Lower/Losses/Policy_Loss', info['lower_policy_loss'], higher_env.global_step)

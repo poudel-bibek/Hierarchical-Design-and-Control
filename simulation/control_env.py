@@ -1013,6 +1013,9 @@ class ControlEnv(gym.Env):
 
         # Normalize
         # design_reward = design_reward / 100.0 # Extra Normalization
+
+        # shift so it can be positive
+        design_reward = 100.0 - design_reward
         return design_reward
     
     def _get_control_reward(self, corrected_occupancy_map, switch_state, pressure_dict=None):
@@ -1268,10 +1271,11 @@ class ControlEnv(gym.Env):
         # Frequency of switch state changes
         # norm_switch_penalty = sum(switch_state) / len(self.tl_ids)
         
+        alpha = 0.5
         # Final reward calculation
         # For the intersection, exponent the current normalized value (for both veh and ped)
-        final_int_veh = np.exp(norm_int_veh_mwaq) # Alpha value of 0.5 to reduce sensitivity 
-        final_int_ped = np.exp(norm_int_ped_mwaq) 
+        final_int_veh = np.exp(alpha * norm_int_veh_mwaq) # Alpha value of 0.5 to reduce sensitivity 
+        final_int_ped = np.exp(alpha * norm_int_ped_mwaq) 
 
         # For the midblock, compute an L2 norm over the vector of normalized values for each TL, then exponentiate (for both veh and ped)
         norm_mb_veh_l2 = np.linalg.norm(np.array(list(norm_mb_veh_mwaq_per_tl.values())))
@@ -1279,14 +1283,14 @@ class ControlEnv(gym.Env):
 
         # TODO: For Midblock: Can further, effectively "normalize" the L2 aggregation. By dividing ny sqrt(N). Reduce the effect of outliers.
         # Perhaps preserving outliers is beneficial.
-        final_mb_veh = np.exp(norm_mb_veh_l2)
-        final_mb_ped = np.exp(norm_mb_ped_l2)
+        final_mb_veh = np.exp(alpha * norm_mb_veh_l2)
+        final_mb_ped = np.exp(alpha * norm_mb_ped_l2)
 
         # Final reward is the negative sum of the four exponentiated values
         reward = -1 * (final_int_veh + final_int_ped + final_mb_veh + final_mb_ped)
 
         # Clip the reward (In an appropriately chosen range) before returning. 
-        clipped_reward = np.clip(reward, -100000, 100000)
+        clipped_reward = np.clip(reward, -10000, 10000)
 
         # if print_reward:
         #     print(f"Intersection Reward Components:\n"

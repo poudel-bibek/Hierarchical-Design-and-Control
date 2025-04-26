@@ -1,5 +1,5 @@
 import wandb
-import torch.nn as nn
+
 class HyperParameterTuner: 
     def __init__(self, config, train_function):
         self.config = config

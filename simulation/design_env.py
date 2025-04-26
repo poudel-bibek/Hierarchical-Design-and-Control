@@ -9,7 +9,7 @@ import xml.etree.ElementTree as ET
 from gymnasium import spaces
 from torch_geometric.data import Data
 from ppo.ppo import PPO
-from ppo.ppo_utils import Memory
+from ppo.ppo_utils import Memory, WelfordNormalizer
 from .env_utils import *
 from .sim_setup import CONTROLLED_CROSSWALKS_DICT, return_horizontal_nodes
 from .worker import parallel_train_worker
@@ -110,6 +110,10 @@ class DesignEnv(gym.Env):
         }
         self.current_net_file_path = None
         self.lower_memories = Memory()
+
+        self.lower_state_normalizer = None
+        self.lower_reward_normalizer = WelfordNormalizer(1)
+        self.higher_reward_normalizer = WelfordNormalizer(1) # No state normalizer for design agent.
 
     @property
     def action_space(self):
@@ -226,11 +230,7 @@ class DesignEnv(gym.Env):
     def step(self, 
              padded_proposals, 
              num_proposals, 
-             iteration, 
-             SEED, 
-             lower_state_normalizer,
-             lower_reward_normalizer,
-             higher_reward_normalizer):
+             iteration):
         """
         Every step in the design environment involves:
         - Updating the network xml file based on the design action.
@@ -255,7 +255,7 @@ class DesignEnv(gym.Env):
         lower_processes = []
         active_lower_workers = []
         for rank in range(self.control_args['lower_num_processes']):
-            worker_seed = SEED + iteration * 1000 + rank
+            worker_seed = self.control_args['global_seed'] + iteration * 1000 + rank
             p = mp.Process(
                 target=parallel_train_worker,
                 args=(
@@ -267,9 +267,7 @@ class DesignEnv(gym.Env):
                     worker_seed,
                     num_proposals,
                     self.max_proposals,
-                    lower_state_normalizer,
-                    lower_reward_normalizer,
-                    higher_reward_normalizer,
+                    self.lower_state_normalizer,
                     self.extreme_edge_dict,
                     self.lower_ppo_args['device'],
                     iteration,
@@ -282,13 +280,14 @@ class DesignEnv(gym.Env):
         # lower_memories = Memory()
         design_rewards_norm = []
         design_rewards_unnorm = [] # Unnormalized reward for logging.
+        lower_memories_norm = []
         while active_lower_workers:
             print(f"Active workers: {active_lower_workers}")
-            rank, memory, design_reward_unnorm, design_reward_norm = lower_queue.get(timeout=120) 
+            rank, memory, design_reward_unnorm = lower_queue.get(timeout=120) 
 
             if memory is None:
                 print(f"Worker {rank} None received\n")
-                design_rewards_norm.append(design_reward_norm) # Store the normalized reward
+                design_rewards_norm.append(self.higher_reward_normalizer.normalize(design_reward_unnorm)) # Store the normalized reward
                 design_rewards_unnorm.append(design_reward_unnorm) # Store the unnormalized reward
                 active_lower_workers.remove(rank)
             else:
@@ -316,7 +315,8 @@ class DesignEnv(gym.Env):
                     if self.control_args['lower_anneal_lr']:
                         current_lr_lower = self.lower_ppo.update_learning_rate(iteration, self.total_updates_lower)
 
-                    avg_lower_reward = sum(self.lower_memories.rewards) / len(self.lower_memories.rewards)
+                    avg_lower_reward_unnorm = sum(self.lower_memories.rewards) / len(self.lower_memories.rewards)
+                    avg_lower_reward_norm = sum(lower_memories_norm) / len(lower_memories_norm)
                     # print(f"\nAverage Lower Reward (across all memories): {avg_lower_reward}\n")
 
                     lower_loss = self.lower_ppo.update(self.lower_memories, num_proposals)
@@ -324,12 +324,14 @@ class DesignEnv(gym.Env):
                     # Reset all memories
                     del self.lower_memories
                     self.lower_memories = Memory() 
+                    lower_memories_norm = []
                     self.action_timesteps = 0
                     # print(f"Size of lower memories after update: {len(self.lower_memories.actions)}")
 
                     # This contains the info of the last time it gets updated. While it could be updated multiple times during single step.
                     self.info = {
-                        'lower_avg_reward': avg_lower_reward,
+                        'lower_avg_reward_norm': avg_lower_reward_norm,
+                        'lower_avg_reward_unnorm': avg_lower_reward_unnorm,
                         'lower_update_count': self.lower_update_count,
                         'lower_policy_loss': lower_loss['policy_loss'],
                         'lower_value_loss': lower_loss['value_loss'],

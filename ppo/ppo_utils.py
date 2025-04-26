@@ -9,11 +9,9 @@ class WelfordNormalizer:
         """
         Online normalization (for both state and reward) using Welford's algorithm.
         Each lower level PPO actor uses its own copy of the old policy.
-        However, a single (global) instance of the normalizer will be updated by all workers (as a shared resource).
-        To avoid race conditions, lock is used. 
         """
-        self.mean = torch.zeros(shape, dtype=torch.float32).share_memory_() 
-        self.M2 = torch.zeros(shape, dtype=torch.float32).share_memory_() 
+        self.mean = torch.zeros(shape, dtype=torch.float32) #.share_memory_() 
+        self.M2 = torch.zeros(shape, dtype=torch.float32) #.share_memory_() 
         self.count = mp.Value('i', 0) # A variable i that is shared between processes and is init to 0.
         self.eps = eps
         self.lock = mp.Lock()
