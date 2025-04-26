@@ -86,8 +86,9 @@ class ControlEnv(gym.Env):
         # Normalization parameters (100m cutoff distance with 5m veh and 2.5m gap = approx 13 vehicles)
         self.max_pressure_vehicle = 15
         self.max_pressure_pedestrian = 25 # arbitrary
-        self.cutoff_distance = 50.0
-
+        self.intersection_cutoff_distance = 100.0
+        self.midblock_cutoff_distance = 50.0
+        
         # For safety conflict tracking (only in unsignalized)
         self.recorded_conflicts = set()  # Set of unique conflict identifiers to prevent double-counting
         self.total_conflicts = 0         # Running total of unique vehicle-pedestrian conflicts
@@ -119,7 +120,7 @@ class ControlEnv(gym.Env):
             return "right"       # right only
         return "center"          # both off
 
-    def _step_operations(self, occupancy_map, vehicle_pos_map, print_map=False):
+    def _step_operations(self, occupancy_map, vehicle_pos_map, print_map=True):
         """
         Some corrections have to be done to the occupancy map every step.
         1. Pedestrians wanting to cross, and pedestrians already crossed both are going to be in the same area in simulation. This mechanism helps distinguish between them. 
@@ -167,7 +168,7 @@ class ControlEnv(gym.Env):
                     original_list = occupancy_map[tl_id]["vehicle"]["incoming"][direction_turn] # copy
                     occupancy_map[tl_id]["vehicle"]["incoming"][direction_turn] = [
                         veh_id for veh_id in original_list
-                        if self._get_vehicle_distance_cached(junction_pos, vehicle_pos_map.get(veh_id)) <= self.cutoff_distance
+                        if self._get_vehicle_distance_cached(junction_pos, vehicle_pos_map.get(veh_id)) <= self.intersection_cutoff_distance
                     ]
 
                 # Outgoing
@@ -175,17 +176,31 @@ class ControlEnv(gym.Env):
                     original_list = occupancy_map[tl_id]["vehicle"]["outgoing"][direction]
                     occupancy_map[tl_id]["vehicle"]["outgoing"][direction] = [
                         veh_id for veh_id in original_list
-                        if self._get_vehicle_distance_cached(junction_pos, vehicle_pos_map.get(veh_id)) <= self.cutoff_distance
+                        if self._get_vehicle_distance_cached(junction_pos, vehicle_pos_map.get(veh_id)) <= self.intersection_cutoff_distance
                     ]
-
-            else:  # Midblock
-                for group in ["incoming", "outgoing"]:
-                    for direction_turn in self.direction_turn_midblock:
-                        original_list = occupancy_map[tl_id]["vehicle"][group][direction_turn]
-                        occupancy_map[tl_id]["vehicle"][group][direction_turn] = [
-                            veh_id for veh_id in original_list
-                            if self._get_vehicle_distance_cached(junction_pos, vehicle_pos_map.get(veh_id)) <= self.cutoff_distance
-                        ]
+            # In the new mechanism, in mid-block "inside" vehicles may have duplicate entries in "outgoing" and "incoming" directions.
+            # only keep in "incoming" and "outgoing" directions if the vehicle does not exist in "inside" direction.
+            else: # Midblock
+                for direction_turn in self.direction_turn_midblock:
+                    inside_list = occupancy_map[tl_id]["vehicle"]["inside"][direction_turn]
+                    occupancy_map[tl_id]["vehicle"]["incoming"][direction_turn] = [
+                        veh_id for veh_id in occupancy_map[tl_id]["vehicle"]["incoming"][direction_turn]
+                        if veh_id not in inside_list
+                    ]
+                    occupancy_map[tl_id]["vehicle"]["outgoing"][direction_turn] = [
+                        veh_id for veh_id in occupancy_map[tl_id]["vehicle"]["outgoing"][direction_turn]
+                        if veh_id not in inside_list
+                    ]
+            
+            # Old mechanism, in the new mechanism, we enforce the cutoff distance earlier.
+            # else:  # Midblock
+            #     for group in ["incoming", "outgoing"]:
+            #         for direction_turn in self.direction_turn_midblock:
+            #             original_list = occupancy_map[tl_id]["vehicle"][group][direction_turn]
+            #             occupancy_map[tl_id]["vehicle"][group][direction_turn] = [
+            #                 veh_id for veh_id in original_list
+            #                 if self._get_vehicle_distance_cached(junction_pos, vehicle_pos_map.get(veh_id)) <= self.midblock_cutoff_distance
+            #             ]
 
         # for tl_id in self.tl_ids:
         #     if tl_id == 'cluster_172228464_482708521_9687148201_9687148202_#5more': # Intersection has 8 directions for incoming and 4 for outgoing
@@ -193,14 +208,14 @@ class ControlEnv(gym.Env):
         #         for direction_turn in self.direction_turn_intersection_incoming:
         #             for veh_id in occupancy_map[tl_id]["vehicle"]["incoming"][direction_turn]:
         #                 distance = self._get_vehicle_distance_to_junction(tl_id, veh_id)
-        #                 if distance > self.cutoff_distance:
+        #                 if distance > self.intersection_cutoff_distance:
         #                     occupancy_map[tl_id]["vehicle"]["incoming"][direction_turn].remove(veh_id)
 
         #         # Outgoing
         #         for direction in self.directions:
         #             for veh_id in occupancy_map[tl_id]["vehicle"]["outgoing"][direction]:
         #                 distance = self._get_vehicle_distance_to_junction(tl_id, veh_id)
-        #                 if distance > self.cutoff_distance:
+        #                 if distance > self.intersection_cutoff_distance:
         #                     occupancy_map[tl_id]["vehicle"]["outgoing"][direction].remove(veh_id)
 
         #     else: # Midblock has two directions (west-straight, east-straight) 
@@ -208,27 +223,27 @@ class ControlEnv(gym.Env):
         #             for direction_turn in self.direction_turn_midblock:
         #                 for veh_id in occupancy_map[tl_id]["vehicle"][group][direction_turn]:
         #                     distance = self._get_vehicle_distance_to_junction(tl_id, veh_id)
-        #                     if distance > self.cutoff_distance:
+        #                     if distance > self.midblock_cutoff_distance:
         #                         occupancy_map[tl_id]["vehicle"][group][direction_turn].remove(veh_id)
 
-        # if print_map: 
-        #     print("\nOccupancy Map:")
-        #     for tl_id, tl_data in occupancy_map.items():
-        #         print(f"\nTraffic Light: {tl_id}")
-        #         for type in ["vehicle", "pedestrian"]:
-        #             print(f"  {type.capitalize()}:")
+        if print_map: 
+            print("\nOccupancy Map:")
+            for tl_id, tl_data in occupancy_map.items():
+                print(f"\nTraffic Light: {tl_id}")
+                for type in ["vehicle"]:#, "pedestrian"]:
+                    print(f"  {type.capitalize()}:")
 
-        #             for group in tl_data[type].keys():
-        #                 print(f"    {group.capitalize()}:")
-        #                 for direction, ids in tl_data[type][group].items():
-        #                     if type == "vehicle":
-        #                         print(f"      {direction.capitalize()}: {len(ids)} [{', '.join(ids)}]")
-        #                         for idx in ids:
-        #                             distance = self._get_vehicle_distance_to_junction(tl_id, idx)
-        #                             print(f"        {idx}: {distance:.2f}m")   
-        #                     else: 
-        #                         for area in ids.keys():
-        #                             print(f"      {direction.capitalize(), area}: {len(ids[area])} [{', '.join(ids[area])}]")
+                    for group in tl_data[type].keys():
+                        print(f"    {group.capitalize()}:")
+                        for direction, ids in tl_data[type][group].items():
+                            if type == "vehicle":
+                                print(f"      {direction.capitalize()}: {len(ids)} [{', '.join(ids)}]")
+                                for idx in ids:
+                                    distance = self._get_vehicle_distance_to_junction(tl_id, idx)
+                                    print(f"        {idx}: {distance:.2f}m")   
+                            else: 
+                                for area in ids.keys():
+                                    print(f"      {direction.capitalize(), area}: {len(ids[area])} [{', '.join(ids[area])}]")
 
         return occupancy_map
     
@@ -241,7 +256,6 @@ class ControlEnv(gym.Env):
         dx = junction_pos[0] - vehicle_pos[0]
         dy = junction_pos[1] - vehicle_pos[1]
         return math.hypot(dx, dy)  # More stable than sqrt(x^2 + y^2)
-
 
     def _get_vehicle_distance_to_junction(self, junction_id, vehicle_id):
         """
@@ -376,6 +390,7 @@ class ControlEnv(gym.Env):
         person_road_map = {ped_id: traci.person.getRoadID(ped_id) for ped_id in person_ids}
         vehicle_ids = traci.vehicle.getIDList()
         vehicle_pos_map = {veh_id: traci.vehicle.getPosition(veh_id) for veh_id in vehicle_ids}
+        vehicle_occupancy_midblock = self._get_vehicle_occupancy_midblock(vehicle_ids, vehicle_pos_map)
 
         for tl_id in self.tl_ids:
             for type in ["vehicle", "pedestrian"]:
@@ -419,14 +434,21 @@ class ControlEnv(gym.Env):
                                 occupancy_map[tl_id][type]["outgoing"][direction].extend(veh_ids)
 
                     else:  # For midblock TLs, they have 2 directions each for incoming, inside, and outgoing
-                        for group in ["incoming", "outgoing"]: 
-                            for direction_turn in self.direction_turn_midblock:
-                                occupancy_map[tl_id][type][group][direction_turn] = []
-                                lanes_edges = self.tl_lane_dict[tl_id][type][group][direction_turn]
-                                for lane_edge in lanes_edges:
-                                    veh_ids = traci.lane.getLastStepVehicleIDs(lane_edge) if "edge" not in lane_edge else traci.edge.getLastStepVehicleIDs(lane_edge.split('.')[1]) 
-                                    occupancy_map[tl_id][type][group][direction_turn].extend(veh_ids)
+                        
+                        # Old mechanism has blind spots
+                        # for group in ["incoming", "outgoing"]: 
+                        #     for direction_turn in self.direction_turn_midblock:
+                        #         occupancy_map[tl_id][type][group][direction_turn] = []
+                        #         lanes_edges = self.tl_lane_dict[tl_id][type][group][direction_turn]
+                        #         for lane_edge in lanes_edges:
+                        #             veh_ids = traci.lane.getLastStepVehicleIDs(lane_edge) if "edge" not in lane_edge else traci.edge.getLastStepVehicleIDs(lane_edge.split('.')[1]) 
+                        #             occupancy_map[tl_id][type][group][direction_turn].extend(veh_ids)
 
+                        # New mechanism to get vehicles incoming and outgoing for midblock TLs
+                        for group in ["incoming", "outgoing"]:
+                            for direction in ["west-straight", "east-straight"]:
+                                occupancy_map[tl_id][type][group][direction] = vehicle_occupancy_midblock[tl_id][group][direction]
+                                
                         # Inside has to be done in a computationally expensive way (because its an interal edge not detected either by edge.getLastStepVehicleIDs or lane.getLastStepVehicleIDs). 
                         # Get all vehicles in the simulation and compare their road id with the lanes_edges.
                         for direction_turn in self.direction_turn_midblock:
@@ -1484,36 +1506,105 @@ class ControlEnv(gym.Env):
 
         return observation, {} # info is empty
 
-    def _straight_links(self, ctrl_links):
-        west_in = east_in = west_out = east_out = None
+    # Old mechanism for vehicle occupancy
+    # def _straight_links(self, ctrl_links):
+    #     west_in = east_in = west_out = east_out = None
 
-        for phase in ctrl_links:
-            for frm, to, via in phase:
-                if via == "" or not (frm.endswith("_0") and to.endswith("_0")):
-                    continue                        # skip ped rows & turns
+    #     for phase in ctrl_links:
+    #         for frm, to, via in phase:
+    #             if via == "" or not (frm.endswith("_0") and to.endswith("_0")):
+    #                 continue                        # skip ped rows & turns
 
-                if frm.startswith("-"):            # vehicle coming from WEST
-                    west_in  = frm
-                    west_out = to                  # <-- keep WEST tag
-                else:                              # coming from EAST
-                    east_in  = frm
-                    east_out = to                  # <-- keep EAST tag
+    #             if frm.startswith("-"):            # vehicle coming from WEST
+    #                 west_in  = frm
+    #                 west_out = to                  # <-- keep WEST tag
+    #             else:                              # coming from EAST
+    #                 east_in  = frm
+    #                 east_out = to                  # <-- keep EAST tag
 
-        if None in (west_in, east_in, west_out, east_out):
-            raise RuntimeError("Could not find all four straight vehicle links")
+    #     if None in (west_in, east_in, west_out, east_out):
+    #         raise RuntimeError("Could not find all four straight vehicle links")
 
-        return west_in, east_in, west_out, east_out
+    #     return west_in, east_in, west_out, east_out
+    
+    def _get_vehicle_occupancy_midblock(self, vehicle_ids, vehicle_pos_map):
+        """
+        A new mechanism for midblock TLs ("incoming" and "outgoing"). 
+        Get the vehicle occupancy for all midblock TLs.
+        For the ones below, we are using the old mechanism.
+         - pedestrians in all TLs
+         - "inside" for vehicles in midblock TLs
+         - vehicles in intersection
+        Enforces the cutoff distance.
+        The mechanism also allows for same vehicles to be detected by multiple TLs.
+        Duplication of vehicles between is corrected later.
+        """
+        midblock_tl_ids = self.tl_ids[1:]
+        vehicle_occupancy_midblock = {
+            tl_id: {
+                "incoming": {"west-straight": [], "east-straight": []},
+                "outgoing": {"west-straight": [], "east-straight": []}
+            }
+            for tl_id in midblock_tl_ids
+        }
 
+        # Angle 90 is East-bound, 0 North-bound, 270 West-bound, 180 South-bound.
+        angle_tolerance = 40
+
+        for veh_id in vehicle_ids:
+            veh_pos = vehicle_pos_map.get(veh_id)
+
+            if veh_pos is None:
+                continue
+
+            try: # Vehicle might have just left or not fully entered
+                angle = traci.vehicle.getAngle(veh_id) 
+            except traci.TraCIException:
+                continue
+
+            direction = None 
+            if angle >= (90 - angle_tolerance) and angle <= (90 + angle_tolerance):
+                direction = "east-straight"
+            elif angle >= (270 - angle_tolerance) and angle <= (270 + angle_tolerance):
+                direction = "west-straight"
+            
+            if direction is None: # If not clearly East or Westbound, skip (likely turning or vertical)
+                continue
+            
+            veh_pos_x, veh_pos_y = veh_pos[0], veh_pos[1]
+            for tl_id in midblock_tl_ids:
+                junction_pos = self.junction_pos_cache.get(tl_id)
+                distance = self._get_vehicle_distance_cached(junction_pos, veh_pos)
+                if distance >= self.midblock_cutoff_distance:
+                    continue
+                    
+                # get the incoming or outgoing direction based on x-coordinate
+                tl_pos_x = junction_pos[0]
+                # Assign based on relative position and direction
+                if direction == "east-straight": # Moving East
+                    if veh_pos_x < tl_pos_x: # Vehicle is West of TL
+                        vehicle_occupancy_midblock[tl_id]["incoming"]["east-straight"].append(veh_id)
+                    elif veh_pos_x > tl_pos_x: # Vehicle is East of TL
+                        vehicle_occupancy_midblock[tl_id]["outgoing"]["east-straight"].append(veh_id)
+                elif direction == "west-straight": 
+                    if veh_pos_x > tl_pos_x: # Vehicle is East of TL
+                        vehicle_occupancy_midblock[tl_id]["incoming"]["west-straight"].append(veh_id)
+                    elif veh_pos_x < tl_pos_x: # Vehicle is West of TL
+                        vehicle_occupancy_midblock[tl_id]["outgoing"]["west-straight"].append(veh_id)
+
+        return vehicle_occupancy_midblock
+    
+    # Old mechanism for vehicle occupancy
     # helper – returns True if the lane is “verticalish”
-    def _is_vertical(self, lane, thresh=30):                  # thresh = degrees from 90°
-        x0, y0 = lane.getShape()[0]
-        x1, y1 = lane.getShape()[-1]
-        dx, dy = x1 - x0, y1 - y0
-        if dx == dy == 0:                               # zero‑length, ignore
-            return True
-        angle = abs(math.degrees(math.atan2(dy, dx)))   #   0° = east, 90° = north
-        angle = min(angle, 180 - angle)                 # mirror so 90° is “up/down”
-        return angle >= 90 - thresh                     # within thresh of vertical
+    # def _is_vertical(self, lane, thresh=30):                  # thresh = degrees from 90°
+    #     x0, y0 = lane.getShape()[0]
+    #     x1, y1 = lane.getShape()[-1]
+    #     dx, dy = x1 - x0, y1 - y0
+    #     if dx == dy == 0:                               # zero‑length, ignore
+    #         return True
+    #     angle = abs(math.degrees(math.atan2(dy, dx)))   #   0° = east, 90° = north
+    #     angle = min(angle, 180 - angle)                 # mirror so 90° is “up/down”
+    #     return angle >= 90 - thresh                     # within thresh of vertical
 
     def dynamically_populate_edges_lanes(self, extreme_edge_dict, real_world=False):
         """
@@ -1538,24 +1629,26 @@ class ControlEnv(gym.Env):
             if tl_id in self.tl_lane_dict:
                 continue
             else: 
-                controlled_links = traci.trafficlight.getControlledLinks(tl_id)
-                west_in, east_in, west_out, east_out = self._straight_links(controlled_links)
+                # controlled_links = traci.trafficlight.getControlledLinks(tl_id)
+                # west_in, east_in, west_out, east_out = self._straight_links(controlled_links)
 
                 tl_internal = f":{tl_id}"
                 self.tl_lane_dict[tl_id] = {
                     "vehicle": {
-                        "incoming": {
-                            "west-straight": [west_in],
-                            "east-straight": [east_in]
-                        },
+                        # Old mechanism for vehicle occupancy
+                        # "incoming": {
+                        #     "west-straight": [west_in],
+                        #     "east-straight": [east_in]
+                        # },
+                        # "outgoing": {
+                        #     "west-straight": [west_out],
+                        #     "east-straight": [east_out]
+                        # }
                         "inside": {
                             "west-straight": [f"{tl_internal}_0"],
                             "east-straight": [f"{tl_internal}_1"]
                         },
-                        "outgoing": {
-                            "west-straight": [west_out],
-                            "east-straight": [east_out]
-                        }
+                        
                     },
                     "pedestrian": {
                         "incoming": {
@@ -1571,59 +1664,60 @@ class ControlEnv(gym.Env):
                     }
                 }
                 
+                # Old mechanism for vehicle occupancy
                 # TODO: For ONLY vehicle incoming + outgoing, keep adding until the total length becomes just higher than cutoff distance or we encounter another TL. DONE
                 # Do this for east-straight (only for outgoing) of the intersection as well.
-                for group in ["incoming", "outgoing"]:
-                    for dir_key in ["west-straight", "east-straight"]:
+                # for group in ["incoming", "outgoing"]:
+                #     for dir_key in ["west-straight", "east-straight"]:
 
-                        expanded   = self.tl_lane_dict[tl_id]["vehicle"][group][dir_key].copy()
-                        seed_sign  = expanded[0].split('_')[0].startswith('-')   # True if '‑'
-                        total_dist = self.net.getLane(expanded[-1]).getLength()
-                        visited    = set(expanded)
+                #         expanded   = self.tl_lane_dict[tl_id]["vehicle"][group][dir_key].copy()
+                #         seed_sign  = expanded[0].split('_')[0].startswith('-')   # True if '‑'
+                #         total_dist = self.net.getLane(expanded[-1]).getLength()
+                #         visited    = set(expanded)
 
 
-                        while total_dist < self.cutoff_distance:
-                            last_lane_obj = self.net.getLane(expanded[-1])
-                            successors    = (last_lane_obj.getIncoming()
-                                            if group == "incoming"
-                                            else last_lane_obj.getOutgoingLanes())
+                #         while total_dist < self.midblock_cutoff_distance:
+                #             last_lane_obj = self.net.getLane(expanded[-1])
+                #             successors    = (last_lane_obj.getIncoming()
+                #                             if group == "incoming"
+                #                             else last_lane_obj.getOutgoingLanes())
 
-                            next_lane_id  = None
-                            for ln in successors:
-                                lid = ln.getID()
+                #             next_lane_id  = None
+                #             for ln in successors:
+                #                 lid = ln.getID()
 
-                                # 1) skip lanes we have already taken
-                                # 2) skip “verticalish” lanes
-                                # 3) keep the original sign (− for westbound, + for eastbound)
-                                if (lid in visited or
-                                    self._is_vertical(ln) or
-                                    lid.split('_')[0].startswith('-') != seed_sign):
-                                    continue
+                #                 # 1) skip lanes we have already taken
+                #                 # 2) skip “verticalish” lanes
+                #                 # 3) keep the original sign (− for westbound, + for eastbound)
+                #                 if (lid in visited or
+                #                     self._is_vertical(ln) or
+                #                     lid.split('_')[0].startswith('-') != seed_sign):
+                #                     continue
 
-                                next_lane_id = lid
-                                break          # only take **one** successor each step
+                #                 next_lane_id = lid
+                #                 break          # only take **one** successor each step
 
-                            # No suitable successor found → stop expanding
-                            if next_lane_id is None or "iter" in next_lane_id:
-                                break
+                #             # No suitable successor found → stop expanding
+                #             if next_lane_id is None or "iter" in next_lane_id:
+                #                 break
 
-                            # -------------------------------------------------------------
-                            # If the successor’s *from* (or *to*) node is a **different**
-                            # traffic‑light, we stop **before** adding it.
-                            # -------------------------------------------------------------
-                            next_node = (self.net.getLane(next_lane_id).getEdge().getFromNode()
-                                        if group == "incoming"
-                                        else self.net.getLane(next_lane_id).getEdge().getToNode())
+                #             # -------------------------------------------------------------
+                #             # If the successor’s *from* (or *to*) node is a **different**
+                #             # traffic‑light, we stop **before** adding it.
+                #             # -------------------------------------------------------------
+                #             next_node = (self.net.getLane(next_lane_id).getEdge().getFromNode()
+                #                         if group == "incoming"
+                #                         else self.net.getLane(next_lane_id).getEdge().getToNode())
 
-                            if next_node.getID() in self.tl_ids and next_node.getID() != tl_id:
-                                break      # reached another TL – do NOT cross it
+                #             if next_node.getID() in self.tl_ids and next_node.getID() != tl_id:
+                #                 break      # reached another TL – do NOT cross it
 
-                            # Otherwise: append, mark visited, update distance, continue
-                            expanded.append(next_lane_id)
-                            visited.add(next_lane_id)
-                            total_dist += self.net.getLane(next_lane_id).getLength()
+                #             # Otherwise: append, mark visited, update distance, continue
+                #             expanded.append(next_lane_id)
+                #             visited.add(next_lane_id)
+                #             total_dist += self.net.getLane(next_lane_id).getLength()
 
-                        self.tl_lane_dict[tl_id]["vehicle"][group][dir_key] = expanded
+                #         self.tl_lane_dict[tl_id]["vehicle"][group][dir_key] = expanded
 
                 if real_world: # Hard code for Craver
                     if tl_id == '9727816850_c0_mid':

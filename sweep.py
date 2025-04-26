@@ -46,7 +46,7 @@ class HyperParameterTuner:
                 },
 
             'parameters': {
-                'higher_lr': { 'values': [1e-5, 1e-4] },
+                'higher_lr': { 'values': [1e-4, 5e-4] },
                 'lower_lr': { 'values': [1e-5, 1e-4] },
                 # HRL Interaction / Update Frequencies
                 'higher_update_freq': { 'values': [8, 16] },
@@ -56,7 +56,7 @@ class HyperParameterTuner:
                 # --- Higher-Level Specific ---
                 'higher_batch_size': {'values': [2, 4]},
                 'higher_eps_clip': {'values': [0.1, 0.2, 0.3]},
-                'higher_ent_coef': {'values': [0.005, 0.01, 0.02]},
+                'higher_ent_coef': {'values': [0.001, 0.005]},
                 # --- Lower-Level Specific ---
                 'lower_batch_size': {'values': [32, 64]},
                 'lower_eps_clip': {'values': [0.1, 0.2, 0.3]},
@@ -65,3 +65,7 @@ class HyperParameterTuner:
         }
         
         return wandb.sweep(sweep_config, entity="fluidic-city", project=self.project)
+
+# learnings from sweep: 
+# - Higher lr high
+# - Higher entropy coeff low 

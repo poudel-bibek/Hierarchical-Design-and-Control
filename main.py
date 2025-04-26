@@ -254,7 +254,8 @@ def train(train_config, is_sweep=False, sweep_config=None):
                 step=higher_env.global_step)
         else:
             writer.add_scalar('Iteration', iteration, higher_env.global_step)
-            writer.add_scalar('Higher/Average_Reward', avg_higher_reward, higher_env.global_step)
+            writer.add_scalar('Higher/Average_Reward (normalized)', higher_reward_norm, higher_env.global_step)
+            writer.add_scalar('Higher/Average_Reward (unnormalized)', higher_reward_unnorm, higher_env.global_step)
             writer.add_scalar('Higher/Update_Count', higher_update_count, higher_env.global_step)
             writer.add_scalar('Higher/Current_LR', current_lr_higher if train_config['higher_anneal_lr'] else higher_ppo_args['lr'], higher_env.global_step)
             writer.add_scalar('Higher/Losses/Policy_Loss', higher_loss['policy_loss'], higher_env.global_step)
