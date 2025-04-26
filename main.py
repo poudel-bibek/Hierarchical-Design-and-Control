@@ -190,7 +190,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
             if avg_higher_reward > best_higher_reward: 
                 save_policy(higher_ppo.policy, 
                             higher_env.lower_ppo.policy, 
-                            lower_state_normalizer, 
+                            higher_env.lower_state_normalizer, 
                             higher_env.normalizer_x, 
                             higher_env.normalizer_y, 
                             os.path.join(design_args['save_dir'], 
@@ -200,7 +200,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
             if higher_loss['total_loss'] < best_higher_loss:
                 save_policy(higher_ppo.policy, 
                             higher_env.lower_ppo.policy, 
-                            lower_state_normalizer, 
+                            higher_env.lower_state_normalizer, 
                             higher_env.normalizer_x, 
                             higher_env.normalizer_y, 
                             os.path.join(design_args['save_dir'], 
@@ -210,7 +210,7 @@ def train(train_config, is_sweep=False, sweep_config=None):
             if eval_ped_avg_arrival < best_higher_eval:
                 save_policy(higher_ppo.policy, 
                             higher_env.lower_ppo.policy, 
-                            lower_state_normalizer, 
+                            higher_env.lower_state_normalizer, 
                             higher_env.normalizer_x, 
                             higher_env.normalizer_y, 
                             os.path.join(design_args['save_dir'], 
