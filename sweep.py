@@ -51,7 +51,7 @@ class HyperParameterTuner:
                 # HRL Interaction / Update Frequencies
                 'higher_update_freq': { 'values': [8, 16] },
                 'lower_update_freq': { 'values': [1024, 2048] },
-                'num_mixtures': { 'values': [5, 7, 10] },
+                # 'num_mixtures': { 'values': [5, 7, 10] },
                 'higher_readout_k': { 'values': [32, 64] },
                 # --- Higher-Level Specific ---
                 'higher_batch_size': {'values': [2, 4]},

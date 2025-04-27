@@ -54,7 +54,7 @@ def get_config():
         "max_proposals": 10,  # Maximum number of proposals to consider for higher-level agent
         "save_graph_images": True, # Save graph image every iteration.
         "save_gmm_plots": True, # Save GMM visualization every iteration.
-        "num_mixtures": 7,  # Number of mixture components in GMM. Having more is ok (means will collapse into each other) but makes it difficult to learn. Having less will make it less representative.
+        "num_mixtures": 5,  # Number of mixture components in GMM. Having more is ok (means will collapse into each other) but makes it difficult to learn. Having less will make it less representative.
         'initial_heads': 8, # Number of attention heads in first GATv2 layer
         'second_heads': 1, # Number of attention heads in second GATv2 layer
         'edge_dim': 2, # Number of features per edge 
