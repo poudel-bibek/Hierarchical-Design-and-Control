@@ -60,7 +60,7 @@ def get_config():
         'edge_dim': 2, # Number of features per edge 
 
         # PPO Lower level agent params
-        "lower_anneal_lr": True,  # Anneal learning rate
+        "lower_anneal_lr": False,  # Anneal learning rate
         "lower_gae_lambda": 0.95,  # GAE lambda
         "lower_max_grad_norm": 0.75,  # Maximum gradient norm for gradient clipping
         "lower_vf_clip_param": 0.5,  # Value function clipping parameter

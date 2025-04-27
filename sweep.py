@@ -47,7 +47,7 @@ class HyperParameterTuner:
 
             'parameters': {
                 'higher_lr': { 'values': [1e-4, 5e-4] },
-                'lower_lr': { 'values': [1e-5, 1e-4] },
+                'lower_lr': { 'values': [5e-4, 1e-3] },
                 # HRL Interaction / Update Frequencies
                 'higher_update_freq': { 'values': [8, 16] },
                 'lower_update_freq': { 'values': [1024, 2048] },

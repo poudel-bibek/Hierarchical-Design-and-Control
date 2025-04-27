@@ -1285,7 +1285,7 @@ class ControlEnv(gym.Env):
         reward = -1 * (final_int_veh + final_int_ped + final_mb_veh + final_mb_ped)
 
         # Clip the reward (In an appropriately chosen range) before returning. 
-        clipped_reward = np.clip(reward, -4000, 4000) # IMPORTANT: If alpha is changed, this range needs to be changed as well.
+        clipped_reward = np.clip(reward, -2500, 2500) # IMPORTANT: If alpha is changed, this range needs to be changed as well.
 
         # if print_reward:
         #     print(f"Intersection Reward Components:\n"
