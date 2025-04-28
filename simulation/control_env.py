@@ -1,6 +1,7 @@
 import math
 import time 
 import traci
+import torch
 import sumolib
 import random
 import gymnasium as gym
