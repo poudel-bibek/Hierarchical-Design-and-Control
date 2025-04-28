@@ -61,6 +61,7 @@ class HyperParameterTuner:
                 'lower_batch_size': {'values': [32, 64]},
                 'lower_eps_clip': {'values': [0.1, 0.2, 0.3]},
                 'lower_ent_coef': {'values': [0.005, 0.01, 0.02]},
+                'lower_K_epochs': {'values': [2, 4, 8]},
             },
         }
         
