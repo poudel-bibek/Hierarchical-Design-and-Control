@@ -151,7 +151,7 @@ def parallel_eval_worker(rank,
                 state = lower_state_normalizer.normalize(state)
                 state = state.to(worker_device)
 
-                action, _ = shared_policy.act(state, eval_worker_config['num_proposals'])
+                action, _ = shared_policy.act(state, eval_worker_config['num_proposals'], training=False) # Pass training=False for deterministic eval
                 action = action.detach().cpu() # sim runs in CPU
                 state, _, done, truncated, _ = env.eval_step(action, tl, unsignalized=unsignalized)
 

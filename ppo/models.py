@@ -94,12 +94,15 @@ class MLP_ActorCritic(nn.Module):
         flat = state.view(bsz, -1)  # shape: (B, in_channels*action_duration*per_timestep_state_dim)
         return self.critic_value(self.critic_layers(flat))
 
-    def act(self, state, num_proposals):
+    def act(self, state, num_proposals, training=True):
         """
         Sample an action exactly like in the CNN version:
           - intersection action from first 4 logits (Categorical)
           - midblock from next num_proposals logits (Bernoulli)
           - Ignore the rest of the logits.
+
+        If training=False, selects the most likely action deterministically.
+        Otherwise, samples stochastically.
 
         TODO: Is there a bias in log_prob because of the number of proposals?
         How to propoerly handle the rest (is ignoring them good?)
@@ -112,13 +115,20 @@ class MLP_ActorCritic(nn.Module):
         intersection_logits = action_logits[:, :4]
         # intersection_probs = torch.softmax(intersection_logits, dim=1)
         intersection_dist = Categorical(logits=intersection_logits)
-        intersection_action = intersection_dist.sample()  # [1]
+        if training:
+            intersection_action = intersection_dist.sample()  # [1]
+        else:
+            intersection_action = torch.argmax(intersection_logits, dim=1) # [1]
 
         # The next num_proposals logits => midblock (Bernoulli)
         midblock_logits = action_logits[:, 4: 4 + num_proposals]
         # midblock_probs = torch.sigmoid(midblock_logits)
         midblock_dist = Bernoulli(logits=midblock_logits)
-        midblock_actions = midblock_dist.sample()  # shape [1,num_proposals]
+        if training:
+            midblock_actions = midblock_dist.sample()  # shape [1,num_proposals]
+        else:
+            # Deterministic: Choose action 1 if logit > 0 (probability > 0.5), else 0
+            midblock_actions = (midblock_logits > 0).float() # shape [1, num_proposals]
 
         # print(f"\nIntersection logits: {intersection_logits}")
         # print(f"\nMidblock logits: {midblock_logits}")
