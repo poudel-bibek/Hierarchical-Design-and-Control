@@ -2,7 +2,7 @@ def get_config():
     config = {
         # Simulation
         "sweep": True,  # Use wandb sweeps for hyperparameter tuning
-        "evaluate": True, 
+        "evaluate": False, 
         "gui": False,  # Use SUMO GUI (default: False)
          
         "vehicle_input_trips": "./simulation/original_vehtrips.xml",  # Original Input trips file
