@@ -624,7 +624,6 @@ class ControlEnv(gym.Env):
 
         observation = np.asarray(observation_buffer, dtype=np.float32) 
         #print(f"\nObservation shape: {observation.shape}, type: {type(observation)}, value: {observation}")
-        #visualize_observation(observation)
         return observation, reward, done, False, {} # info is empty
     
     def eval_step(self, action, tl= False, unsignalized= False):

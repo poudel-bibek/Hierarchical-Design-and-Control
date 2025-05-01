@@ -12,6 +12,7 @@ import torch.multiprocessing as mp
 from sweep import HyperParameterTuner
 from torch.utils.tensorboard import SummaryWriter
 from utils import *
+from plots import *
 from simulation.control_env import ControlEnv
 from simulation.design_env import DesignEnv
 from simulation.worker import parallel_eval_worker

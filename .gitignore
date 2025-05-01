@@ -30,3 +30,9 @@ wandb/
 
 consolidated_control_results.pdf
 consolidated_design_results.pdf
+
+design_control_results.pdf
+./design_control_results.pdf
+
+graphs_gmm.pdf
+./graphs_gmm.pdf
