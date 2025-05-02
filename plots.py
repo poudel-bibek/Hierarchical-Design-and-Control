@@ -1495,16 +1495,15 @@ def plot_graphs_and_gmm( graph_a_path,
     # Save figure tightly
     fig.savefig('./graphs_gmm.png', dpi=dpi, bbox_inches='tight', pad_inches=0)
 
-# ── Example usage ──
-run_dir = "Apr27_09-22-25"
-eval_dir = "eval_Apr28_12-16-10"
-original_graph = f'./runs/{run_dir}/graph_iterations/graph_i_0_data.pkl'
-final_graph = f'./runs/{run_dir}/graph_iterations/graph_i_eval_final_data.pkl'
-gmm_path = f'./runs/{run_dir}/gmm_iterations/gmm_i_eval_final_b0_data.pkl'
+# # ── Example usage ──
+# run_dir = "Apr28_19-29-42/"
+# original_graph = f'./runs/{run_dir}/graph_iterations/graph_i_0_data.pkl'
+# final_graph = f'./runs/{run_dir}/graph_iterations/graph_i_eval_final_data.pkl'
+# gmm_path = f'./runs/{run_dir}/gmm_iterations/gmm_i_eval_final_b0_data.pkl'
 
-plot_graphs_and_gmm(original_graph,
-                    final_graph,
-                    gmm_path)
+# plot_graphs_and_gmm(original_graph,
+#                     final_graph,
+#                     gmm_path)
 
 
 # ###############

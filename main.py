@@ -491,14 +491,22 @@ def main(config):
                                                     tl=True, 
                                                     unsignalized=True)
 
-        plot_control_results(new_design_unsignalized_results_path,  
-                          new_design_tl_results_path,
-                          new_design_ppo_results_path,
-                          in_range_demand_scales = eval_args['in_range_demand_scales'])
+        # plot_control_results(new_design_unsignalized_results_path,  
+        #                   new_design_tl_results_path,
+        #                   new_design_ppo_results_path,
+        #                   in_range_demand_scales = eval_args['in_range_demand_scales'])
         
-        plot_design_results(new_design_unsignalized_results_path, 
-                          real_world_design_unsignalized_results_path,
-                          in_range_demand_scales = eval_args['in_range_demand_scales'])
+        # plot_design_results(new_design_unsignalized_results_path, 
+        #                   real_world_design_unsignalized_results_path,
+        #                   in_range_demand_scales = eval_args['in_range_demand_scales'])
+        
+        plot_design_and_control_results(
+            design_unsig_path = new_design_unsignalized_results_path,
+            realworld_unsig_path = real_world_design_unsignalized_results_path,
+            control_tl_path = new_design_tl_results_path,
+            control_ppo_path = new_design_ppo_results_path,
+            in_range_demand_scales = eval_args['in_range_demand_scales']
+        )
 
     elif config['sweep']:
         tuner = HyperParameterTuner(config, train)

@@ -1,7 +1,7 @@
 def get_config():
     config = {
         # Simulation
-        "sweep": True,  # Use wandb sweeps for hyperparameter tuning
+        "sweep": False,  # Use wandb sweeps for hyperparameter tuning
         "evaluate": False, 
         "gui": False,  # Use SUMO GUI (default: False)
          
@@ -30,21 +30,21 @@ def get_config():
         "higher_gae_lambda": 0.97,  # GAE lambda for higher-level agent
         "higher_max_grad_norm": 0.75,  # Maximum gradient norm for gradient clipping
         "higher_vf_clip_param": 0.5,  # Value function clipping parameter
-        "higher_update_freq": 16,  # Number of action timesteps between each policy update. A low value incurs high variance for design agent.
+        "higher_update_freq": 8,  # Number of action timesteps between each policy update. A low value incurs high variance for design agent.
         "higher_lr": 0.0001,  # Learning rate for higher-level agent
         "higher_gamma": 0.99,  # Discount factor for higher-level agent
         "higher_K_epochs": 4,  # Number of epochs to update policy for higher-level agent
-        "higher_eps_clip": 0.2,  # Clip parameter for PPO for higher-level agent
-        "higher_batch_size": 8,  # Batch size for higher-level agent
+        "higher_eps_clip": 0.3,  # Clip parameter for PPO for higher-level agent
+        "higher_batch_size": 2,  # Batch size for higher-level agent
         "higher_dropout_rate": 0.25,  # Dropout rate for GATv2
         "higher_model_size": "medium",  # Model size for GATv2: 'small' or 'medium'
-        "higher_ent_coef": 0.01,  # Entropy coefficient for higher-level agent
+        "higher_ent_coef": 0.005,  # Entropy coefficient for higher-level agent
         "higher_vf_coef": 0.5,  # Value function coefficient for higher-level agent
         "higher_in_channels": 2,  # Number of input features per node (x and y coordinates)
         "higher_hidden_channels": 64, # Number of hidden channels in between two GATv2 layers
         'higher_out_channels': 64, # Number of channels at the ouput of last GATv2 layer
         "higher_activation": "tanh",  # Policy activation function
-        "higher_readout_k": 16, # Number of nodes to keep for each graph
+        "higher_readout_k": 64, # Number of nodes to keep for each graph
 
         # Design specific parameters
         "min_thickness": 1.0,  # Minimum thickness for crosswalks
@@ -64,12 +64,12 @@ def get_config():
         "lower_gae_lambda": 0.95,  # GAE lambda
         "lower_max_grad_norm": 0.75,  # Maximum gradient norm for gradient clipping
         "lower_vf_clip_param": 0.5,  # Value function clipping parameter
-        "lower_update_freq": 1024,  # Number of action timesteps between each policy update
-        "lower_lr": 1e-4,  # Learning rate
+        "lower_update_freq": 2048,  # Number of action timesteps between each policy update
+        "lower_lr": 0.001,  # Learning rate
         "lower_gamma": 0.99,  # Discount factor
-        "lower_K_epochs": 4,  # Number of epochs to update policy
-        "lower_eps_clip": 0.2,  # Clip parameter for PPO
-        "lower_ent_coef": 0.01,  # Entropy coefficient
+        "lower_K_epochs": 8,  # Number of epochs to update policy
+        "lower_eps_clip": 0.1,  # Clip parameter for PPO
+        "lower_ent_coef": 0.02,  # Entropy coefficient
         "lower_vf_coef": 0.5,  # Value function coefficient
         "lower_batch_size": 64,  # Batch size
         "lower_num_processes": 10,  # Number of parallel processes to use (agent has multiple workers)
@@ -87,7 +87,7 @@ def get_config():
         "lower_auto_start": True,  # Automatically start the simulation
 
         # Evaluation
-        "eval_model_path": "./runs/Apr28_13-30-31/saved_policies/policy_at_2612800.pth",  # Path to the saved PPO model for evaluation. replace xyz.
+        "eval_model_path": "./runs/Apr28_19-29-42/saved_policies/policy_at_9972800.pth",  # Path to the saved PPO model for evaluation. replace xyz.
         "eval_lower_timesteps": 460,  # Number of timesteps to each episode. Warmup not counted.
         "eval_lower_workers": 10,  # Parallelizes how many demands can be evaluated at the same time.
         "eval_worker_device": "gpu",  # Policy during eval can be run in GPU 
@@ -200,7 +200,7 @@ def classify_and_return_args(train_config, device):
 
     if train_config['evaluate']:
         # during evaluation
-        eval_n_iterations = 10 # For the sliced window demand approach, we need more iterations.
+        eval_n_iterations = 20 # For the sliced window demand approach, we need more iterations.
         in_range_demand_scales = [1.0, 1.25, 1.5, 1.75, 2.0, 2.25] 
         out_of_range_demand_scales = [0.5, 0.75, 2.5, 2.75]
     else: 
