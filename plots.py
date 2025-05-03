@@ -1639,14 +1639,14 @@ def rewards_results_plot(combined_csv_codesign, combined_csv_control, result_1, 
 #     result_2 = ""
 # )
 
-run_dir = "Apr28_19-29-42"
-original_graph = f'./runs/{run_dir}/graph_iterations/graph_i_0_data.pkl'
-final_graph = f'./runs/{run_dir}/graph_iterations/graph_i_eval_final_data.pkl'
-gmm_path = f'./runs/{run_dir}/gmm_iterations/gmm_i_eval_final_b0_data.pkl'
+# run_dir = "Apr28_19-29-42"
+# original_graph = f'./runs/{run_dir}/graph_iterations/graph_i_0_data.pkl'
+# final_graph = f'./runs/{run_dir}/graph_iterations/graph_i_eval_final_data.pkl'
+# gmm_path = f'./runs/{run_dir}/gmm_iterations/gmm_i_eval_final_b0_data.pkl'
 
-plot_graphs_and_gmm(original_graph,
-                    final_graph,
-                    gmm_path)
+# plot_graphs_and_gmm(original_graph,
+#                     final_graph,
+#                     gmm_path)
 
 
 # ###############

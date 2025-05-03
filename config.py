@@ -1,7 +1,7 @@
 def get_config():
     config = {
         # Simulation
-        "sweep": False,  # Use wandb sweeps for hyperparameter tuning
+        "sweep": True,  # Use wandb sweeps for hyperparameter tuning
         "evaluate": False, 
         "gui": False,  # Use SUMO GUI (default: False)
          
@@ -87,7 +87,7 @@ def get_config():
         "lower_auto_start": True,  # Automatically start the simulation
 
         # Evaluation
-        "eval_model_path": "./runs/Apr28_19-29-42/saved_policies/policy_at_9972800.pth",  # Path to the saved PPO model for evaluation. replace xyz.
+        "eval_model_path": "./runs/May02_15-24-29/saved_policies/policy_at_9825600.pth",  # Path to the saved PPO model for evaluation. replace xyz.
         "eval_lower_timesteps": 460,  # Number of timesteps to each episode. Warmup not counted.
         "eval_lower_workers": 10,  # Parallelizes how many demands can be evaluated at the same time.
         "eval_worker_device": "gpu",  # Policy during eval can be run in GPU 

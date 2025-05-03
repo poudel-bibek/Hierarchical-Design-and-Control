@@ -207,7 +207,7 @@ def clear_elements(parent, tag):
     for elem in parent.findall(tag):
         parent.remove(elem)
 
-def scale_demand_sliced_window(input_file, output_file, scale_factor, demand_type, window_size, eval_mode=False, eval_iteration= None):
+def scale_demand_sliced_window(input_file, output_file, scale_factor, demand_type, window_size):
     """
     Scale the demand in a randomly-sampled time window of the input file.
     window_size: max episode length (in seconds), including any warm‐up.
@@ -218,23 +218,7 @@ def scale_demand_sliced_window(input_file, output_file, scale_factor, demand_typ
 
     # ORIGINAL_TIME_SPAN = 3600  # full duration of the real‐world data
     TRAIN_TIME_SPAN = 2400 # 67%
-    # EVAL_TIME_SPAN = 1200 # 33%
-    
-    # 10 randomly selected windows for evaluation (because we want to use the same for all controllers.)
-    RANDOM_EVAL_WINDOWS = [2410, 2598, 2672, 2717, 2761, 2800, 2813, 2937, 2972, 2975]
-
-    # 1) choose the start of the window
-    if eval_mode:
-        # evaluation time: pick one of the pre‐selected evaluation windows so that
-        # every controller is tested on exactly the same slices.  We index into
-        # RANDOM_EVAL_WINDOWS using eval_iteration (wrapped around) to keep the
-        # interface flexible while still deterministic.
-        t_start = RANDOM_EVAL_WINDOWS[int(eval_iteration)]
-    else:
-        # training time: sample uniformly from the training portion of the
-        # trace so that evaluation windows remain unseen during learning.
-        t_start = random.uniform(0, TRAIN_TIME_SPAN - window_size)
-
+    t_start = random.uniform(0, TRAIN_TIME_SPAN - window_size)
     t_end = t_start + window_size
 
     # 2) load XML and prepare root
