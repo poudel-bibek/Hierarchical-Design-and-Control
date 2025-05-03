@@ -2,6 +2,7 @@ import json
 import torch
 import pickle
 import numpy as np
+import pandas as pd
 import networkx as nx
 from utils import get_averages
 import matplotlib as mpl
@@ -1405,8 +1406,11 @@ def plot_graphs_and_gmm( graph_a_path,
     ax3.set_xlim(xmin, xmax)
     ax3.set_ylim(ymin, ymax)
     ax3.set_zlim(0, 0.8)
-    ax3.set_xlabel("Location", fontsize=fs- 2, labelpad=10)
-    ax3.set_ylabel("Width", fontsize=fs- 2, labelpad=12)
+    
+    # Apply black text for axis labels (from rewards_results_plot style)
+    ax3.set_xlabel("Location", fontsize=fs-2, labelpad=10, color='#202124')
+    ax3.set_ylabel("Width", fontsize=fs-2, labelpad=12, color='#202124')
+    ax3.set_zlabel("Density", fontsize=fs-2, labelpad=10, color='#202124')
 
     # Set explicit ticks and labels for all axes
     ticks = np.arange(0, 0.81, 0.2)
@@ -1420,10 +1424,9 @@ def plot_graphs_and_gmm( graph_a_path,
     # ax3.set_yticklabels(tick_labels) # Commented out to allow auto Y ticks
     ax3.set_zticklabels(tick_labels)
 
-    # Set tick font size
-    ax3.tick_params(axis='both', which='major', labelsize=fs-2)
-
-    ax3.set_zlabel("Density", fontsize=fs -2, labelpad=10) # Increased labelpad
+    # Set tick font size and color to gray (from rewards_results_plot style)
+    ax3.tick_params(axis='both', which='major', labelsize=fs-2, colors='#5f6368')
+    
     ax3.view_init(elev=35, azim=-60) # Changed view angle
     # Enable grid and apply custom dashed white style via _axinfo to ensure 3D grid lines adopt it
     ax3.grid(True)
@@ -1437,7 +1440,7 @@ def plot_graphs_and_gmm( graph_a_path,
     sm = cm.ScalarMappable(cmap=cmap, norm=norm)
     sm.set_array([])
     cbar = fig.colorbar(sm, ax=ax3, shrink=0.35, pad=0.10, label='')
-    cbar.ax.tick_params(labelsize=fs-2)  # Match other tick font sizes
+    cbar.ax.tick_params(labelsize=fs-2, colors='#5f6368')  # Match other tick font sizes and use gray color
     
     # --- Precise Label Positioning ---
     # Ensure figure is drawn to get accurate bounding boxes
@@ -1495,15 +1498,155 @@ def plot_graphs_and_gmm( graph_a_path,
     # Save figure tightly
     fig.savefig('./graphs_gmm.png', dpi=dpi, bbox_inches='tight', pad_inches=0)
 
-# # ── Example usage ──
-# run_dir = "Apr28_19-29-42/"
-# original_graph = f'./runs/{run_dir}/graph_iterations/graph_i_0_data.pkl'
-# final_graph = f'./runs/{run_dir}/graph_iterations/graph_i_eval_final_data.pkl'
-# gmm_path = f'./runs/{run_dir}/gmm_iterations/gmm_i_eval_final_b0_data.pkl'
+def rewards_results_plot(combined_csv_codesign, combined_csv_control, result_1, result_2):
+    """
+    (a) Contains both codesign and control reward plot
+    (b) Codesign result
+    (c) Control result
+    """
+    # Load data
+    df_c = pd.read_csv(combined_csv_codesign)
+    df_ctrl = pd.read_csv(combined_csv_control)
 
-# plot_graphs_and_gmm(original_graph,
-#                     final_graph,
-#                     gmm_path)
+    # Clean infinities and ensure numeric
+    for df in (df_c, df_ctrl):
+        df.replace([np.inf, -np.inf], np.nan, inplace=True)
+        df['step'] = pd.to_numeric(df['step'], errors='coerce')
+        for col in ['reward1', 'reward2', 'reward3']:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+
+    # Compute mean reward and moving average
+    window = 50
+    df_c['mean_reward_ma'] = df_c[['reward1', 'reward2', 'reward3']].mean(axis=1).rolling(window, min_periods=1).mean()
+    df_ctrl['mean_reward_ma'] = df_ctrl[['reward1', 'reward2', 'reward3']].mean(axis=1).rolling(window, min_periods=1).mean()
+
+    # Prepare for plotting
+    x_c = df_c['step'].to_numpy(dtype=float)
+    y_c = [df_c[col].to_numpy(dtype=float) for col in ['reward1', 'reward2', 'reward3']]
+    ma_c = df_c['mean_reward_ma'].to_numpy(dtype=float)
+
+    x_ctrl = df_ctrl['step'].to_numpy(dtype=float)
+    y_ctrl = [df_ctrl[col].to_numpy(dtype=float) for col in ['reward1', 'reward2', 'reward3']]
+    ma_ctrl = df_ctrl['mean_reward_ma'].to_numpy(dtype=float)
+
+    # Define styling parameters
+    fs = 23  # Base font size
+    dpi = 300
+    
+    # Set consistent styling
+    mpl.rcParams.update({
+        'font.family': 'sans-serif',
+        'font.sans-serif': ['Open Sans', 'Arial', 'DejaVu Sans'],
+        'text.color': '#202124',  # Dark gray for main text
+        'axes.edgecolor': '#dadce0',  # Light gray for axes edges
+        'axes.linewidth': 1.0,
+        'axes.titlesize': fs + 2,
+        'axes.titleweight': 'bold',
+        'axes.labelsize': fs,
+        'xtick.color': '#5f6368',  # Medium gray for tick labels
+        'ytick.color': '#5f6368',
+        'xtick.labelsize': fs - 1,
+        'ytick.labelsize': fs - 1,
+        'grid.color': '#e8eaed',  # Very light gray for grid
+        'grid.linewidth': 0.8,
+        'grid.linestyle': '--',
+        'legend.frameon': False,
+        'figure.facecolor': 'white',
+        'axes.facecolor': 'white',
+        'legend.facecolor': 'white',
+        'legend.edgecolor': '#cccccc',
+        'axes.titlepad': 12
+    })
+
+    # Create figure with wider layout but equal subplot sizes
+    figsize = (24, 8)  # Adjusted for better proportions
+    fig = plt.figure(figsize=figsize, dpi=dpi)
+    gs = fig.add_gridspec(1, 3, wspace=0.20)  # Equal width subplots with proper spacing
+    ax1 = fig.add_subplot(gs[0, 0])
+    ax2 = fig.add_subplot(gs[0, 1])
+    ax3 = fig.add_subplot(gs[0, 2])
+
+    # Define colors
+    COLOR_CODESIGN = '#FF8000'  # Orange for CoDesign
+    COLOR_CONTROL = '#4169E1'   # Royal Blue for Control
+
+    # Plot (a): CoDesign shaded and MA
+    for y in y_c:
+        ax1.fill_between(x_c, y, ma_c, alpha=0.1, color=COLOR_CODESIGN)
+    ax1.plot(x_c, ma_c, color=COLOR_CODESIGN, linewidth=2.5, label='Co-design', zorder=2)
+
+    # Plot (a): Control shaded and MA
+    for y in y_ctrl:
+        ax1.fill_between(x_ctrl, y, ma_ctrl, alpha=0.1, color=COLOR_CONTROL)
+    ax1.plot(x_ctrl, ma_ctrl, color=COLOR_CONTROL, linewidth=2.5, label='Separate', zorder=2)
+
+    # Set y-axis limits for ax1
+    ax1.set_ylim(-1450, 150)
+    
+    # Set specific y-ticks (6 ticks)
+    ax1.set_yticks([-1400, -1100, -800, -500, -200, 100])
+    
+    # Set specific x-ticks (integers 0, 2, 4, 6, 8, 10 million)
+    ax1.set_xticks([0, 2e6, 4e6, 6e6, 8e6, 10e6])
+    ax1.set_xticklabels(['0', '2', '4', '6', '8', '10'])
+    ax1.set_xlabel('Training Step (x10$^6$)', fontsize=fs, labelpad=10)
+    
+    # Style the main plot
+    # ax1.set_title('Training Rewards', fontsize=fs+2, fontweight='bold', pad=12)
+    ax1.set_ylabel('Control Agent Reward', fontsize=fs, labelpad=10)
+    ax1.tick_params(axis='both', labelsize=fs-1)
+    ax1.spines['top'].set_visible(False)
+    ax1.spines['right'].set_visible(False)
+    ax1.grid(True, linestyle='--', linewidth=0.8, alpha=0.7, zorder=-5)
+    
+    # Placeholders for (b) and (c)
+    ax2.axis('off')
+    ax3.axis('off')
+
+    # Create legend with rounded white box for subplot (a) only
+    legend_kwargs = {
+        'loc': 'lower center',
+        'fontsize': fs - 2,
+        'frameon': True,
+        'fancybox': True,
+        'facecolor': 'white',
+        'edgecolor': '#cccccc',
+        'framealpha': 1.0,
+        'borderpad': 0.6,
+        'labelspacing': 0.4
+    }
+    
+    # Add legend directly to ax1 instead of the figure
+    ax1.legend(**legend_kwargs)
+
+    # Subplot labels below each panel
+    label_y = -0.08  # Position for panel labels
+    label_fontsize = fs + 2
+    fig.text(0.215, label_y, "(a)", ha="center", va="center", fontsize=label_fontsize, fontweight="bold")
+    fig.text(0.505, label_y, "(b)", ha="center", va="center", fontsize=label_fontsize, fontweight="bold")
+    fig.text(0.835, label_y, "(c)", ha="center", va="center", fontsize=label_fontsize, fontweight="bold")
+
+    # Final adjustments
+    plt.subplots_adjust(left=0.08, right=0.98, top=0.93, bottom=0.13)
+    plt.savefig(f"./rewards_results_plot.png", dpi=dpi, bbox_inches='tight', pad_inches=0.1)
+    plt.close(fig)
+
+# # ── Example usage ──
+# rewards_results_plot(
+#     combined_csv_codesign = "./runs/combined_steps_rewards_wide.csv",
+#     combined_csv_control = "./runs/combined_steps_rewards_wide.csv",
+#     result_1 = "",
+#     result_2 = ""
+# )
+
+run_dir = "Apr28_19-29-42"
+original_graph = f'./runs/{run_dir}/graph_iterations/graph_i_0_data.pkl'
+final_graph = f'./runs/{run_dir}/graph_iterations/graph_i_eval_final_data.pkl'
+gmm_path = f'./runs/{run_dir}/gmm_iterations/gmm_i_eval_final_b0_data.pkl'
+
+plot_graphs_and_gmm(original_graph,
+                    final_graph,
+                    gmm_path)
 
 
 # ###############
