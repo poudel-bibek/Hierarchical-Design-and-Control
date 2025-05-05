@@ -1,8 +1,8 @@
 def get_config():
     config = {
         # Simulation
-        "sweep": False,  # Use wandb sweeps for hyperparameter tuning
-        "evaluate": True, 
+        "sweep": True,  # Use wandb sweeps for hyperparameter tuning
+        "evaluate": False, 
         "gui": False,  # Use SUMO GUI (default: False)
          
         "vehicle_input_trips": "./simulation/original_vehtrips.xml",  # Original Input trips file
@@ -21,7 +21,7 @@ def get_config():
         # PPO (general params)
         "seed": None,  # Random seed (default: None)
         "gpu": True,  # Use GPU if available (default: use CPU)
-        "total_timesteps": 10000000,  # Total number of timesteps the simulation will run
+        "total_timesteps": 15000000,  # Total number of timesteps the simulation will run
         "eval_freq": 1,  # Evaluate both higher and lower-level policies and their normalizers after every n updates of the higher policy (0 to disable). 
         # Also decides how often to evaluate
 
@@ -34,11 +34,11 @@ def get_config():
         "higher_lr": 0.0001,  # Learning rate for higher-level agent
         "higher_gamma": 0.99,  # Discount factor for higher-level agent
         "higher_K_epochs": 4,  # Number of epochs to update policy for higher-level agent
-        "higher_eps_clip": 0.3,  # Clip parameter for PPO for higher-level agent
+        "higher_eps_clip": 0.2,  # Clip parameter for PPO for higher-level agent
         "higher_batch_size": 2,  # Batch size for higher-level agent
         "higher_dropout_rate": 0.25,  # Dropout rate for GATv2
         "higher_model_size": "medium",  # Model size for GATv2: 'small' or 'medium'
-        "higher_ent_coef": 0.005,  # Entropy coefficient for higher-level agent
+        "higher_ent_coef": 0.001,  # Entropy coefficient for higher-level agent
         "higher_vf_coef": 0.5,  # Value function coefficient for higher-level agent
         "higher_in_channels": 2,  # Number of input features per node (x and y coordinates)
         "higher_hidden_channels": 64, # Number of hidden channels in between two GATv2 layers
@@ -54,7 +54,7 @@ def get_config():
         "max_proposals": 10,  # Maximum number of proposals to consider for higher-level agent
         "save_graph_images": True, # Save graph image every iteration.
         "save_gmm_plots": True, # Save GMM visualization every iteration.
-        "num_mixtures": 5,  # Number of mixture components in GMM. Having more is ok (means will collapse into each other) but makes it difficult to learn. Having less will make it less representative.
+        "num_mixtures": 7,  # Number of mixture components in GMM. Having more is ok (means will collapse into each other) but makes it difficult to learn. Having less will make it less representative.
         'initial_heads': 8, # Number of attention heads in first GATv2 layer
         'second_heads': 1, # Number of attention heads in second GATv2 layer
         'edge_dim': 2, # Number of features per edge 
@@ -68,10 +68,10 @@ def get_config():
         "lower_lr": 0.001,  # Learning rate
         "lower_gamma": 0.99,  # Discount factor
         "lower_K_epochs": 8,  # Number of epochs to update policy
-        "lower_eps_clip": 0.1,  # Clip parameter for PPO
-        "lower_ent_coef": 0.02,  # Entropy coefficient
+        "lower_eps_clip": 0.2,  # Clip parameter for PPO
+        "lower_ent_coef": 0.01,  # Entropy coefficient
         "lower_vf_coef": 0.5,  # Value function coefficient
-        "lower_batch_size": 64,  # Batch size
+        "lower_batch_size": 32,  # Batch size
         "lower_num_processes": 10,  # Number of parallel processes to use (agent has multiple workers)
         "lower_model_size": "medium",  # Model size for CNN: 'small' or 'medium'
         "lower_dropout_rate": 0.25,  # Dropout rate for CNN
