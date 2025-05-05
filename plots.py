@@ -1120,12 +1120,14 @@ def plot_design_and_control_results(design_unsig_path, realworld_unsig_path,
 
     # Explicitly set top limit for ax_control_veh_tot to encourage 5 ticks
     # Set top slightly above the max value to give MaxNLocator room
-    if max_veh_tot_val > -np.inf: # Check if we found a max value
-         new_top_limit = np.ceil(max_veh_tot_val) + 0.5 # Go slightly above the ceiling of max value
-         ax_control_veh_tot.set_ylim(bottom=-0.5, top=new_top_limit)
-         # Re-apply locator after setting limits to ensure it recalculates
-         ax_control_veh_tot.yaxis.set_major_locator(MaxNLocator(nbins=n_yticks, integer=True))
+    # if max_veh_tot_val > -np.inf: # Check if we found a max value
+    #      new_top_limit = np.ceil(max_veh_tot_val) + 0.5 # Go slightly above the ceiling of max value
+    #      ax_control_veh_tot.set_ylim(bottom=-0.5, top=new_top_limit)
+    #      # Re-apply locator after setting limits to ensure it recalculates
+    #      ax_control_veh_tot.yaxis.set_major_locator(MaxNLocator(nbins=n_yticks, integer=True))
 
+    ax_control_veh_tot.set_ylim(top=3.9)
+    ax_control_veh_avg.set_ylim(top=75)
 
     # --- X-axis Ticks and Labels ---
     # Select every other scale, EXCLUDING the last one
@@ -1388,7 +1390,7 @@ def plot_graphs_and_gmm( graph_a_path,
                 nx.draw_networkx_edges(G, pos, ax=ax,
                                        edgelist=mid_edges,
                                        edge_color=orange_color, # Use orange
-                                       width=0.5)
+                                       width=1.0) # Thicker orange edges
             # Draw nodes on top in orange
             nx.draw_networkx_nodes(G, pos, ax=ax,
                                    nodelist=mid_nodes,
@@ -1399,9 +1401,14 @@ def plot_graphs_and_gmm( graph_a_path,
     
     cmap = plt.get_cmap("coolwarm", 256)
     ax3.plot_surface(Xg, Yg, dens_norm,
-                     rstride=1, cstride=1,
+                     rstride=2, 
+                     cstride=2,
                      facecolors=cmap(dens_norm),
-                     linewidth=0, antialiased=True, shade=False)
+                     linewidth=0.05,  # Make grid lines visible
+                     edgecolor='white', # Set grid line color
+                     alpha=0.95, # Slightly transparent surface to see lines
+                     antialiased=True, 
+                     shade=False)
     
     ax3.set_xlim(xmin, xmax)
     ax3.set_ylim(ymin, ymax)
@@ -1631,33 +1638,6 @@ def rewards_results_plot(combined_csv_codesign, combined_csv_control, result_1, 
     plt.savefig(f"./rewards_results_plot.png", dpi=dpi, bbox_inches='tight', pad_inches=0.1)
     plt.close(fig)
 
-# # ── Example usage ──
-# rewards_results_plot(
-#     combined_csv_codesign = "./runs/combined_steps_rewards_wide.csv",
-#     combined_csv_control = "./runs/combined_steps_rewards_wide.csv",
-#     result_1 = "",
-#     result_2 = ""
-# )
-
-# run_dir = "Apr28_19-29-42"
-# original_graph = f'./runs/{run_dir}/graph_iterations/graph_i_0_data.pkl'
-# final_graph = f'./runs/{run_dir}/graph_iterations/graph_i_eval_final_data.pkl'
-# gmm_path = f'./runs/{run_dir}/gmm_iterations/gmm_i_eval_final_b0_data.pkl'
-
-# plot_graphs_and_gmm(original_graph,
-#                     final_graph,
-#                     gmm_path)
-
-
-# ###############
-# run_dir = "Apr27_09-22-25"
-# eval_dir = "eval_Apr28_12-16-10"
-# real_world_design_unsignalized_results_path = f'./runs/{run_dir}/results/{eval_dir}/realworld_unsignalized.json'
-# new_design_ppo_results_path = f'./runs/{run_dir}/results/{eval_dir}/best_eval_policy_ppo.json'
-# new_design_tl_results_path = f'./runs/{run_dir}/results/{eval_dir}/best_eval_policy_tl.json'
-# new_design_unsignalized_results_path = f'./runs/{run_dir}/results/{eval_dir}/best_eval_policy_unsignalized.json'
-
-# irds = [1.0, 1.25, 1.5, 1.75, 2.0, 2.25]
 
 # # plot_design_results(new_design_unsignalized_results_path, 
 # #                     real_world_design_unsignalized_results_path,
@@ -1669,10 +1649,44 @@ def rewards_results_plot(combined_csv_codesign, combined_csv_control, result_1, 
 # #                                  in_range_demand_scales = irds)
 
 
-# plot_design_and_control_results(
-#     design_unsig_path = new_design_unsignalized_results_path,
-#     realworld_unsig_path = real_world_design_unsignalized_results_path,
-#     control_tl_path = new_design_tl_results_path,
-#     control_ppo_path = new_design_ppo_results_path,
-#     in_range_demand_scales = irds
-# )
+def plot(design_and_control = False, 
+         graphs_and_gmm = True,
+         rewards_results = False):
+    
+    run_dir = "May04_17-03-12"
+
+    if design_and_control:
+        eval_dir = "eval_May05_15-56-37"
+        real_world_design_unsignalized_results_path = f'./runs/{run_dir}/results/{eval_dir}/realworld_unsignalized.json'
+        new_design_ppo_results_path = f'./runs/{run_dir}/results/{eval_dir}/best_eval_policy_ppo.json'
+        new_design_tl_results_path = f'./runs/{run_dir}/results/{eval_dir}/best_eval_policy_tl.json'
+        new_design_unsignalized_results_path = f'./runs/{run_dir}/results/{eval_dir}/best_eval_policy_unsignalized.json'
+
+        irds = [1.0, 1.25, 1.5, 1.75, 2.0, 2.25]
+
+        plot_design_and_control_results(
+            design_unsig_path = new_design_unsignalized_results_path,
+            realworld_unsig_path = real_world_design_unsignalized_results_path,
+            control_tl_path = new_design_tl_results_path,
+            control_ppo_path = new_design_ppo_results_path,
+            in_range_demand_scales = irds
+        )
+                    
+    if graphs_and_gmm:
+        original_graph = f'./runs/{run_dir}/graph_iterations/graph_i_0_data.pkl'
+        final_graph = f'./runs/{run_dir}/graph_iterations/graph_i_eval_final_data.pkl'
+        gmm_path = f'./runs/{run_dir}/gmm_iterations/gmm_i_eval_final_b0_data.pkl'
+
+        plot_graphs_and_gmm(original_graph,
+                            final_graph,
+                            gmm_path)
+        
+    if rewards_results:
+        rewards_results_plot(
+            combined_csv_codesign = "./runs/combined_steps_rewards_wide.csv",
+            combined_csv_control = "./runs/combined_steps_rewards_wide.csv",
+            result_1 = "",
+            result_2 = ""
+        )
+        
+plot()

@@ -1,8 +1,8 @@
 def get_config():
     config = {
         # Simulation
-        "sweep": True,  # Use wandb sweeps for hyperparameter tuning
-        "evaluate": False, 
+        "sweep": False,  # Use wandb sweeps for hyperparameter tuning
+        "evaluate": True, 
         "gui": False,  # Use SUMO GUI (default: False)
          
         "vehicle_input_trips": "./simulation/original_vehtrips.xml",  # Original Input trips file
@@ -78,7 +78,7 @@ def get_config():
         "lower_action_dim": None, # will be set later
         "lower_in_channels": 1, # in_channels for cnn
         "lower_activation": "tanh",  # Policy activation function
-        "lower_max_timesteps": 460,  # Maximum number of steps in one episode (make this multiple of 16*10)
+        "lower_max_timesteps": 360,  # Maximum number of steps in one episode (make this multiple of 16*10)
         "lower_memory_transfer_freq": 16,  # Frequency of memory transfer from worker to main process 
         "lower_per_timestep_state_dim": 11 + 32 + 8 * 10,  # Number of features per timestep (corresponding to max_proposals = 10), calculation in _get_observation function.
         "lower_step_length": 1.0,  # Real-world time in seconds per simulation timestep (default: 1.0). 
@@ -87,8 +87,8 @@ def get_config():
         "lower_auto_start": True,  # Automatically start the simulation
 
         # Evaluation
-        "eval_model_path": "./runs/May02_15-24-29/saved_policies/policy_at_9825600.pth",  # Path to the saved PPO model for evaluation. replace xyz.
-        "eval_lower_timesteps": 460,  # Number of timesteps to each episode. Warmup not counted.
+        "eval_model_path": "./runs/May04_17-03-12/saved_policies/best_eval_policy.pth",  # Path to the saved PPO model for evaluation. replace xyz.
+        "eval_lower_timesteps": 360,  # Number of timesteps to each episode. Warmup not counted.
         "eval_lower_workers": 10,  # Parallelizes how many demands can be evaluated at the same time.
         "eval_worker_device": "gpu",  # Policy during eval can be run in GPU 
     }
