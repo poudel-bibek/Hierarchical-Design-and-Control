@@ -1071,9 +1071,9 @@ def plot_design_and_control_results(design_unsig_path, realworld_unsig_path,
         # Pedestrian Average Wait (Middle Top)
         h_ped = ax_control_ped_avg.plot(scales, ped_avg_mean, color=color, lw=2.5, label=label, zorder=2)[0]
         ax_control_ped_avg.fill_between(scales,
-                                       ped_avg_mean - ped_avg_std,
-                                       ped_avg_mean + ped_avg_std,
-                                       color=color, alpha=0.2, zorder=2)
+                                         ped_avg_mean - ped_avg_std,
+                                         ped_avg_mean + ped_avg_std,
+                                         color=color, alpha=0.2, zorder=2)
         # Store unique handles for legend
         if label not in [h.get_label() for h in control_legend_handles]:
              control_legend_handles.append(h_ped)
@@ -1081,25 +1081,25 @@ def plot_design_and_control_results(design_unsig_path, realworld_unsig_path,
         # Pedestrian Total Wait (Middle Bottom)
         ax_control_ped_tot.plot(scales, ped_tot/1000, color=color, lw=2.5, zorder=2)
         ax_control_ped_tot.fill_between(scales,
-                                       (ped_tot - ped_tot_std)/1000,
-                                       (ped_tot + ped_tot_std)/1000,
-                                       color=color, alpha=0.2, zorder=2)
+                                        (ped_tot - ped_tot_std)/1000,
+                                        (ped_tot + ped_tot_std)/1000,
+                                        color=color, alpha=0.2, zorder=2)
 
         # Vehicle Average Wait (Right Top)
         ax_control_veh_avg.plot(scales, veh_avg_mean, color=color, lw=2.5, zorder=2)
         ax_control_veh_avg.fill_between(scales,
-                                       veh_avg_mean - veh_avg_std,
-                                       veh_avg_mean + veh_avg_std,
-                                       color=color, alpha=0.2, zorder=2)
+                                        veh_avg_mean - veh_avg_std,
+                                        veh_avg_mean + veh_avg_std,
+                                        color=color, alpha=0.2, zorder=2)
 
         # Vehicle Total Wait (Right Bottom)
         veh_tot_k = veh_tot / 1000.0
         veh_tot_k_std = veh_tot_std / 1000.0
         ax_control_veh_tot.plot(scales, veh_tot_k, color=color, lw=2.5, zorder=2)
         ax_control_veh_tot.fill_between(scales,
-                                       veh_tot_k - veh_tot_k_std,
-                                       veh_tot_k + veh_tot_k_std,
-                                       color=color, alpha=0.2, zorder=2)
+                                        veh_tot_k - veh_tot_k_std,
+                                        veh_tot_k + veh_tot_k_std,
+                                        color=color, alpha=0.2, zorder=2)
         # Update max value seen in this plot (including std dev)
         current_max = np.max(veh_tot_k + veh_tot_k_std)
         if current_max > max_veh_tot_val:
@@ -1328,7 +1328,8 @@ def plot_graphs_and_gmm( graph_a_path,
                         surf_res=200,
                         y_scale=5.0,
                         node_size=50, 
-                        y_crop=(12, 86)):
+                        y_crop=(12, 86),
+                        gmm_cmap_style='coolwarm'): # Added cmap_style parameter
     
     G1, pos1_raw = _crop_graph(_load_graph(graph_a_path), *y_crop)
     G2, pos2_raw = _crop_graph(_load_graph(graph_b_path), *y_crop)
@@ -1373,77 +1374,92 @@ def plot_graphs_and_gmm( graph_a_path,
 
     fs = 18
 
+    # Common styling for GMM subplot's ticks, labels, and fonts, based on 'coolwarm'
+    ax3.set_xlabel('Location', fontsize=fs-2, labelpad=10, color='#202124')
+    ax3.set_zlabel('Density', fontsize=fs-2, labelpad=10, color='#202124')
+
+    z_lim_unified = (0, 0.8)
+    ax3.set_zlim(*z_lim_unified)
+    z_ticks_unified = np.arange(0, z_lim_unified[1] + 0.01, 0.2) # Includes 0.8
+    ax3.set_zticks(z_ticks_unified)
+    ax3.set_zticklabels([f"{t:.1f}" for t in z_ticks_unified])
+
+    ax3.tick_params(axis='both', which='major', labelsize=fs-2, colors='#5f6368')
+    
+    common_norm = mpl.colors.Normalize(vmin=z_lim_unified[0], vmax=z_lim_unified[1])
 
     _draw_graph(ax1, G1, pos1, node_size)
     _draw_graph(ax2, G2, pos2, node_size)
     
-    # Overlay orange color for nodes containing "_mid" in their id for both graphs
-    orange_color = "#FF8000"  # Vibrant Orange
-    darker_orange_color = "#CC6600" # Darker vibrant orange for edge
+    # Define blue colors for "_mid" nodes and their incident edges
+    lighter_blue_color = "#7FA2F8"  # Lighter blue for nodes
+    darker_blue_color = "#0037BE"   # Darker blue for edges and node outlines
 
     for G, pos, ax in [(G1, pos1, ax1), (G2, pos2, ax2)]:
         mid_nodes = [n for n in G.nodes() if "_mid" in str(n)]
         if mid_nodes:
-            # Draw edges incident to these nodes in orange
+            # Draw edges incident to these nodes in darker blue
             mid_edges = [e for e in G.edges() if e[0] in mid_nodes or e[1] in mid_nodes]
             if mid_edges:
                 nx.draw_networkx_edges(G, pos, ax=ax,
                                        edgelist=mid_edges,
-                                       edge_color=orange_color, # Use orange
+                                       edge_color=darker_blue_color,
                                        width=1.0) # Thicker orange edges
-            # Draw nodes on top in orange
+            # Draw nodes on top in lighter blue with darker blue outlines
             nx.draw_networkx_nodes(G, pos, ax=ax,
                                    nodelist=mid_nodes,
                                    node_size=node_size,
-                                   node_color=orange_color,       # Use orange
-                                   edgecolors=darker_orange_color, # Use darker orange for edge
+                                   node_color=lighter_blue_color,
+                                   edgecolors=darker_blue_color,
                                    linewidths=0.5)
     
-    cmap = plt.get_cmap("coolwarm", 256)
-    ax3.plot_surface(Xg, Yg, dens_norm,
-                     rstride=2, 
-                     cstride=2,
-                     facecolors=cmap(dens_norm),
-                     linewidth=0.05,  # Make grid lines visible
-                     edgecolor='white', # Set grid line color
-                     alpha=0.95, # Slightly transparent surface to see lines
-                     antialiased=True, 
-                     shade=False)
-    
+    # Choose colormap based on gmm_cmap_style
+    if gmm_cmap_style == 'viridis':
+        cmap = plt.get_cmap("viridis", 256)
+        ax3.plot_surface(Xg, Yg, dens_norm,
+                         rstride=2, cstride=2,       
+                         cmap=cmap,                  
+                         linewidth=0,                
+                         alpha=0.9,                  
+                         antialiased=False)          
+
+        ax3.set_ylabel('Thickness', fontsize=fs-2, labelpad=12, color='#202124') # Coolwarm font style, Viridis text
+        ax3.set_title('GMM Distribution', fontweight='bold', fontsize=fs) # Added title
+
+        ax3.grid(True) # Simpler grid for viridis style
+        norm = common_norm # Use common norm
+
+    elif gmm_cmap_style == 'coolwarm':
+        cmap = plt.get_cmap("coolwarm", 256)
+        ax3.plot_surface(Xg, Yg, dens_norm,
+                         rstride=2, 
+                         cstride=2,
+                         facecolors=cmap(dens_norm), # Original method for coolwarm
+                         linewidth=0.05,
+                         edgecolor='white',
+                         alpha=0.9,
+                         antialiased=True, 
+                         shade=False)                 # Original shade=False
+
+        ax3.set_ylabel("Width", fontsize=fs-2, labelpad=12, color='#202124') # Original label and coolwarm font style
+        # No title for coolwarm style
+        
+        # Custom grid for coolwarm style
+        ax3.grid(True)
+        grid_style = dict(color=(0.0, 0.0, 0.0, 0.2), linestyle=(0, (5, 5)), linewidth=0.5)
+        for axis_obj in [ax3.xaxis, ax3.yaxis, ax3.zaxis]:
+            axis_obj._axinfo["grid"].update(grid_style)
+        
+        norm = common_norm # Use common norm
+    else:
+        raise ValueError(f"Unsupported gmm_cmap_style: {gmm_cmap_style}. Choose 'viridis' or 'coolwarm'.")
+
     ax3.set_xlim(xmin, xmax)
     ax3.set_ylim(ymin, ymax)
-    ax3.set_zlim(0, 0.8)
-    
-    # Apply black text for axis labels (from rewards_results_plot style)
-    ax3.set_xlabel("Location", fontsize=fs-2, labelpad=10, color='#202124')
-    ax3.set_ylabel("Width", fontsize=fs-2, labelpad=12, color='#202124')
-    ax3.set_zlabel("Density", fontsize=fs-2, labelpad=10, color='#202124')
-
-    # Set explicit ticks and labels for all axes
-    ticks = np.arange(0, 0.81, 0.2)
-    tick_labels = [f"{t:.1f}" for t in ticks]
-
-    # ax3.set_xticks(ticks) # Commented out to allow auto X ticks
-    # ax3.set_yticks(ticks) # Commented out to allow auto Y ticks
-    ax3.set_zticks(ticks)
-
-    # ax3.set_xticklabels(tick_labels) # Commented out to allow auto X ticks
-    # ax3.set_yticklabels(tick_labels) # Commented out to allow auto Y ticks
-    ax3.set_zticklabels(tick_labels)
-
-    # Set tick font size and color to gray (from rewards_results_plot style)
-    ax3.tick_params(axis='both', which='major', labelsize=fs-2, colors='#5f6368')
     
     ax3.view_init(elev=35, azim=-60) # Changed view angle
-    # Enable grid and apply custom dashed white style via _axinfo to ensure 3D grid lines adopt it
-    ax3.grid(True)
-    # Dashed, thin white grid lines
-    grid_style = dict(color=(0.0, 0.0, 0.0, 0.2), linestyle=(0, (5, 5)), linewidth=0.5)
-    for axis in [ax3.xaxis, ax3.yaxis, ax3.zaxis]:
-        axis._axinfo["grid"].update(grid_style)
     
     # Drawing colorbar relative to ax3 with controlled height
-    norm = mpl.colors.Normalize(vmin=0, vmax=0.8)
     sm = cm.ScalarMappable(cmap=cmap, norm=norm)
     sm.set_array([])
     cbar = fig.colorbar(sm, ax=ax3, shrink=0.35, pad=0.10, label='')
