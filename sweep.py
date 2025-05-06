@@ -46,27 +46,23 @@ class HyperParameterTuner:
                 },
 
             'parameters': {
-                'higher_lr': { 'values': [1e-4, 5e-4] },
-                'lower_lr': { 'values': [5e-4, 1e-3] },
+                'higher_lr': { 'values': [5e-4] }, #1e-4, 5e-4
+                'lower_lr': { 'values': [5e-4] }, #1e-3, 5e-4
                 # HRL Interaction / Update Frequencies
-                'higher_update_freq': { 'values': [8, 16] },
-                'lower_update_freq': { 'values': [1024, 2048] },
+                'higher_update_freq': { 'values': [16] }, #8, 16
+                'lower_update_freq': { 'values': [1024] }, # 1024, 2048
                 # 'num_mixtures': { 'values': [5, 7, 10] },
-                'higher_readout_k': { 'values': [32, 64] },
+                'higher_readout_k': { 'values': [64] }, # 32, 64
                 # --- Higher-Level Specific ---
-                'higher_batch_size': {'values': [2, 4]},
-                'higher_eps_clip': {'values': [0.1, 0.2, 0.3]},
-                'higher_ent_coef': {'values': [0.001, 0.005]},
+                'higher_batch_size': {'values': [2]}, # 2, 4
+                'higher_eps_clip': {'values': [0.3]}, # 0.1, 0.2, 0.3
+                'higher_ent_coef': {'values': [0.005]}, # 0.001, 0.005
                 # --- Lower-Level Specific ---
-                'lower_batch_size': {'values': [32, 64]},
-                'lower_eps_clip': {'values': [0.1, 0.2, 0.3]},
-                'lower_ent_coef': {'values': [0.005, 0.01, 0.02]},
-                'lower_K_epochs': {'values': [2, 4, 8]},
+                'lower_batch_size': {'values': [32]}, # 32, 64
+                'lower_eps_clip': {'values': [0.1]}, # 0.1, 0.2, 0.3
+                'lower_ent_coef': {'values': [0.005]}, # 0.005, 0.01, 0.02
+                'lower_K_epochs': {'values': [2]}, # 2, 4, 8
             },
         }
         
         return wandb.sweep(sweep_config, entity="fluidic-city", project=self.project)
-
-# learnings from sweep: 
-# - Higher lr high
-# - Higher entropy coeff low 

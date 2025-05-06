@@ -47,7 +47,7 @@ def get_config():
         "higher_readout_k": 64, # Number of nodes to keep for each graph
 
         # Design specific parameters
-        "min_thickness": 1.0,  # Minimum thickness for crosswalks
+        "min_thickness": 2.0,  # Minimum thickness for crosswalks
         "max_thickness": 15.0,  # Maximum thickness for crosswalks
         "clamp_min": 0.01,  # Minimum value for x location and thickness for crosswalks # Add small buffer to avoid exact 0.0 or 1.0
         "clamp_max": 0.99,  # Maximum value for x location and thickness for crosswalks
