@@ -1175,7 +1175,7 @@ class ControlEnv(gym.Env):
 
         # TODO: Should we consider vicinity for pedestrians as well?
         """
-        MWAQ_VEH_NORMALIZER = 6.0 # Number of pedestrians per crosswalk increases as the number of crosswalks is reduced by design agent. But it remains same for vehicles.
+        MWAQ_VEH_NORMALIZER = 2.0 # Number of pedestrians per crosswalk increases as the number of crosswalks is reduced by design agent. But it remains same for vehicles.
         MWAQ_PED_NORMALIZER = 10.0
         VEH_THRESHOLD_SPEED = 0.2 # m/s
         PED_THRESHOLD_SPEED = 0.5 # m/s # 0.1 is the threshold in SUMO by default (i.e. wait time is counted when speed is below 0.1 m/s)
@@ -1306,7 +1306,7 @@ class ControlEnv(gym.Env):
 
         return clipped_reward
 
-    def _count_near_conflicts(self, corrected_occupancy_map, threshold_speed=1.0, distance_threshold=5.0):
+    def _count_near_conflicts(self, corrected_occupancy_map, threshold_speed=0.8, distance_threshold=6.0):
         """
         Count potential vehicle-pedestrian conflicts at signalized/ unsignalized crosswalks.
         Only meaningful at high volumes. 

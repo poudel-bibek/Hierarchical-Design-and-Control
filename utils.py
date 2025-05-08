@@ -217,8 +217,9 @@ def scale_demand_sliced_window(input_file, output_file, scale_factor, demand_typ
     """
 
     # ORIGINAL_TIME_SPAN = 3600  # full duration of the real‐world data
-    TRAIN_TIME_SPAN = 2400 # 67%
-    t_start = random.uniform(0, TRAIN_TIME_SPAN - window_size)
+    START_SPAN = 2900
+    END_SPAN = 3400 # 67%
+    t_start = random.uniform(START_SPAN, END_SPAN - window_size)
     t_end = t_start + window_size
 
     # 2) load XML and prepare root

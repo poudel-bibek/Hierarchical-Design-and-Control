@@ -44,7 +44,7 @@ def get_config():
         "higher_hidden_channels": 64, # Number of hidden channels in between two GATv2 layers
         'higher_out_channels': 64, # Number of channels at the ouput of last GATv2 layer
         "higher_activation": "tanh",  # Policy activation function
-        "higher_readout_k": 64, # Number of nodes to keep for each graph
+        "higher_readout_k": 32, # Number of nodes to keep for each graph
 
         # Design specific parameters
         "min_thickness": 2.0,  # Minimum thickness for crosswalks
@@ -87,7 +87,7 @@ def get_config():
         "lower_auto_start": True,  # Automatically start the simulation
 
         # Evaluation
-        "eval_model_path": "./runs/May04_17-03-12/saved_policies/best_eval_policy.pth",  # Path to the saved PPO model for evaluation. replace xyz.
+        "eval_model_path": "./runs/May06_15-20-52/saved_policies/policy_at_14054400.pth",  # Path to the saved PPO model for evaluation. replace xyz.
         "eval_lower_timesteps": 360,  # Number of timesteps to each episode. Warmup not counted.
         "eval_lower_workers": 10,  # Parallelizes how many demands can be evaluated at the same time.
         "eval_worker_device": "gpu",  # Policy during eval can be run in GPU 

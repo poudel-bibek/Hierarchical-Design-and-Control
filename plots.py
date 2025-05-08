@@ -1669,10 +1669,10 @@ def plot(design_and_control = False,
          graphs_and_gmm = True,
          rewards_results = False):
     
-    run_dir = "May04_17-03-12"
+    run_dir = "May06_15-20-52"
 
     if design_and_control:
-        eval_dir = "eval_May05_15-56-37"
+        eval_dir = "eval_May07_15-51-24"
         real_world_design_unsignalized_results_path = f'./runs/{run_dir}/results/{eval_dir}/realworld_unsignalized.json'
         new_design_ppo_results_path = f'./runs/{run_dir}/results/{eval_dir}/best_eval_policy_ppo.json'
         new_design_tl_results_path = f'./runs/{run_dir}/results/{eval_dir}/best_eval_policy_tl.json'
@@ -1705,4 +1705,4 @@ def plot(design_and_control = False,
             result_2 = ""
         )
         
-# plot()
+plot()
