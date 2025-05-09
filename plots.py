@@ -1392,8 +1392,8 @@ def plot_graphs_and_gmm( graph_a_path,
     _draw_graph(ax2, G2, pos2, node_size)
     
     # Define blue colors for "_mid" nodes and their incident edges
-    lighter_blue_color = "#7FA2F8"  # Lighter blue for nodes
-    darker_blue_color = "#0037BE"   # Darker blue for edges and node outlines
+    lighter_blue_color = "#FFA07A"  # Light salmon for nodes
+    darker_blue_color = "#FF4500"   # Orange red for edges and node outlines
 
     for G, pos, ax in [(G1, pos1, ax1), (G2, pos2, ax2)]:
         mid_nodes = [n for n in G.nodes() if "_mid" in str(n)]
@@ -1705,4 +1705,4 @@ def plot(design_and_control = False,
             result_2 = ""
         )
         
-plot()
+# plot()
