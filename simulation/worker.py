@@ -139,7 +139,7 @@ def parallel_eval_worker(rank,
 
         # Run the worker (reset includes warmup)
         env = ControlEnv(control_args, eval_worker_config['run_dir'], worker_id=rank, network_iteration=eval_worker_config['network_iteration'], current_net_file_path=current_net_file_path)
-        state, _ = env.reset(extreme_edge_dict, eval_worker_config['num_proposals'], tl = tl, real_world=real_world)
+        state, _ = env.reset(extreme_edge_dict, eval_worker_config['num_proposals'], tl = tl, real_world=real_world, eval_mode=True)
         veh_waiting_time_this_episode = 0
         ped_waiting_time_this_episode = 0
         veh_unique_ids_this_episode = 0
