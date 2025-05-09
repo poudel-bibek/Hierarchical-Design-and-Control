@@ -1,8 +1,8 @@
 def get_config():
     config = {
         # Simulation
-        "sweep": True,  # Use wandb sweeps for hyperparameter tuning
-        "evaluate": False, 
+        "sweep": False,  # Use wandb sweeps for hyperparameter tuning
+        "evaluate": True, 
         "gui": False,  # Use SUMO GUI (default: False)
          
         "vehicle_input_trips": "./simulation/original_vehtrips.xml",  # Original Input trips file
@@ -30,7 +30,7 @@ def get_config():
         "higher_gae_lambda": 0.97,  # GAE lambda for higher-level agent
         "higher_max_grad_norm": 0.75,  # Maximum gradient norm for gradient clipping
         "higher_vf_clip_param": 0.5,  # Value function clipping parameter
-        "higher_update_freq": 8,  # Number of action timesteps between each policy update. A low value incurs high variance for design agent.
+        "higher_update_freq": 16,  # Number of action timesteps between each policy update. A low value incurs high variance for design agent.
         "higher_lr": 0.0001,  # Learning rate for higher-level agent
         "higher_gamma": 0.99,  # Discount factor for higher-level agent
         "higher_K_epochs": 4,  # Number of epochs to update policy for higher-level agent
@@ -64,7 +64,7 @@ def get_config():
         "lower_gae_lambda": 0.95,  # GAE lambda
         "lower_max_grad_norm": 0.75,  # Maximum gradient norm for gradient clipping
         "lower_vf_clip_param": 0.5,  # Value function clipping parameter
-        "lower_update_freq": 2048,  # Number of action timesteps between each policy update
+        "lower_update_freq": 1024,  # Number of action timesteps between each policy update
         "lower_lr": 0.001,  # Learning rate
         "lower_gamma": 0.99,  # Discount factor
         "lower_K_epochs": 8,  # Number of epochs to update policy
@@ -87,7 +87,7 @@ def get_config():
         "lower_auto_start": True,  # Automatically start the simulation
 
         # Evaluation
-        "eval_model_path": "./runs/May06_15-20-52/saved_policies/best_eval_policy.pth",  # Path to the saved PPO model for evaluation. replace xyz.
+        "eval_model_path": "./runs/May07_16-04-44/saved_policies/policy_at_6969600.pth",  # Path to the saved PPO model for evaluation. replace xyz.
         "eval_lower_timesteps": 360,  # Number of timesteps to each episode. Warmup not counted.
         "eval_lower_workers": 10,  # Parallelizes how many demands can be evaluated at the same time.
         "eval_worker_device": "gpu",  # Policy during eval can be run in GPU 

@@ -217,8 +217,8 @@ def scale_demand_sliced_window(input_file, output_file, scale_factor, demand_typ
     """
     
     if evaluation:
-        START_SPAN = 2900
-        END_SPAN = 3400 
+        START_SPAN = 3000
+        END_SPAN = 3500 
     else: 
         START_SPAN = 0
         END_SPAN = 2400 
