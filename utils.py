@@ -207,7 +207,7 @@ def clear_elements(parent, tag):
     for elem in parent.findall(tag):
         parent.remove(elem)
 
-def scale_demand_sliced_window(input_file, output_file, scale_factor, demand_type, window_size):
+def scale_demand_sliced_window(input_file, output_file, scale_factor, demand_type, window_size, evaluation=False):
     """
     Scale the demand in a randomly-sampled time window of the input file.
     window_size: max episode length (in seconds), including any warm‐up.
@@ -215,10 +215,14 @@ def scale_demand_sliced_window(input_file, output_file, scale_factor, demand_typ
     and only trips/persons with depart in [t_start, t_start + window_size)
     are kept, re‐timed, and scaled.
     """
+    
+    if evaluation:
+        START_SPAN = 2900
+        END_SPAN = 3400 
+    else: 
+        START_SPAN = 0
+        END_SPAN = 2400 
 
-    # ORIGINAL_TIME_SPAN = 3600  # full duration of the real‐world data
-    START_SPAN = 2900
-    END_SPAN = 3400 # 67%
     t_start = random.uniform(START_SPAN, END_SPAN - window_size)
     t_end = t_start + window_size
 

@@ -1672,7 +1672,7 @@ def plot(design_and_control = False,
     run_dir = "May06_15-20-52"
 
     if design_and_control:
-        eval_dir = "eval_May07_15-51-24"
+        eval_dir = "eval_May09_10-55-14"
         real_world_design_unsignalized_results_path = f'./runs/{run_dir}/results/{eval_dir}/realworld_unsignalized.json'
         new_design_ppo_results_path = f'./runs/{run_dir}/results/{eval_dir}/best_eval_policy_ppo.json'
         new_design_tl_results_path = f'./runs/{run_dir}/results/{eval_dir}/best_eval_policy_tl.json'

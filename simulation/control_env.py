@@ -1374,7 +1374,7 @@ class ControlEnv(gym.Env):
         """
         return self.step_count >= self.max_timesteps
 
-    def reset(self, extreme_edge_dict, num_proposals, tl= False, real_world=False, eval_mode=False, eval_iteration=None):
+    def reset(self, extreme_edge_dict, num_proposals, tl= False, real_world=False, eval_mode=False):
         """
         """
         # useful when running multiple iterations of the same env (as in eval)
@@ -1386,21 +1386,21 @@ class ControlEnv(gym.Env):
         if self.manual_demand_veh is not None : 
             #scaling = convert_demand_to_scale_factor(self.manual_demand_veh, "vehicle", self.vehicle_input_trips) # Convert the demand to scaling factor first
             # scale_demand(self.vehicle_input_trips, self.vehicle_output_trips, self.manual_demand_veh, demand_type="vehicle") # directly scaling factor given
-            scale_demand_sliced_window(self.vehicle_input_trips, self.vehicle_output_trips, self.manual_demand_veh, demand_type="vehicle", window_size=window_size)
+            scale_demand_sliced_window(self.vehicle_input_trips, self.vehicle_output_trips, self.manual_demand_veh, demand_type="vehicle", window_size=window_size, evaluation=eval_mode)
         else: 
             # Automatically scale demand 
             scale_factor_vehicle = random.uniform(self.demand_scale_min, self.demand_scale_max)
             # scale_demand(self.vehicle_input_trips, self.vehicle_output_trips, scale_factor_vehicle, demand_type="vehicle")
-            scale_demand_sliced_window(self.vehicle_input_trips, self.vehicle_output_trips, scale_factor_vehicle, demand_type="vehicle", window_size=window_size)
+            scale_demand_sliced_window(self.vehicle_input_trips, self.vehicle_output_trips, scale_factor_vehicle, demand_type="vehicle", window_size=window_size, evaluation=eval_mode)
 
         if self.manual_demand_ped is not None:
             # scaling = convert_demand_to_scale_factor(self.manual_demand_ped, "pedestrian", self.pedestrian_input_trips)
             # scale_demand(self.pedestrian_input_trips, self.pedestrian_output_trips, self.manual_demand_ped, demand_type="pedestrian") # directly scaling factor given
-            scale_demand_sliced_window(self.pedestrian_input_trips, self.pedestrian_output_trips, self.manual_demand_ped, demand_type="pedestrian", window_size=window_size)
+            scale_demand_sliced_window(self.pedestrian_input_trips, self.pedestrian_output_trips, self.manual_demand_ped, demand_type="pedestrian", window_size=window_size, evaluation=eval_mode)
         else: 
             scale_factor_pedestrian = random.uniform(self.demand_scale_min, self.demand_scale_max)
             # scale_demand(self.pedestrian_input_trips, self.pedestrian_output_trips, scale_factor_pedestrian, demand_type="pedestrian")
-            scale_demand_sliced_window(self.pedestrian_input_trips, self.pedestrian_output_trips, scale_factor_pedestrian, demand_type="pedestrian", window_size=window_size)
+            scale_demand_sliced_window(self.pedestrian_input_trips, self.pedestrian_output_trips, scale_factor_pedestrian, demand_type="pedestrian", window_size=window_size, evaluation=eval_mode)
 
 
         # create the new sumocfg file before the call
