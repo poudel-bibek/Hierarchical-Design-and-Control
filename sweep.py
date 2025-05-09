@@ -52,7 +52,7 @@ class HyperParameterTuner:
                 'higher_update_freq': { 'values': [16] }, #8, 16
                 'lower_update_freq': { 'values': [1024] }, # 1024, 2048
                 # 'num_mixtures': { 'values': [5, 7, 10] },
-                'higher_readout_k': { 'values': [64] }, # 32, 64
+                'higher_readout_k': { 'values': [32] }, # 32, 64
                 # --- Higher-Level Specific ---
                 'higher_batch_size': {'values': [2]}, # 2, 4
                 'higher_eps_clip': {'values': [0.3]}, # 0.1, 0.2, 0.3
