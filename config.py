@@ -21,7 +21,7 @@ def get_config():
         # PPO (general params)
         "seed": None,  # Random seed (default: None)
         "gpu": True,  # Use GPU if available (default: use CPU)
-        "total_timesteps": 15000000,  # Total number of timesteps the simulation will run
+        "total_timesteps": 10000000,  # Total number of timesteps the simulation will run
         "eval_freq": 1,  # Evaluate both higher and lower-level policies and their normalizers after every n updates of the higher policy (0 to disable). 
         # Also decides how often to evaluate
 
