@@ -40,7 +40,17 @@ def train(train_config, is_sweep=False, sweep_config=None):
     current_time = datetime.now().strftime('%b%d_%H-%M-%S')
     run_dir = os.path.join('runs', current_time)
     os.makedirs(run_dir, exist_ok=True)
-    design_args, control_args, higher_ppo_args, lower_ppo_args, eval_args = classify_and_return_args(train_config, device)
+    design_args, control_args, _, _, eval_args = classify_and_return_args(train_config, device)
+
+    # load the ppo args from the saved config file
+    load_dir_parent = os.path.dirname(os.path.dirname(eval_args['eval_model_path']))
+    config_file_path = os.path.join(load_dir_parent, 'config.json')
+    print(f"Config file path: {config_file_path}")
+    with open(config_file_path, 'r') as f:
+        saved_config = json.load(f)['hyperparameters']
+    higher_ppo_args = saved_config['higher_ppo_args']
+    lower_ppo_args = saved_config['lower_ppo_args']
+    higher_ppo_args['model_kwargs']['run_dir'] = run_dir
 
     # Print stats from dummy environment
     dummy_envs = {
@@ -72,31 +82,20 @@ def train(train_config, is_sweep=False, sweep_config=None):
     os.makedirs(eval_args['eval_save_dir'], exist_ok=True)
     os.makedirs(os.path.join(run_dir, 'saved_policies'), exist_ok=True)
     design_args.update({'save_dir': run_dir})
-    higher_ppo_args['model_kwargs'].update({'run_dir': run_dir})
     control_args.update({'global_seed': SEED})
     control_args.update({'total_action_timesteps_per_episode': train_config['lower_max_timesteps'] // train_config['lower_action_duration']})
 
     # Instead of using total_episodes, we will use total_iterations. 
     # Every iteration, num_process control agents interact with the environment for total_action_timesteps_per_episode steps (which further internally contains action_duration steps)
     total_iterations = train_config['total_timesteps'] // (train_config['lower_max_timesteps'] * train_config['lower_num_processes'])
-    total_updates_higher = total_iterations // train_config['higher_update_freq']
     total_updates_lower = (train_config['total_timesteps'] / train_config['lower_action_duration']) // train_config['lower_update_freq']
 
-    higher_ppo = PPO(**higher_ppo_args)
-    higher_env = DesignEnv(design_args, control_args, lower_ppo_args, run_dir)
+    eval_ppo_higher = PPO(**higher_ppo_args)
+    higher_env = DesignEnv(design_args, control_args, lower_ppo_args, run_dir) # Pass the correct run_dir
     higher_env.total_updates_lower = total_updates_lower
     higher_env.lower_state_normalizer = WelfordNormalizer(lower_obs_shape)
-    higher_ppo.policy_old = higher_ppo.policy_old.to(device)
-    higher_ppo.policy = higher_ppo.policy.to(device)
-
-    higher_state = higher_env.reset()
-    print(f"\nHigher state at reset: {higher_state}")
-    higher_memories = Memory()
-
+    
     higher_update_count = 0
-    best_higher_reward = float('-inf') 
-    best_higher_loss = float('inf')
-    best_higher_eval = float('inf')
     eval_ped_avg_arrival = float('inf')
     higher_loss = {
         'policy_loss': float('inf'),
@@ -109,61 +108,49 @@ def train(train_config, is_sweep=False, sweep_config=None):
     lower_avg_eval = 200.0 # arbitrary large numbers
     eval_veh_avg_wait = 200.0
     eval_ped_avg_wait = 200.0
+    best_lower_avg_eval = float('inf')
     current_lr_higher = higher_ppo_args['lr']
     save_config(higher_ppo_args, lower_ppo_args, control_args, design_args, run_dir)
+
+    # Load a tranied higher policy and evaluate to get the fixed design proposals once at the beginning.
+    norm_x, norm_y = load_policy(eval_ppo_higher.policy, None, None, eval_args['eval_model_path'])
+    higher_env.normalizer_x = norm_x # Then replace them
+    higher_env.normalizer_y = norm_y
+
+    higher_policy = eval_ppo_higher.policy.to(device)
+    higher_policy.eval()
+
+    higher_state = higher_env.reset() # At reset, we get the original real-world configuration.
+    iteration = f"control_only"
+
+    # Which is the input network to the act function
+    _, merged_proposals, num_proposals, _ = higher_policy.act(higher_state,
+                                                            iteration, 
+                                                            design_args['clamp_min'], 
+                                                            design_args['clamp_max'], 
+                                                            device,
+                                                            training=False, # !important
+                                                            visualize=True) 
 
     for iteration in range(1, total_iterations + 1): #start from 1, else policy gets updated at step 0.
         print(f"\nStarting iteration: {iteration}/{total_iterations} with {higher_env.global_step} total steps so far\n")
 
-        # Higher level agent takes node features, edge index, edge attributes and batch (to make single large graph) as input 
-        # To produce padded fixed-sized actions num_actual_proposals is also returned.
-        higher_ppo.policy_old.eval()
-        original_proposals, merged_proposals, num_proposals, higher_logprob = higher_ppo.policy_old.act(higher_state, 
-                                                                                        iteration, 
-                                                                                        design_args['clamp_min'], 
-                                                                                        design_args['clamp_max'], 
-                                                                                        device,
-                                                                                        training=True,
-                                                                                        visualize=True) 
-        
-        # Since the higher agent internally takes a step where a number of parallel lower agents take their own steps, 
-        # We return things relevant to both the higher and lower agents. First, for higher.
-        higher_next_state, higher_reward_norm, higher_reward_unnorm, higher_done, info = higher_env.step(merged_proposals, # Act on the environment with merged proposals
+        # We still have to make the higher agent take a step. Because thats where lower agent gets trained. 
+        higher_next_state, higher_reward_norm, higher_reward_unnorm, _, info = higher_env.step(merged_proposals, # Act on the environment with merged proposals
                                                                                      num_proposals, 
                                                                                      iteration)
         
-        # Get value from critic network
-        with torch.no_grad():
-            critic_output = higher_ppo.policy_old.critic(higher_state, device=device)
-            # print(f"Critic output shape: {critic_output.shape}")
-            # print(f"Critic output: {critic_output}")
-            # The critic returns a tensor of shape [1], so we can directly call .item()
-            higher_value = critic_output.item()
-        # print(f"\n\n\nNum proposals: {num_proposals}\n\n\n")
-        # Append to memory, the original proposals. Get reward based on merged proposals. Merging operation = environment physics.
-        # Add num_proposals for code re-use and consistency but dont make use of it in the higher agent.
-        higher_memories.append(higher_state, original_proposals, num_proposals, higher_value, higher_logprob, higher_reward_norm, higher_done) 
-
         if iteration % design_args['higher_update_freq'] == 0:
-            print(f"Updating Higher PPO with {len(higher_memories.actions)} memories") 
             higher_update_count += 1
-
-            if design_args['higher_anneal_lr']:
-                current_lr_higher = higher_ppo.update_learning_rate(higher_update_count, total_updates_higher)
-
-            avg_higher_reward = sum(higher_memories.rewards) / len(higher_memories.rewards)
-            higher_loss = higher_ppo.update(higher_memories)
-            del higher_memories # Reset memory
-            higher_memories = Memory()
 
             # eval the policies every now and then. 
             if higher_update_count % design_args['eval_freq'] == 0:
                 policy_path = os.path.join(design_args['save_dir'], f'saved_policies/policy_at_{higher_env.global_step}.pth')
-                save_policy(higher_ppo.policy, 
+                save_policy(eval_ppo_higher.policy, 
                             higher_env.lower_ppo.policy, 
                             higher_env.lower_state_normalizer, 
-                            higher_env.normalizer_x, 
-                            higher_env.normalizer_y, 
+                            norm_x, 
+                            norm_y, 
                             policy_path)
                 
                 # Evaluate the latest policies
@@ -188,35 +175,15 @@ def train(train_config, is_sweep=False, sweep_config=None):
                 print(f"Evaluation results: \n\tHigher: {eval_ped_avg_arrival} \n\tLower: {lower_avg_eval}")
 
             # save the policies at every update
-            if avg_higher_reward > best_higher_reward: 
-                save_policy(higher_ppo.policy, 
+            if lower_avg_eval < best_lower_avg_eval:
+                save_policy(eval_ppo_higher.policy, 
                             higher_env.lower_ppo.policy, 
                             higher_env.lower_state_normalizer, 
-                            higher_env.normalizer_x, 
-                            higher_env.normalizer_y, 
-                            os.path.join(design_args['save_dir'], 
-                            'saved_policies/best_reward_policy.pth'))
-                best_higher_reward = avg_higher_reward
-
-            if higher_loss['total_loss'] < best_higher_loss:
-                save_policy(higher_ppo.policy, 
-                            higher_env.lower_ppo.policy, 
-                            higher_env.lower_state_normalizer, 
-                            higher_env.normalizer_x, 
-                            higher_env.normalizer_y, 
-                            os.path.join(design_args['save_dir'], 
-                            'saved_policies/best_loss_policy.pth'))
-                best_higher_loss = higher_loss['total_loss']
-
-            if eval_ped_avg_arrival < best_higher_eval:
-                save_policy(higher_ppo.policy, 
-                            higher_env.lower_ppo.policy, 
-                            higher_env.lower_state_normalizer, 
-                            higher_env.normalizer_x, 
-                            higher_env.normalizer_y, 
+                            norm_x, 
+                            norm_y, 
                             os.path.join(design_args['save_dir'], 
                             'saved_policies/best_eval_policy.pth'))
-                best_higher_eval = eval_ped_avg_arrival
+                best_lower_avg_eval = lower_avg_eval
 
         # logging at every iteration (every time sample is drawn)
         if is_sweep:
@@ -422,8 +389,6 @@ def main(config):
     # Spawn means create a new process. There is a fork method as well which will create a copy of the current process.
     mp.set_start_method('spawn') 
     if config['evaluate']: 
-        # TODO: Load from saved config
-
         # setup params
         device = torch.device("cuda") if config['eval_worker_device']=='gpu' and torch.cuda.is_available() else torch.device("cpu")
         design_args, control_args, higher_ppo_args, lower_ppo_args, eval_args = classify_and_return_args(config, device)

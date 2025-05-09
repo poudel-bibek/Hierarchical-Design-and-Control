@@ -42,19 +42,21 @@ def save_policy(higher_policy, lower_policy, lower_state_normalizer, norm_x, nor
         'state_normalizer_count': lower_state_normalizer.count.value  
     }}, save_path)
 
-def load_policy(higher_policy, lower_policy, lower_state_normalizer, load_path):
+def load_policy(higher_policy, lower_policy = None, lower_state_normalizer = None, load_path = None):
     """
     Load policy state dict and welford normalizer stats.
     """
     checkpoint = torch.load(load_path)
     # In place operations
     higher_policy.load_state_dict(checkpoint['higher']['state_dict'])
-    lower_policy.load_state_dict(checkpoint['lower']['state_dict'])
-    lower_state_normalizer.manual_load(
-        mean=torch.from_numpy(checkpoint['lower']['state_normalizer_mean']),  
-        M2=torch.from_numpy(checkpoint['lower']['state_normalizer_M2']),  
-        count=checkpoint['lower']['state_normalizer_count']
-    )
+    if lower_policy is not None:
+        lower_policy.load_state_dict(checkpoint['lower']['state_dict'])
+    if lower_state_normalizer is not None:
+        lower_state_normalizer.manual_load(
+            mean=torch.from_numpy(checkpoint['lower']['state_normalizer_mean']),  
+            M2=torch.from_numpy(checkpoint['lower']['state_normalizer_M2']),  
+            count=checkpoint['lower']['state_normalizer_count']
+        )
     return checkpoint['higher']['norm_x'], checkpoint['higher']['norm_y']
     
 def convert_demand_to_scale_factor(demand, demand_type, input_file):

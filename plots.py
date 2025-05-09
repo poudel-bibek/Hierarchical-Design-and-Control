@@ -1705,4 +1705,4 @@ def plot(design_and_control = False,
             result_2 = ""
         )
         
-plot()
+# plot()
