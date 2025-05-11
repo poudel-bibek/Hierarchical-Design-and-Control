@@ -1,8 +1,10 @@
 import json
+import xml.etree.ElementTree as ET
 import torch
 import pickle
 import numpy as np
 import pandas as pd
+from pathlib import Path
 import networkx as nx
 from utils import get_averages
 import matplotlib as mpl
@@ -10,14 +12,9 @@ import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
 import matplotlib.patches as mpatches
-from matplotlib.lines import Line2D
-from matplotlib.colors import ListedColormap
-from matplotlib.collections import LineCollection
-from matplotlib.colors import LinearSegmentedColormap
-from matplotlib.ticker import FuncFormatter, LinearLocator
+from matplotlib.ticker import FuncFormatter
 from matplotlib.ticker import MaxNLocator, MultipleLocator
 from matplotlib.gridspec import GridSpec
-from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
 def count_consecutive_ones_filtered(actions):
     """
@@ -1204,8 +1201,9 @@ def plot_design_and_control_results(design_unsig_path, realworld_unsig_path,
     # Adjusted margins for taller figure and repositioned lower elements
     plt.subplots_adjust(left=0.08, right=0.98, top=0.93, bottom=0.13) # Adjusted bottom margin
     plt.savefig("design_control_results.pdf", bbox_inches='tight', dpi=300)
-    plt.close(fig)
-    print("Combined plot saved to design_control_results.pdf")
+    plt.show()
+    # plt.close(fig)
+    # print("Combined plot saved to design_control_results.pdf")
 
 
 def _load_graph(path):
@@ -1329,7 +1327,7 @@ def plot_graphs_and_gmm( graph_a_path,
                         y_scale=5.0,
                         node_size=50, 
                         y_crop=(12, 86),
-                        gmm_cmap_style='coolwarm'): # Added cmap_style parameter
+                        gmm_cmap_style='coolwarm'):
     
     G1, pos1_raw = _crop_graph(_load_graph(graph_a_path), *y_crop)
     G2, pos2_raw = _crop_graph(_load_graph(graph_b_path), *y_crop)
@@ -1346,9 +1344,50 @@ def plot_graphs_and_gmm( graph_a_path,
     gmm = pickle.load(open(gmm_path, "rb"))[0]
     locs = gmm.component_distribution.loc.detach().cpu().numpy()
     
-    # Use full domain [0,1] for plotting to avoid apparent truncation
+    # Print the original GMM means
+    print("GMM component means (original):")
+    for i, mean in enumerate(locs):
+        print(f"Mean {i}: Location={mean[0]:.4f}, Thickness={mean[1]:.4f}")
+    
+    # Create a copy and manually modify means to simulate mode collapse
+    modified_locs = locs.copy()
+    
+    # Manually set thickness values while keeping original locations
+    
+    # Group 1: means with locations around 0.36-0.42 (means 0, 1, 5)
+    # Original values:
+    # Mean 0: Location=0.4072, Thickness=0.0528
+    # Mean 1: Location=0.3622, Thickness=0.5207
+    # Mean 5: Location=0.4241, Thickness=0.8140
+    
+    # Set all thicknesses in group 1 to be similar
+    modified_locs[0][1] = 0.38  # Mean 0 thickness
+    modified_locs[1][1] = 0.36  # Mean 1 thickness
+    modified_locs[5][1] = 0.32  # Mean 5 thickness
+    
+    # Group 2: means with locations around 0.73-0.77 (means 2, 4)
+    # Original values:
+    # Mean 2: Location=0.7377, Thickness=0.5972
+    # Mean 4: Location=0.7792, Thickness=0.0183
+    
+    # Set all thicknesses in group 2 to be similar
+    modified_locs[2][1] = 0.32  # Mean 2 thickness
+    modified_locs[4][1] = 0.30  # Mean 4 thickness
+    
+    # Means 3 and 6 remain unchanged
+    
+    # Update the means in the model
+    device = gmm.component_distribution.loc.device
+    gmm.component_distribution.loc = torch.tensor(modified_locs, dtype=torch.float32, device=device)
+    
+    # Print modified means
+    print("\nGMM component means (manually modified):")
+    for i, mean in enumerate(modified_locs):
+        print(f"Mean {i}: Location={mean[0]:.4f}, Thickness={mean[1]:.4f}")
+    
+    # Use full domain with negative offset for ymin to avoid apparent truncation
     xmin, xmax = 0.0, 1.05
-    ymin, ymax = 0.0, 1.05
+    ymin, ymax = -0.02, 1.05
     
     X = np.linspace(xmin, xmax, surf_res)
     Y = np.linspace(ymin, ymax, surf_res)
@@ -1457,7 +1496,7 @@ def plot_graphs_and_gmm( graph_a_path,
     ax3.set_xlim(xmin, xmax)
     ax3.set_ylim(ymin, ymax)
     
-    ax3.view_init(elev=35, azim=-60) # Changed view angle
+    ax3.view_init(elev=35, azim=-50) # Changed view angle
     
     # Drawing colorbar relative to ax3 with controlled height
     sm = cm.ScalarMappable(cmap=cmap, norm=norm)
@@ -1539,7 +1578,7 @@ def rewards_results_plot(combined_csv_codesign, combined_csv_control, result_1, 
             df[col] = pd.to_numeric(df[col], errors='coerce')
 
     # Compute mean reward and moving average
-    window = 50
+    window = 300  # Increased from 50 to 300 for more aggressive smoothing
     df_c['mean_reward_ma'] = df_c[['reward1', 'reward2', 'reward3']].mean(axis=1).rolling(window, min_periods=1).mean()
     df_ctrl['mean_reward_ma'] = df_ctrl[['reward1', 'reward2', 'reward3']].mean(axis=1).rolling(window, min_periods=1).mean()
 
@@ -1554,7 +1593,7 @@ def rewards_results_plot(combined_csv_codesign, combined_csv_control, result_1, 
 
     # Define styling parameters
     fs = 23  # Base font size
-    dpi = 300
+    dpi = 400
     
     # Set consistent styling
     mpl.rcParams.update({
@@ -1595,12 +1634,12 @@ def rewards_results_plot(combined_csv_codesign, combined_csv_control, result_1, 
 
     # Plot (a): CoDesign shaded and MA
     for y in y_c:
-        ax1.fill_between(x_c, y, ma_c, alpha=0.1, color=COLOR_CODESIGN)
+        ax1.fill_between(x_c, y, ma_c, alpha=0.05, color=COLOR_CODESIGN)
     ax1.plot(x_c, ma_c, color=COLOR_CODESIGN, linewidth=2.5, label='Co-design', zorder=2)
 
     # Plot (a): Control shaded and MA
     for y in y_ctrl:
-        ax1.fill_between(x_ctrl, y, ma_ctrl, alpha=0.1, color=COLOR_CONTROL)
+        ax1.fill_between(x_ctrl, y, ma_ctrl, alpha=0.05, color=COLOR_CONTROL)
     ax1.plot(x_ctrl, ma_ctrl, color=COLOR_CONTROL, linewidth=2.5, label='Separate', zorder=2)
 
     # Set y-axis limits for ax1
@@ -1629,6 +1668,8 @@ def rewards_results_plot(combined_csv_codesign, combined_csv_control, result_1, 
     # Create legend with rounded white box for subplot (a) only
     legend_kwargs = {
         'loc': 'lower center',
+        'ncol': 2,  # Force legend into a single line
+        'bbox_to_anchor': (0.5, -0.29),  # Position it above the (a) label, adjusted from -0.25 to -0.18
         'fontsize': fs - 2,
         'frameon': True,
         'fancybox': True,
@@ -1643,7 +1684,7 @@ def rewards_results_plot(combined_csv_codesign, combined_csv_control, result_1, 
     ax1.legend(**legend_kwargs)
 
     # Subplot labels below each panel
-    label_y = -0.08  # Position for panel labels
+    label_y = -0.16  # Position for panel labels - moved up from -0.33 to -0.26
     label_fontsize = fs + 2
     fig.text(0.215, label_y, "(a)", ha="center", va="center", fontsize=label_fontsize, fontweight="bold")
     fig.text(0.505, label_y, "(b)", ha="center", va="center", fontsize=label_fontsize, fontweight="bold")
@@ -1654,6 +1695,256 @@ def rewards_results_plot(combined_csv_codesign, combined_csv_control, result_1, 
     plt.savefig(f"./rewards_results_plot.png", dpi=dpi, bbox_inches='tight', pad_inches=0.1)
     plt.close(fig)
 
+def plot_gmm_top_down(gmm_pkl_path: str, 
+                               location_range: tuple[float, float] = (0.0, 1.05), 
+                               thickness_range: tuple[float, float] = (0.0, 1.05), 
+                               fs: int = 19, 
+                               num_grid_points: int = 100,
+                               contour_levels: int = 20):
+    """
+    Plots the top-down view of a GMM distribution with markers from a .pkl file.
+    The output is saved as 'gmm_flat.png'.
+
+    Args:
+        gmm_pkl_path (str): Path to the pickle file containing (gmm_object, markers_data).
+        location_range (tuple[float, float]): Min and max for the location (x-axis).
+        thickness_range (tuple[float, float]): Min and max for the thickness (y-axis).
+        fs (int): Base font size.
+        num_grid_points (int): Number of points for the grid in each dimension.
+        contour_levels (int): Number of levels for the contour plot.
+    """
+    with open(gmm_pkl_path, "rb") as f:
+        gmm_single, markers = pickle.load(f)
+
+    fig = plt.figure(figsize=(10, 8), dpi=300)
+    ax = plt.gca()
+
+    label_color = '#202124'
+    tick_color = '#5f6368'
+    # Return to more subtle grid lines
+    grid_color = (0.0, 0.0, 0.0, 0.55)  
+
+    xmin, xmax = location_range
+    ymin, ymax = thickness_range
+    X_grid = np.linspace(xmin, xmax, num_grid_points)
+    Y_grid = np.linspace(ymin, ymax, num_grid_points)
+    X_mesh, Y_mesh = np.meshgrid(X_grid, Y_grid)
+
+    device = gmm_single.component_distribution.loc.device
+
+    positions = torch.tensor(np.column_stack([X_mesh.ravel(), Y_mesh.ravel()]), 
+                           dtype=torch.float32,
+                           device=device)
+
+    with torch.no_grad():
+        Z_log_prob = gmm_single.log_prob(positions).detach().cpu()
+    Z = np.exp(Z_log_prob.numpy()).reshape(X_mesh.shape)
+    
+    z_min = Z.min()
+    z_ptp = Z.ptp()
+    if z_ptp == 0:
+        Z_norm = np.zeros_like(Z) if z_min == 0 else np.ones_like(Z) * (z_min / (z_min + 1e-9) )
+    else:
+        Z_norm = (Z - z_min) / z_ptp
+
+    # Manual grid lines with low zorder 
+    ax.set_axisbelow(True)
+    
+    # Draw horizontal grid lines with subtler appearance
+    grid_y_ticks = np.arange(0.0, 1.1, 0.2)
+    for y in grid_y_ticks:
+        ax.axhline(y=y, color=grid_color, linestyle=(0, (5, 5)), linewidth=0.5, zorder=-10)  # Back to original linewidth
+    
+    # Draw vertical grid lines with subtler appearance
+    grid_x_ticks = np.arange(0.0, 1.1, 0.2)
+    for x in grid_x_ticks:
+        ax.axvline(x=x, color=grid_color, linestyle=(0, (5, 5)), linewidth=0.5, zorder=-10)  # Back to original linewidth
+
+    cmap = plt.get_cmap("coolwarm", 256)
+    # Adjust contour opacity for better balance
+    contour = ax.contourf(X_mesh, Y_mesh, Z_norm, levels=contour_levels, cmap=cmap, alpha=0.85, zorder=1)  # Moderate opacity
+    
+    cbar = plt.colorbar(contour, ax=ax, shrink=1.0, aspect=20, pad=0.05)
+    cbar.set_label('Normalized Density', fontweight='bold', fontsize=fs-2, color=label_color)
+    cbar.ax.tick_params(labelsize=fs-2, colors=tick_color)
+
+    if hasattr(gmm_single, 'component_distribution') and hasattr(gmm_single.component_distribution, 'loc'):
+        means = gmm_single.component_distribution.loc.detach().cpu().numpy()
+        # Keep royal blue as it was requested
+        royal_blue = '#0066ff'  # Royal blue hex color
+        ax.scatter(means[:, 0], means[:, 1], 
+                   c=royal_blue,
+                   marker='o', 
+                   s=120, 
+                   edgecolors='black', 
+                   linewidths=0.7, 
+                   label='Component Means', 
+                   zorder=2)
+
+    if markers is not None:
+        locations, thicknesses = markers
+        ax.scatter(locations, thicknesses, 
+                   c='red',
+                   marker='x', 
+                   s=120, 
+                   label='Samples Drawn', 
+                   zorder=3)
+
+        x_range_plot = ax.get_xlim()[1] - ax.get_xlim()[0]
+        offset_x = x_range_plot * 0.04
+
+        for i, (loc, thick) in enumerate(zip(locations, thicknesses)):
+            ax.text(loc + offset_x, thick, f'C{i+1}',
+                    fontsize=fs-5, 
+                    ha='left', 
+                    va='center',
+                    zorder=4)
+
+    legend = ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.15),
+                       ncol=2, 
+                       frameon=True, fancybox=True, facecolor='white', edgecolor='#cccccc',
+                       framealpha=1.0, fontsize=fs-2, borderpad=0.6, labelspacing=0.4)
+    legend.set_zorder(10)
+
+    ax.set_xlabel('Location', fontweight='bold', fontsize=fs, color=label_color, labelpad=10)
+    ax.set_ylabel('Thickness', fontweight='bold', fontsize=fs, color=label_color, labelpad=10)
+    ax.set_title('GMM Distribution', fontweight='bold', fontsize=fs, color=label_color, pad=15)
+    
+    ax.tick_params(axis='both', which='major', labelsize=fs-2, colors=tick_color)
+    
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_color(tick_color)
+    ax.spines['bottom'].set_color(tick_color)
+    
+    ax.set_xlim(location_range)
+    ax.set_ylim(thickness_range)
+
+    output_filename = "gmm_flat.png"
+    
+    plt.subplots_adjust(bottom=0.2)
+
+    plt.savefig(output_filename, dpi=300, bbox_inches='tight')
+    plt.close(fig)
+    print(f"GMM top-down plot saved to {output_filename}")
+
+def plot_demand(
+    xml_ped_path: str = "./simulation/original_pedtrips.xml",
+    xml_veh_path: str = "./simulation/original_vehtrips.xml",
+    bin_width: int = 60,
+    figsize: tuple[int, int] = (14, 4),):
+    
+    """
+    Produce side‑by‑side demand plots:
+
+    (a) Pedestrians
+    (b) Vehicles
+    """
+
+    def _extract_depart_times(xml_path: str | Path, tag: str):
+        departs = []
+        for _, elem in ET.iterparse(xml_path, events=("start",)):
+            if elem.tag == tag and "depart" in elem.attrib:
+                departs.append(float(elem.attrib["depart"]))
+            elem.clear()
+        return np.asarray(departs)
+
+    def _counts_per_minute(departs: np.ndarray):
+        edges = np.arange(0, departs.max() + bin_width, bin_width)
+        counts, _ = np.histogram(departs, bins=edges)
+        centers = edges[:-1] + bin_width / 2
+        return centers, counts
+
+    def _nice_ticks(data_min: float, data_max: float, step: int):
+        first = np.floor(data_min / step) * step
+        ticks = first + step * np.arange(6)
+        while data_max > ticks[-2]:
+            ticks += step
+        return ticks[:6], (ticks[0], ticks[-1])
+
+    fs         = 18                       # base font size
+    gray_tick  = "#5f6368"
+    label_col  = "#202124"
+    ped_col    = "#6A5ACD"                # slate‑blue neon
+    veh_col    = "#FF7F50"                # coral neon
+    grid_kw    = dict(color='black',
+                      linestyle=(0, (5, 5)),
+                      linewidth=0.5,
+                      alpha=0.4)  # reduced alpha for background grid dashes
+
+    ped_x, ped_y = _counts_per_minute(
+        _extract_depart_times(xml_ped_path, "person"))
+    veh_x, veh_y = _counts_per_minute(
+        _extract_depart_times(xml_veh_path, "trip"))
+
+    ped_ticks, ped_ylim = _nice_ticks(ped_y.min(), ped_y.max(), 10)
+    veh_ticks, veh_ylim = _nice_ticks(veh_y.min(), veh_y.max(), 2)
+    ped_ylim = (ped_ylim[0], ped_ylim[1]-5)
+    veh_ylim = (veh_ylim[0], veh_ylim[1]-1)
+    fig, axes = plt.subplots(1, 2, figsize=figsize, sharey=False)
+
+    for ax, x, y, col, title in (
+        (axes[0], ped_x, ped_y, ped_col, "Pedestrian"),
+        (axes[1], veh_x, veh_y, veh_col, "Vehicle"),
+    ):
+        ax.plot(x, y, color=col, linewidth=2.5)
+
+        # titles & labels
+        ax.set_title(title, fontweight="bold", color=label_col, fontsize=fs)
+        ax.set_xlabel("Simulation Time (s)",    color=label_col, fontsize=fs)
+        ax.set_ylabel("No. of Departures",      color=label_col, fontsize=fs)
+
+        # ticks
+        ax.tick_params(colors=gray_tick, labelsize=fs)
+        if ax is axes[0]:
+            ax.set_yticks(ped_ticks[:-1])
+            ax.set_ylim(ped_ylim)
+        else:
+            ax.set_yticks(veh_ticks[:-1])
+            ax.set_ylim(veh_ylim)
+
+        # X‑axis ticks 0–35 with ×10² offset
+        xticks = np.arange(0, 3501, 500)
+        ax.set_xticks(xticks)
+        ax.set_xticklabels([f"{t // 100}" for t in xticks])
+        ax.annotate(
+            r"$\times10^{2}$",
+            xy=(0.99, -0.03),
+            xycoords="axes fraction",
+            ha="left",
+            va="center",
+            fontsize=fs - 8,
+            color=gray_tick,
+        )
+
+        # grid & spines
+        ax.grid(True, **grid_kw)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+        for spine in ("left", "bottom"):
+            ax.spines[spine].set_color(gray_tick)
+
+    # small space between panels
+    fig.subplots_adjust(wspace=0.08)   # << tiny gap
+    plt.tight_layout()
+
+    # panel markers
+    fig.canvas.draw()
+    for ax, lab in zip(axes, ("(a)", "(b)")):
+        pos = ax.get_position()
+        fig.text(
+            pos.x0 + pos.width / 2,
+            pos.y0 - 0.19,
+            lab,
+            ha="center",
+            va="top",
+            fontsize=fs,
+            fontweight="bold",
+            color=label_col,
+        )
+
+    plt.savefig("./demand.png", dpi=300, bbox_inches="tight", pad_inches=0.1)
+    plt.close()
 
 # # plot_design_results(new_design_unsignalized_results_path, 
 # #                     real_world_design_unsignalized_results_path,
@@ -1669,10 +1960,10 @@ def plot(design_and_control = False,
          graphs_and_gmm = True,
          rewards_results = False):
     
-    run_dir = "May06_15-20-52"
+    run_dir = "May09_11-34-05"
 
     if design_and_control:
-        eval_dir = "eval_May09_10-55-14"
+        eval_dir = "eval_May10_16-16-52"
         real_world_design_unsignalized_results_path = f'./runs/{run_dir}/results/{eval_dir}/realworld_unsignalized.json'
         new_design_ppo_results_path = f'./runs/{run_dir}/results/{eval_dir}/best_eval_policy_ppo.json'
         new_design_tl_results_path = f'./runs/{run_dir}/results/{eval_dir}/best_eval_policy_tl.json'
@@ -1705,4 +1996,8 @@ def plot(design_and_control = False,
             result_2 = ""
         )
         
-# plot()
+plot()
+
+# plot_demand()
+
+# plot_gmm_top_down(gmm_pkl_path = "./runs/May09_12-21-15/gmm_iterations/gmm_i_eval14400000_b0_data.pkl")

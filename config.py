@@ -87,7 +87,7 @@ def get_config():
         "lower_auto_start": True,  # Automatically start the simulation
 
         # Evaluation
-        "eval_model_path": "./runs/May07_16-04-44/saved_policies/policy_at_6969600.pth",  # Path to the saved PPO model for evaluation. replace xyz.
+        "eval_model_path": "./runs/May09_11-34-05/saved_policies/policy_at_7603200.pth",  # Path to the saved PPO model for evaluation. replace xyz.
         "eval_lower_timesteps": 360,  # Number of timesteps to each episode. Warmup not counted.
         "eval_lower_workers": 10,  # Parallelizes how many demands can be evaluated at the same time.
         "eval_worker_device": "gpu",  # Policy during eval can be run in GPU 
