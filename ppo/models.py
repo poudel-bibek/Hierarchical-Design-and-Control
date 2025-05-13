@@ -837,6 +837,12 @@ class GAT_v2_ActorCritic(nn.Module):
                 merged_markers = (merged_proposals[b, :actual_num_proposals, 0].squeeze().detach().cpu().numpy(), merged_proposals[b, :actual_num_proposals, 1].squeeze().detach().cpu().numpy())
                 self.visualize_gmm(gmm_batch[b], self.run_dir, markers=merged_markers, batch_index=b, thickness_range=(0, 1), location_range=(0, 1), iteration=iteration)
 
+        # print(f"\noriginal_proposals: {original_proposals}")
+        # print(f"\nnum_proposals: {num_proposals}")
+        # The higher ppo memory needs to store the proposals and log_probs without considering the merging operations.
+        # The number of actual proposals is corresponding to the merged proposals.
+
+        
         print(f"\noriginal_proposals: {original_proposals}")
         print(f"\nnum_proposals: {num_proposals}")
         # The higher ppo memory needs to store the proposals and log_probs without considering the merging operations.
@@ -844,7 +850,7 @@ class GAT_v2_ActorCritic(nn.Module):
 
         # For testing, explicitly keep only selected proposals and invalidate others
         # [0.1250, 0.9750], [0.4000, 0.4875], [0.7250, 0.5750], [0.8500, 0.0500]
-        desired_proposals = torch.tensor([[0.1250, 0.9750], [0.8500, 0.0500]], device=device)
+        desired_proposals = torch.tensor([[0.1250, 0.9750], [0.4000, 0.4875], [0.7250, 0.5750], [0.8500, 0.0500], [0.90, 0.45]], device=device)
         num_desired = desired_proposals.shape[0]
 
         # Reset all proposals to -1
@@ -859,8 +865,7 @@ class GAT_v2_ActorCritic(nn.Module):
         # Debugging output
         print(f"\nFinal merged_proposals: {merged_proposals}")
         print(f"\nFinal num_proposals: {num_proposals}")
-
-
+                
         return original_proposals, merged_proposals, num_proposals, log_probs
     
     def evaluate(self, states_batch, actions_batch, device=None):

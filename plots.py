@@ -1107,7 +1107,7 @@ def plot_graphs_and_gmm( graph_a_path,
 
     # Common styling for GMM subplot's ticks, labels, and fonts, based on 'coolwarm'
     ax3.set_xlabel('Location', fontsize=fs-2, labelpad=10, color='#202124')
-    ax3.set_zlabel('Density', fontsize=fs-2, labelpad=10, color='#202124')
+    ax3.set_zlabel('Norm. Density', fontsize=fs-2, labelpad=10, color='#202124')
 
     z_lim_unified = (0, 0.8)
     ax3.set_zlim(*z_lim_unified)
@@ -1146,7 +1146,7 @@ def plot_graphs_and_gmm( graph_a_path,
     
     # Choose colormap based on gmm_cmap_style
     if gmm_cmap_style == 'viridis':
-        cmap = plt.get_cmap("viridis", 256)
+        cmap = plt.get_cmap("viridis", 20)  # Changed from 256 to 20 for discrete colormap
         ax3.plot_surface(Xg, Yg, dens_norm,
                          rstride=2, cstride=2,       
                          cmap=cmap,                  
@@ -1161,7 +1161,7 @@ def plot_graphs_and_gmm( graph_a_path,
         norm = common_norm # Use common norm
 
     elif gmm_cmap_style == 'coolwarm':
-        cmap = plt.get_cmap("coolwarm", 256)
+        cmap = plt.get_cmap("coolwarm", 20)  # Changed from 256 to 20 for discrete colormap
         ax3.plot_surface(Xg, Yg, dens_norm,
                          rstride=2, 
                          cstride=2,
@@ -1190,10 +1190,10 @@ def plot_graphs_and_gmm( graph_a_path,
     
     ax3.view_init(elev=35, azim=-50) # Changed view angle
     
-    # Drawing colorbar relative to ax3 with controlled height
+    # Drawing colorbar relative to ax3 with controlled height and increased padding
     sm = cm.ScalarMappable(cmap=cmap, norm=norm)
     sm.set_array([])
-    cbar = fig.colorbar(sm, ax=ax3, shrink=0.35, pad=0.10, label='')
+    cbar = fig.colorbar(sm, ax=ax3, shrink=0.35, pad=0.15, label='')  # Increased pad from 0.10 to 0.15
     cbar.ax.tick_params(labelsize=fs-2, colors='#5f6368')  # Match other tick font sizes and use gray color
     
     # --- Precise Label Positioning ---
@@ -1250,7 +1250,7 @@ def plot_graphs_and_gmm( graph_a_path,
     cbar.ax.set_position([bcbar_final.x0, bcbar_final.y0 + dy, bcbar_final.width, bcbar_final.height])
 
     # Save figure tightly
-    fig.savefig('./graphs_gmm.pdf', dpi=dpi, bbox_inches='tight', pad_inches=0)
+    fig.savefig('./graphs_gmm.png', dpi=dpi, bbox_inches='tight', pad_inches=0)
 
 def rewards_results_plot(combined_csv_codesign, 
                          combined_csv_control, 
@@ -1577,6 +1577,13 @@ def rewards_results_plot(combined_csv_codesign,
             if plot_title not in all_legend_labels:
                 all_legend_handles.append(h)
                 all_legend_labels.append(plot_title)
+        
+        # Set specific y-axis limits for average data type
+        if data_type == "average":
+            if domain == "pedestrian":
+                ax.set_ylim(115, 185)  # For subplot (b) - Pedestrian
+            else:  # vehicle
+                ax.set_ylim(-10, 200)  # For subplot (c) - Vehicle
 
     # Create a single shared legend in the middle of the figure
     legend_kwargs = {
@@ -2296,9 +2303,9 @@ def plot_design_and_control_results(design_unsig_path, realworld_unsig_path,
 # #                                  in_range_demand_scales = irds)
 
 
-def plot(design_and_control = True, 
-         graphs_and_gmm = False,
-         rewards_results = True):
+def plot(design_and_control = False, 
+         graphs_and_gmm = True,
+         rewards_results = False):
     
     run_dir = "May09_11-34-05"
 
@@ -2333,8 +2340,8 @@ def plot(design_and_control = True,
         rewards_results_plot(
             combined_csv_codesign = "./runs/combined_rewards_codesign.csv",
             combined_csv_control = "./runs/combined_rewards_control_only.csv",
-            results_codesign = "./runs/May09_11-34-05/results/eval_May13_14-23-01/policy_at_7603200_ppo.json",
-            results_separate = "./runs/May11_10-18-09/results/eval_May13_15-01-15/policy_at_11980800_ppo.json",
+            results_codesign = "./runs/May09_11-34-05/results/eval_May13_15-12-38/policy_at_7603200_ppo.json",
+            results_separate = "./runs/May11_10-18-09/results/eval_May13_15-17-33/policy_at_11923200_ppo.json",
             data_type = "average"
         )
         
