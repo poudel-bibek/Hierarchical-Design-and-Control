@@ -1,9 +1,9 @@
 def get_config():
     config = {
         # Simulation
-        "sweep": True,  # Use wandb sweeps for hyperparameter tuning
-        "evaluate": False, 
-        "gui": False,  # Use SUMO GUI (default: False)
+        "sweep": False,  # Use wandb sweeps for hyperparameter tuning
+        "evaluate": True, 
+        "gui": True,  # Use SUMO GUI (default: False)
 
         "vehicle_input_trips": "./simulation/original_vehtrips.xml",  # Original Input trips file
         "vehicle_output_trips": "./simulation/scaled_trips/scaled_vehtrips.xml",  # Output trips file
@@ -87,8 +87,8 @@ def get_config():
         "lower_auto_start": True,  # Automatically start the simulation
 
         # Evaluation
-        "eval_model_path": "./runs/May09_11-34-05/saved_policies/policy_at_7603200.pth",  # Path to the saved PPO model for evaluation. replace xyz.
-        "eval_lower_timesteps": 360,  # Number of timesteps to each episode. Warmup not counted.
+        "eval_model_path": "./runs/May11_10-18-09/saved_policies/policy_at_11923200.pth",  # Path to the saved PPO model for evaluation. replace xyz.
+        "eval_lower_timesteps": 600,  # Number of timesteps to each episode. Warmup not counted.
         "eval_lower_workers": 10,  # Parallelizes how many demands can be evaluated at the same time.
         "eval_worker_device": "gpu",  # Policy during eval can be run in GPU 
     }
