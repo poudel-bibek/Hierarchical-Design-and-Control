@@ -1394,8 +1394,8 @@ def rewards_results_plot(combined_csv_codesign,
     ax3 = fig.add_subplot(gs[0, 2])
 
     # Define colors - use the same colors across all subplots
-    COLOR_CODESIGN = '#FF8000'  # Orange for CoDesign
-    COLOR_CONTROL = '#4169E1'   # Royal Blue for Control
+    COLOR_CODESIGN = '#3C9F40'  # Subdued green for CoDesign
+    COLOR_CONTROL = '#3771A1'   # Subdued blue for Control
 
     # Plot (a): CoDesign - Background raw data (individual runs)
     # Removing raw data lines as per user request
