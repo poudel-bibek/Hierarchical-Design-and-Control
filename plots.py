@@ -2333,12 +2333,12 @@ def plot(design_and_control = True,
         rewards_results_plot(
             combined_csv_codesign = "./runs/combined_rewards_codesign.csv",
             combined_csv_control = "./runs/combined_rewards_control_only.csv",
-            results_codesign = "./runs/May09_11-34-05/results/eval_May13_13-07-37/policy_at_7603200_ppo.json",
-            results_separate = "./runs/May11_10-18-09/results/eval_May13_14-14-41/policy_at_11980800_ppo.json"
-
+            results_codesign = "./runs/May09_11-34-05/results/eval_May13_14-23-01/policy_at_7603200_ppo.json",
+            results_separate = "./runs/May11_10-18-09/results/eval_May13_15-01-15/policy_at_11980800_ppo.json",
+            data_type = "average"
         )
         
-plot()
+# plot()
 
 # plot_demand()
 
