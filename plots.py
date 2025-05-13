@@ -15,6 +15,8 @@ import matplotlib.patches as mpatches
 from matplotlib.ticker import FuncFormatter
 from matplotlib.ticker import MaxNLocator, MultipleLocator
 from matplotlib.gridspec import GridSpec
+from matplotlib.collections import LineCollection
+from matplotlib.colors import LinearSegmentedColormap
 
 def count_consecutive_ones_filtered(actions):
     """
@@ -894,316 +896,6 @@ def graph_to_video():
     pass 
 
 
-def plot_design_and_control_results(design_unsig_path, realworld_unsig_path,
-                                     control_tl_path, control_ppo_path,
-                                     in_range_demand_scales):
-    """
-    Combines the design and control results into a single figure with three columns,
-    using specific colors and split legends. The figure shows:
-    Left (a): Pedestrian Arrival Time results.
-    Middle (b): Pedestrian Wait Time results.
-    Right (c): Vehicle Wait Time results.
-    """
-    fs = 23 # Updated font size
-    n_yticks = 5 # Define the number of y-ticks for all subplots
-
-    # Define Colors (anonymous) - Adjusted scheme with softer red, stronger purple, brighter green
-    COLOR_INDIAN_RED = '#CD5C5C'     # For Real-world (Softer Red)
-    COLOR_SPRING_GREEN = '#00CC00'   # For Design Agent (Ours) (Brighter Green)
-    COLOR_DARK_ORCHID = '#9932CC'    # For Signalized (Stronger Purple)
-    COLOR_SLATE_GRAY = '#E68A00'     # For Unsignalized (Gray)
-    COLOR_ROYAL_BLUE = '#4169E1'     # For Control Agent (Ours) (Blue)
-
-
-    # Map plot elements to Colors - Updated based on new scheme
-    COLORS = {
-        'Design Agent (Ours)': COLOR_SPRING_GREEN,   # Design plot: Spring Green
-        'Real-world':          COLOR_INDIAN_RED,     # Design plot: Indian Red
-        'Signalized':          COLOR_DARK_ORCHID,    # Control plots: Dark Orchid
-        'Unsignalized':        COLOR_SLATE_GRAY,     # Control plots: Slate Gray
-        'Control Agent (Ours)': COLOR_ROYAL_BLUE,     # Control plots: Royal Blue
-    }
-
-    # Consistent styling setup
-    mpl.rcParams.update({
-        'font.family':        'sans-serif',
-        'font.sans-serif':    ['Open Sans', 'Arial', 'DejaVu Sans'],
-        'text.color':         '#202124',
-        'axes.edgecolor':     '#dadce0',
-        'axes.linewidth':     1.0,
-        'axes.titlesize':     fs + 2, # Title size based on fs
-        'axes.titleweight':   'bold',
-        'axes.labelsize':     fs,     # Axis label size based on fs
-        'xtick.color':        '#5f6368',
-        'ytick.color':        '#5f6368',
-        'xtick.labelsize':    fs - 1, # Tick label size
-        'ytick.labelsize':    fs - 1, # Tick label size
-        'grid.color':         '#e8eaed',
-        'grid.linewidth':     0.8,
-        'grid.linestyle':     '--',
-        'legend.frameon':     False, # Default legend frame off, will be overridden below
-        'figure.facecolor':   'white',
-        'axes.facecolor':     'white',
-        'legend.facecolor':   'white', # Updated legend background
-        'legend.edgecolor':   '#cccccc', # Default legend border
-        'axes.titlepad':      12 # Add padding below axis titles
-    })
-
-    # Create figure and grid (2 rows, 3 columns) - Height remains the same as previous
-    fig = plt.figure(figsize=(24, 12))
-    # Adjusted spacing
-    gs  = GridSpec(2, 3, figure=fig, hspace=0.10, wspace=0.20)
-
-    # Create axes
-    ax_design_avg = fig.add_subplot(gs[0, 0])
-    ax_design_tot = fig.add_subplot(gs[1, 0], sharex=ax_design_avg)
-    ax_control_ped_avg = fig.add_subplot(gs[0, 1])
-    ax_control_ped_tot = fig.add_subplot(gs[1, 1], sharex=ax_control_ped_avg)
-    ax_control_veh_avg = fig.add_subplot(gs[0, 2])
-    ax_control_veh_tot = fig.add_subplot(gs[1, 2], sharex=ax_control_veh_avg)
-
-    design_panels = [ax_design_avg, ax_design_tot]
-    control_ped_panels = [ax_control_ped_avg, ax_control_ped_tot]
-    control_veh_panels = [ax_control_veh_avg, ax_control_veh_tot]
-    all_panels = design_panels + control_ped_panels + control_veh_panels
-    top_panels = [ax_design_avg, ax_control_ped_avg, ax_control_veh_avg]
-    bottom_panels = [ax_design_tot, ax_control_ped_tot, ax_control_veh_tot]
-
-    # Combine paths for determining overall scale range
-    all_json_paths = [design_unsig_path, realworld_unsig_path, control_tl_path, control_ppo_path]
-    all_scales = []
-    data_cache = {} # Cache loaded data
-
-    for path in all_json_paths:
-        if path not in data_cache:
-            # Load data using get_averages
-            data_false = get_averages(path, total=False)
-            data_true = get_averages(path, total=True)
-            data_cache[path] = {'total_false': data_false, 'total_true': data_true}
-            all_scales.extend(data_false[0]) # Add scales from this path
-        else:
-             # If already cached, just add scales
-             all_scales.extend(data_cache[path]['total_false'][0])
-
-
-    unique_scales = np.sort(np.unique(np.array(all_scales)))
-    x_min, x_max = unique_scales.min(), unique_scales.max()
-    x_margin = 0.05 * (x_max - x_min)
-    valid_min_scale = min(in_range_demand_scales)
-    valid_max_scale = max(in_range_demand_scales)
-
-    # --- Setup common axis properties ---
-    for ax in all_panels:
-        ax.set_xlim(x_min - x_margin, x_max + x_margin)
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        # Shade out-of-range areas
-        xlim = ax.get_xlim()
-        ax.axvspan(xlim[0], valid_min_scale, facecolor='grey', alpha=0.25, zorder=-2)
-        ax.axvspan(valid_max_scale, xlim[1], facecolor='grey', alpha=0.25, zorder=-2)
-        # Grids
-        ax.grid(True, axis='y')
-        ax.set_xticks(unique_scales, minor=True) # Keep minor ticks for grid lines at all scales
-        ax.grid(which='minor', axis='x', linestyle='--', linewidth=0.8, alpha=0.7, zorder=-5)
-        ax.grid(which='major', axis='x', linestyle='--', linewidth=0.8, alpha=0.7, zorder=-5) # Keep major grid lines
-        # Y-axis formatting - Use n_yticks and ensure integers
-        ax.yaxis.set_major_locator(MaxNLocator(nbins=n_yticks, integer=True)) # Use variable n_yticks
-        ax.yaxis.set_major_formatter(FuncFormatter(lambda x, pos: f"{int(x)}")) # Ensure integer formatting
-
-    # --- Plot Design Results (Left Column - Panel a) ---
-    ax_design_avg.set_title('Pedestrian Arrival Time')
-    design_paths = [realworld_unsig_path, design_unsig_path] # Original order kept from previous edits
-    design_labels = ['Real-world', 'Design Agent (Ours)'] # Original order kept from previous edits
-    design_legend_handles = []
-
-    for path, label in zip(design_paths, design_labels):
-        # Ensure label exists in COLORS, otherwise handle potential KeyError
-        if label not in COLORS:
-             print(f"Warning: Label '{label}' not found in COLORS dictionary. Skipping color assignment.")
-             color = 'black' # Default color or handle error appropriately
-        else:
-             color = COLORS[label] # Uses new COLORS dict
-
-        # Use cached data
-        scales, _, _, avg_vals, _, _, avg_std = data_cache[path]['total_false']
-        _, _, _, tot_vals, _, _, tot_std = data_cache[path]['total_true']
-
-        # Average Plot
-        h = ax_design_avg.plot(scales, avg_vals, color=color, lw=2.5, label=label, zorder=2)[0]
-        ax_design_avg.fill_between(scales, avg_vals - avg_std, avg_vals + avg_std, color=color, alpha=0.2, zorder=2)
-        design_legend_handles.append(h) # Store handle for legend
-
-        # Total Plot
-        tot_k = tot_vals / 1000.0
-        tot_k_std = tot_std / 1000.0
-        ax_design_tot.plot(scales, tot_k, color=color, lw=2.5, zorder=2)
-        ax_design_tot.fill_between(scales, tot_k - tot_k_std, tot_k + tot_k_std, color=color, alpha=0.2, zorder=2)
-
-    # Specific Y limits for design average plot
-    ax_design_avg.set_ylim(bottom=50, top=120)
-    ax_design_tot.set_ylim(bottom=-0.5)
-
-    # --- Plot Control Results (Middle and Right Columns - Panels b, c) ---
-    ax_control_ped_avg.set_title('Pedestrian Wait Time')
-    ax_control_veh_avg.set_title('Vehicle Wait Time')
-
-    # Note: 'Unsignalized' uses the *design_unsig_path* data for comparison consistency
-    control_paths = [control_tl_path, design_unsig_path, control_ppo_path]
-    control_labels = ['Signalized', 'Unsignalized', 'Control Agent (Ours)'] # Original labels kept
-    control_legend_handles = []
-    max_veh_tot_val = -np.inf # Keep track of max value for veh_tot plot
-
-    for path, label in zip(control_paths, control_labels):
-         # Ensure label exists in COLORS
-        if label not in COLORS:
-             print(f"Warning: Label '{label}' not found in COLORS dictionary. Skipping color assignment.")
-             color = 'black'
-        else:
-             color = COLORS[label] # Uses new COLORS dict
-
-        # Use cached data
-        scales, veh_avg_mean, ped_avg_mean, _, veh_avg_std, ped_avg_std, _ = data_cache[path]['total_false']
-        _, veh_tot, ped_tot, _, veh_tot_std, ped_tot_std, _ = data_cache[path]['total_true']
-
-        # Pedestrian Average Wait (Middle Top)
-        h_ped = ax_control_ped_avg.plot(scales, ped_avg_mean, color=color, lw=2.5, label=label, zorder=2)[0]
-        ax_control_ped_avg.fill_between(scales,
-                                         ped_avg_mean - ped_avg_std,
-                                         ped_avg_mean + ped_avg_std,
-                                         color=color, alpha=0.2, zorder=2)
-        # Store unique handles for legend
-        if label not in [h.get_label() for h in control_legend_handles]:
-             control_legend_handles.append(h_ped)
-
-        # Pedestrian Total Wait (Middle Bottom)
-        ax_control_ped_tot.plot(scales, ped_tot/1000, color=color, lw=2.5, zorder=2)
-        ax_control_ped_tot.fill_between(scales,
-                                        (ped_tot - ped_tot_std)/1000,
-                                        (ped_tot + ped_tot_std)/1000,
-                                        color=color, alpha=0.2, zorder=2)
-
-        # Vehicle Average Wait (Right Top)
-        ax_control_veh_avg.plot(scales, veh_avg_mean, color=color, lw=2.5, zorder=2)
-        ax_control_veh_avg.fill_between(scales,
-                                        veh_avg_mean - veh_avg_std,
-                                        veh_avg_mean + veh_avg_std,
-                                        color=color, alpha=0.2, zorder=2)
-
-        # Vehicle Total Wait (Right Bottom)
-        veh_tot_k = veh_tot / 1000.0
-        veh_tot_k_std = veh_tot_std / 1000.0
-        ax_control_veh_tot.plot(scales, veh_tot_k, color=color, lw=2.5, zorder=2)
-        ax_control_veh_tot.fill_between(scales,
-                                        veh_tot_k - veh_tot_k_std,
-                                        veh_tot_k + veh_tot_k_std,
-                                        color=color, alpha=0.2, zorder=2)
-        # Update max value seen in this plot (including std dev)
-        current_max = np.max(veh_tot_k + veh_tot_k_std)
-        if current_max > max_veh_tot_val:
-            max_veh_tot_val = current_max
-
-
-    # Order control legend handles to match labels
-    ordered_control_handles = []
-    temp_handle_dict = {h.get_label(): h for h in control_legend_handles}
-    for lbl in control_labels:
-        if lbl in temp_handle_dict:
-            ordered_control_handles.append(temp_handle_dict[lbl])
-
-    # Set Y limits for control plots
-    for ax in control_ped_panels + control_veh_panels:
-        # Set bottom limit first
-        ax.set_ylim(bottom=-0.5)
-
-    # Explicitly set top limit for ax_control_veh_tot to encourage 5 ticks
-    # Set top slightly above the max value to give MaxNLocator room
-    # if max_veh_tot_val > -np.inf: # Check if we found a max value
-    #      new_top_limit = np.ceil(max_veh_tot_val) + 0.5 # Go slightly above the ceiling of max value
-    #      ax_control_veh_tot.set_ylim(bottom=-0.5, top=new_top_limit)
-    #      # Re-apply locator after setting limits to ensure it recalculates
-    #      ax_control_veh_tot.yaxis.set_major_locator(MaxNLocator(nbins=n_yticks, integer=True))
-
-    ax_control_veh_tot.set_ylim(top=3.9)
-    ax_control_veh_avg.set_ylim(top=75)
-
-    # --- X-axis Ticks and Labels ---
-    # Select every other scale, EXCLUDING the last one
-    scales_to_show = unique_scales[:-1:2] # Select every other scale from all but the last
-
-    x_tick_labels = []
-    for s in scales_to_show:
-        if abs(s * 10 - round(s * 10)) < 1e-6:
-            x_tick_labels.append(f"{s:.1f}x")
-        else:
-            x_tick_labels.append(f"{s:.2f}x")
-
-    for ax in bottom_panels:
-        ax.set_xticks(scales_to_show) # Set major ticks only at these locations
-        ax.set_xticklabels(x_tick_labels)
-        ax.set_xlabel('Demand Scale', fontsize=fs + 1) # Use updated fs
-
-    for ax in top_panels:
-        ax.tick_params(labelbottom=False) # Hide x-labels on top plots
-
-    # --- Y-axis Labels (using fig.text) ---
-    # Simplified labels, keeping units
-    # Adjusted positions for better centering relative to the taller figure
-    avg_y_pos = 0.72 # Adjusted vertical center for top row
-    tot_y_pos = 0.32 # Adjusted vertical center for bottom row
-
-    fig.text(0.04, avg_y_pos, 'Average (s)', va='center', rotation='vertical', fontsize=fs+1)
-    fig.text(0.04, tot_y_pos, 'Total (×10³ s)', va='center', rotation='vertical', fontsize=fs+1)
-
-    fig.text(0.36, avg_y_pos, 'Average (s)', va='center', rotation='vertical', fontsize=fs+1)
-    fig.text(0.36, tot_y_pos, 'Total (×10³ s)', va='center', rotation='vertical', fontsize=fs+1)
-
-    fig.text(0.68, avg_y_pos, 'Average (s)', va='center', rotation='vertical', fontsize=fs+1)
-    fig.text(0.68, tot_y_pos, 'Total (×10³ s)', va='center', rotation='vertical', fontsize=fs+1)
-
-
-    # --- Legends (Split) with Rounded White Boxes ---
-    legend_kwargs = {
-        'loc': 'lower center',
-        'fontsize': fs - 2, # Updated legend font size
-        'frameon': True,        # Turn on frame
-        'fancybox': True,       # Use rounded corners
-        'facecolor': 'white',   # Updated background to white
-        'edgecolor': '#cccccc', # Slightly darker gray border
-        'framealpha': 1.0,      # Make box opaque
-        'borderpad': 0.6,       # Padding inside the box
-        'labelspacing': 0.4     # Spacing between legend entries
-    }
-
-    # Design Legend (a) - Centered under first column
-    # Adjusted y anchor for taller figure and space above
-    leg_a = fig.legend(handles=design_legend_handles, labels=design_labels,
-                       ncol=2,
-                       bbox_to_anchor=(0.215, -0.03), # Moved legend down
-                       **legend_kwargs)
-
-    # Control Legend (b, c) - Centered under middle/right columns
-    # Adjusted y anchor for taller figure and space above
-    leg_b_c = fig.legend(handles=ordered_control_handles, labels=control_labels,
-                         ncol=3,
-                         bbox_to_anchor=(0.675, -0.03), # Moved legend down
-                         **legend_kwargs)
-
-    # --- Panel Labels (a), (b), (c) ---
-    # Positioned below the legends - Adjusted y position to be closer to legends
-    label_y_pos = -0.08 # Moved labels up relative to legends
-    label_fontsize = fs + 2 # Match title font size
-    fig.text(0.215, label_y_pos, '(a)', ha='center', va='center', fontsize=label_fontsize, fontweight='bold')
-    fig.text(0.505, label_y_pos, '(b)', ha='center', va='center', fontsize=label_fontsize, fontweight='bold')
-    fig.text(0.835, label_y_pos, '(c)', ha='center', va='center', fontsize=label_fontsize, fontweight='bold')
-
-
-    # --- Final Adjustments and Save ---
-    # Adjusted margins for taller figure and repositioned lower elements
-    plt.subplots_adjust(left=0.08, right=0.98, top=0.93, bottom=0.13) # Adjusted bottom margin
-    plt.savefig("design_control_results.pdf", bbox_inches='tight', dpi=300)
-    plt.show()
-    # plt.close(fig)
-    # print("Combined plot saved to design_control_results.pdf")
 
 
 def _load_graph(path):
@@ -1560,40 +1252,108 @@ def plot_graphs_and_gmm( graph_a_path,
     # Save figure tightly
     fig.savefig('./graphs_gmm.png', dpi=dpi, bbox_inches='tight', pad_inches=0)
 
-def rewards_results_plot(combined_csv_codesign, combined_csv_control, result_1, result_2):
+def rewards_results_plot(combined_csv_codesign, combined_csv_control):
     """
     (a) Contains both codesign and control reward plot
     (b) Codesign result
     (c) Control result
     """
+    # Configuration variables
+    MOVING_AVG_WINDOW = 200  # Window size for moving average
+    MAX_STEPS = 20e6  # Maximum steps to show (11 million)
+    
     # Load data
     df_c = pd.read_csv(combined_csv_codesign)
     df_ctrl = pd.read_csv(combined_csv_control)
 
     # Clean infinities and ensure numeric
-    for df in (df_c, df_ctrl):
+    for df in [df_c, df_ctrl]:
         df.replace([np.inf, -np.inf], np.nan, inplace=True)
         df['step'] = pd.to_numeric(df['step'], errors='coerce')
-        for col in ['reward1', 'reward2', 'reward3']:
+        
+        # Dynamically identify reward columns
+        reward_cols = [col for col in df.columns if col.startswith('reward')]
+        for col in reward_cols:
             df[col] = pd.to_numeric(df[col], errors='coerce')
+    
+    # Apply cutoff at MAX_STEPS - make explicit copies to avoid SettingWithCopyWarning
+    df_c = df_c[df_c['step'] <= MAX_STEPS].copy()
+    df_ctrl = df_ctrl[df_ctrl['step'] <= MAX_STEPS].copy()
 
-    # Compute mean reward and moving average
-    window = 300  # Increased from 50 to 300 for more aggressive smoothing
-    df_c['mean_reward_ma'] = df_c[['reward1', 'reward2', 'reward3']].mean(axis=1).rolling(window, min_periods=1).mean()
-    df_ctrl['mean_reward_ma'] = df_ctrl[['reward1', 'reward2', 'reward3']].mean(axis=1).rolling(window, min_periods=1).mean()
+    # Calculate average reward per row (across all reward columns)
+    df_c['mean_reward'] = df_c[[col for col in df_c.columns if col.startswith('reward')]].mean(axis=1)
+    df_ctrl['mean_reward'] = df_ctrl[[col for col in df_ctrl.columns if col.startswith('reward')]].mean(axis=1)
+
+    # Compute moving average and rolling standard deviation
+    df_c['mean_reward_ma'] = df_c['mean_reward'].rolling(MOVING_AVG_WINDOW, min_periods=1).mean()
+    df_c['mean_reward_std'] = df_c['mean_reward'].rolling(MOVING_AVG_WINDOW, min_periods=1).std()
+    
+    df_ctrl['mean_reward_ma'] = df_ctrl['mean_reward'].rolling(MOVING_AVG_WINDOW, min_periods=1).mean()
+    df_ctrl['mean_reward_std'] = df_ctrl['mean_reward'].rolling(MOVING_AVG_WINDOW, min_periods=1).std()
+
+    # Fill NaN values in std columns (first few rows) with zeros
+    df_c['mean_reward_std'] = df_c['mean_reward_std'].fillna(0)
+    df_ctrl['mean_reward_std'] = df_ctrl['mean_reward_std'].fillna(0)
+
+    # Calculate statistics for the last 500,000 steps
+    last_steps = 500000
+    
+    # For codesign
+    last_c_data = df_c[df_c['step'] >= (df_c['step'].max() - last_steps)]
+    if not last_c_data.empty:
+        # Stats on the raw rewards
+        c_raw_mean = last_c_data['mean_reward'].mean()
+        c_raw_std = last_c_data['mean_reward'].std()
+        
+        # Stats on the rolling mean (smoothed data)
+        c_ma_mean = last_c_data['mean_reward_ma'].mean()
+        c_ma_std = last_c_data['mean_reward_ma'].std()
+        
+        print(f"\nCo-design (last {last_steps} steps):")
+        print(f"  Raw data:")
+        print(f"    Average reward: {c_raw_mean:.2f}")
+        print(f"    Standard deviation: {c_raw_std:.2f}")
+        print(f"  Smoothed data (moving avg window={MOVING_AVG_WINDOW}):")
+        print(f"    Average: {c_ma_mean:.2f}")
+        print(f"    Standard deviation: {c_ma_std:.2f}")
+    else:
+        print(f"Not enough data for co-design statistics (less than {last_steps} steps)")
+    
+    # For separate control
+    last_ctrl_data = df_ctrl[df_ctrl['step'] >= (df_ctrl['step'].max() - last_steps)]
+    if not last_ctrl_data.empty:
+        # Stats on the raw rewards
+        ctrl_raw_mean = last_ctrl_data['mean_reward'].mean()
+        ctrl_raw_std = last_ctrl_data['mean_reward'].std()
+        
+        # Stats on the rolling mean (smoothed data)
+        ctrl_ma_mean = last_ctrl_data['mean_reward_ma'].mean()
+        ctrl_ma_std = last_ctrl_data['mean_reward_ma'].std()
+        
+        print(f"\nSeparate control (last {last_steps} steps):")
+        print(f"  Raw data:")
+        print(f"    Average reward: {ctrl_raw_mean:.2f}")
+        print(f"    Standard deviation: {ctrl_raw_std:.2f}")
+        print(f"  Smoothed data (moving avg window={MOVING_AVG_WINDOW}):")
+        print(f"    Average: {ctrl_ma_mean:.2f}")
+        print(f"    Standard deviation: {ctrl_ma_std:.2f}")
+    else:
+        print(f"Not enough data for separate control statistics (less than {last_steps} steps)")
 
     # Prepare for plotting
     x_c = df_c['step'].to_numpy(dtype=float)
-    y_c = [df_c[col].to_numpy(dtype=float) for col in ['reward1', 'reward2', 'reward3']]
+    y_c = [df_c[col].to_numpy(dtype=float) for col in df_c.columns if col.startswith('reward') and col not in ['mean_reward', 'mean_reward_ma', 'mean_reward_std']]
     ma_c = df_c['mean_reward_ma'].to_numpy(dtype=float)
+    std_c = df_c['mean_reward_std'].to_numpy(dtype=float)
 
     x_ctrl = df_ctrl['step'].to_numpy(dtype=float)
-    y_ctrl = [df_ctrl[col].to_numpy(dtype=float) for col in ['reward1', 'reward2', 'reward3']]
+    y_ctrl = [df_ctrl[col].to_numpy(dtype=float) for col in df_ctrl.columns if col.startswith('reward') and col not in ['mean_reward', 'mean_reward_ma', 'mean_reward_std']]
     ma_ctrl = df_ctrl['mean_reward_ma'].to_numpy(dtype=float)
+    std_ctrl = df_ctrl['mean_reward_std'].to_numpy(dtype=float)
 
     # Define styling parameters
     fs = 23  # Base font size
-    dpi = 400
+    dpi = 300
     
     # Set consistent styling
     mpl.rcParams.update({
@@ -1632,15 +1392,25 @@ def rewards_results_plot(combined_csv_codesign, combined_csv_control, result_1, 
     COLOR_CODESIGN = '#FF8000'  # Orange for CoDesign
     COLOR_CONTROL = '#4169E1'   # Royal Blue for Control
 
-    # Plot (a): CoDesign shaded and MA
-    for y in y_c:
-        ax1.fill_between(x_c, y, ma_c, alpha=0.05, color=COLOR_CODESIGN)
-    ax1.plot(x_c, ma_c, color=COLOR_CODESIGN, linewidth=2.5, label='Co-design', zorder=2)
+    # Plot (a): CoDesign - Background raw data (individual runs)
+    # Removing raw data lines as per user request
+    
+    # Co-design: Add std deviation band around the moving average - without border
+    ax1.fill_between(x_c, ma_c - std_c, ma_c + std_c, alpha=0.3, color=COLOR_CODESIGN, 
+                     edgecolor='none', zorder=2)
+    
+    # Co-design: Main line (moving average)
+    codesign_line, = ax1.plot(x_c, ma_c, color=COLOR_CODESIGN, linewidth=2.5, zorder=3)
 
-    # Plot (a): Control shaded and MA
-    for y in y_ctrl:
-        ax1.fill_between(x_ctrl, y, ma_ctrl, alpha=0.05, color=COLOR_CONTROL)
-    ax1.plot(x_ctrl, ma_ctrl, color=COLOR_CONTROL, linewidth=2.5, label='Separate', zorder=2)
+    # Plot (a): Control - Background raw data (individual runs)
+    # Removing raw data lines as per user request
+    
+    # Separate control: Add std deviation band around the moving average - without border
+    ax1.fill_between(x_ctrl, ma_ctrl - std_ctrl, ma_ctrl + std_ctrl, alpha=0.3, color=COLOR_CONTROL,
+                     edgecolor='none', zorder=2)
+    
+    # Separate control: Main line (moving average)
+    control_line, = ax1.plot(x_ctrl, ma_ctrl, color=COLOR_CONTROL, linewidth=2.5, zorder=3)
 
     # Set y-axis limits for ax1
     ax1.set_ylim(-1450, 150)
@@ -1648,10 +1418,14 @@ def rewards_results_plot(combined_csv_codesign, combined_csv_control, result_1, 
     # Set specific y-ticks (6 ticks)
     ax1.set_yticks([-1400, -1100, -800, -500, -200, 100])
     
-    # Set specific x-ticks (integers 0, 2, 4, 6, 8, 10 million)
-    ax1.set_xticks([0, 2e6, 4e6, 6e6, 8e6, 10e6])
-    ax1.set_xticklabels(['0', '2', '4', '6', '8', '10'])
-    ax1.set_xlabel('Training Step (x10$^6$)', fontsize=fs, labelpad=10)
+    # Set x-axis limit using MAX_STEPS with left padding
+    ax1.set_xlim(-MAX_STEPS * 0.05, MAX_STEPS)
+    
+    # Set specific x-ticks (0 to MAX_STEPS in increments of 5 million)
+    x_ticks = np.arange(0, MAX_STEPS + 1e6, 5e6)
+    ax1.set_xticks(x_ticks)
+    ax1.set_xticklabels([f'{int(x/1e6)}' for x in x_ticks])
+    ax1.set_xlabel('Simulation Step (x10$^6$)', fontsize=fs, labelpad=10)
     
     # Style the main plot
     # ax1.set_title('Training Rewards', fontsize=fs+2, fontweight='bold', pad=12)
@@ -1669,7 +1443,7 @@ def rewards_results_plot(combined_csv_codesign, combined_csv_control, result_1, 
     legend_kwargs = {
         'loc': 'lower center',
         'ncol': 2,  # Force legend into a single line
-        'bbox_to_anchor': (0.5, -0.29),  # Position it above the (a) label, adjusted from -0.25 to -0.18
+        'bbox_to_anchor': (0.5, -0.29),  # Position it above the (a) label
         'fontsize': fs - 2,
         'frameon': True,
         'fancybox': True,
@@ -1680,8 +1454,14 @@ def rewards_results_plot(combined_csv_codesign, combined_csv_control, result_1, 
         'labelspacing': 0.4
     }
     
-    # Add legend directly to ax1 instead of the figure
-    ax1.legend(**legend_kwargs)
+    # Add legend directly using our explicit line handles
+    legend = ax1.legend([codesign_line, control_line], 
+                        ['Co-design', 'Separate-control'], 
+                        **legend_kwargs)
+    
+    # Increase the linewidth in the legend
+    for line in legend.get_lines():
+        line.set_linewidth(3.5)  # Thicker lines in legend only
 
     # Subplot labels below each panel
     label_y = -0.16  # Position for panel labels - moved up from -0.33 to -0.26
@@ -1946,6 +1726,429 @@ def plot_demand(
     plt.savefig("./demand.png", dpi=300, bbox_inches="tight", pad_inches=0.1)
     plt.close()
 
+def plot_design_and_control_results(design_unsig_path, realworld_unsig_path,
+                                     control_tl_path, control_ppo_path,
+                                     in_range_demand_scales, use_error_bars=True):
+    """
+    Combines the design and control results into a single figure with three columns,
+    using specific colors and split legends. The figure shows:
+    Left (a): Pedestrian Arrival Time results.
+    Middle (b): Pedestrian Wait Time results.
+    Right (c): Vehicle Wait Time results.
+    """
+
+    fs = 23 # Updated font size
+    n_yticks = 5 # Define the number of y-ticks for all subplots
+
+    # Define Colors (anonymous) - Adjusted to be less bright
+    COLOR_INDIAN_RED = '#C93038'     # For Real-world (Subdued red)
+    COLOR_SPRING_GREEN = '#3C9F40'   # For Design Agent (Ours) (Subdued green)
+    COLOR_DARK_ORCHID = '#8064A2'    # For Signalized (Softer purple)
+    COLOR_SLATE_GRAY = '#E67E22'     # For Unsignalized (Softer orange)
+    COLOR_ROYAL_BLUE = '#3771A1'     # For Control Agent (Ours) (Softer blue)
+
+
+    # Map plot elements to Colors - Updated based on new scheme
+    COLORS = {
+        'Design Agent (Ours)': COLOR_SPRING_GREEN,   # Design plot: Spring Green
+        'Real-world':          COLOR_INDIAN_RED,     # Design plot: Indian Red
+        'Signalized':          COLOR_DARK_ORCHID,    # Control plots: Dark Orchid
+        'Unsignalized':        COLOR_SLATE_GRAY,     # Control plots: Slate Gray
+        'Control Agent (Ours)': COLOR_ROYAL_BLUE,     # Control plots: Royal Blue
+    }
+    
+    # Helper function to create a gradient line
+    def create_gradient_line(ax, x, y, base_color, lw=3.5, zorder=3, label=None):
+        # Create points
+        points = np.array([x, y]).T.reshape(-1, 1, 2)
+        segments = np.concatenate([points[:-1], points[1:]], axis=1)
+        
+        # Convert hex to RGB
+        r = int(base_color[1:3], 16) / 255.0
+        g = int(base_color[3:5], 16) / 255.0
+        b = int(base_color[5:7], 16) / 255.0
+        
+        # Create lighter variant (for gradient end) - more subtle increase
+        r2 = min(1.0, r + 0.15)  # Less dramatic lightening
+        g2 = min(1.0, g + 0.15)  # Less dramatic lightening
+        b2 = min(1.0, b + 0.15)  # Less dramatic lightening
+        
+        # Create custom colormap
+        cmap = LinearSegmentedColormap.from_list(
+            "custom_gradient", 
+            [(r, g, b), (r2, g2, b2)],
+            N=100
+        )
+        
+        # Create a gradient effect along the line
+        norm = plt.Normalize(0, len(x)-1)
+        lc = LineCollection(segments, cmap=cmap, norm=norm, linewidth=lw, zorder=zorder)
+        lc.set_array(np.arange(len(x)))
+        
+        line = ax.add_collection(lc)
+        
+        # Add markers separately
+        scatter = ax.scatter(x, y, color=base_color, s=36, marker='o', 
+                            edgecolor='white', linewidth=1.0, zorder=zorder+1)
+        
+        # Create a dummy line with the right color for the legend
+        if label is not None:
+            dummy_line, = ax.plot([], [], color=base_color, lw=lw, marker='o', 
+                                 markersize=6, markeredgecolor='white', markeredgewidth=1.0,
+                                 label=label)
+            return dummy_line
+        return line
+
+    # Enhanced styling setup for a more professional look
+    mpl.rcParams.update({
+        'font.family':        'sans-serif',
+        'font.sans-serif':    ['Open Sans', 'Arial', 'DejaVu Sans'],
+        'text.color':         '#202124',
+        'axes.edgecolor':     '#dadce0',     # Reverted to original lighter gray
+        'axes.linewidth':     1.0,           # Reverted to original width
+        'axes.titlesize':     fs + 2,        # Title size based on fs
+        'axes.titleweight':   'bold',
+        'axes.labelsize':     fs,            # Axis label size based on fs
+        'axes.labelweight':   'medium',      # Make labels slightly bolder
+        'xtick.color':        '#5f6368',     # Reverted to original gray tick color
+        'ytick.color':        '#5f6368',     # Reverted to original gray tick color
+        'xtick.labelsize':    fs - 1,        # Tick label size
+        'ytick.labelsize':    fs - 1,        # Tick label size
+        'xtick.major.width':  1.0,           # Reverted to original tick width
+        'ytick.major.width':  1.0,           # Reverted to original tick width
+        'grid.color':         '#e8eaed',     # Reverted to original grid color
+        'grid.linewidth':     0.8,
+        'grid.linestyle':     '--',
+        'grid.alpha':         0.7,           # Grid transparency
+        'legend.frameon':     True,          # Add frame to legend
+        'legend.framealpha':  0.9,           # Make legend background more opaque
+        'legend.edgecolor':   '#cccccc',     # Light gray legend border
+        'legend.fontsize':    fs - 2,        # Consistent legend font size
+        'figure.facecolor':   'white',
+        'axes.facecolor':     'white',
+        'legend.facecolor':   'white', 
+        'axes.titlepad':      12,            # Add padding below axis titles
+        'axes.spines.top':    False,         # Remove top spines globally
+        'axes.spines.right':  False          # Remove right spines globally
+    })
+
+    # Create figure and grid (2 rows, 3 columns) - Height remains the same as previous
+    fig = plt.figure(figsize=(24, 12))
+    # Adjusted spacing
+    gs  = GridSpec(2, 3, figure=fig, hspace=0.10, wspace=0.20)
+
+    # Create axes
+    ax_design_avg = fig.add_subplot(gs[0, 0])
+    ax_design_tot = fig.add_subplot(gs[1, 0], sharex=ax_design_avg)
+    ax_control_ped_avg = fig.add_subplot(gs[0, 1])
+    ax_control_ped_tot = fig.add_subplot(gs[1, 1], sharex=ax_control_ped_avg)
+    ax_control_veh_avg = fig.add_subplot(gs[0, 2])
+    ax_control_veh_tot = fig.add_subplot(gs[1, 2], sharex=ax_control_veh_avg)
+
+    design_panels = [ax_design_avg, ax_design_tot]
+    control_ped_panels = [ax_control_ped_avg, ax_control_ped_tot]
+    control_veh_panels = [ax_control_veh_avg, ax_control_veh_tot]
+    all_panels = design_panels + control_ped_panels + control_veh_panels
+    top_panels = [ax_design_avg, ax_control_ped_avg, ax_control_veh_avg]
+    bottom_panels = [ax_design_tot, ax_control_ped_tot, ax_control_veh_tot]
+
+    # Combine paths for determining overall scale range
+    all_json_paths = [design_unsig_path, realworld_unsig_path, control_tl_path, control_ppo_path]
+    all_scales = []
+    data_cache = {} # Cache loaded data
+
+    for path in all_json_paths:
+        if path not in data_cache:
+            # Load data using get_averages
+            data_false = get_averages(path, total=False)
+            data_true = get_averages(path, total=True)
+            data_cache[path] = {'total_false': data_false, 'total_true': data_true}
+            all_scales.extend(data_false[0]) # Add scales from this path
+        else:
+             # If already cached, just add scales
+             all_scales.extend(data_cache[path]['total_false'][0])
+
+
+    unique_scales = np.sort(np.unique(np.array(all_scales)))
+    x_min, x_max = unique_scales.min(), unique_scales.max()
+    x_margin = 0.05 * (x_max - x_min)
+    valid_min_scale = min(in_range_demand_scales)
+    valid_max_scale = max(in_range_demand_scales)
+
+    # --- Setup common axis properties ---
+    for ax in all_panels:
+        ax.set_xlim(x_min - x_margin, x_max + x_margin)
+        # Shade out-of-range areas with softer shading
+        xlim = ax.get_xlim()
+        ax.axvspan(xlim[0], valid_min_scale, facecolor='grey', alpha=0.15, zorder=-100)
+        ax.axvspan(valid_max_scale, xlim[1], facecolor='grey', alpha=0.15, zorder=-100)
+        
+        # Turn off default grid
+        ax.grid(False)
+        
+        # Set background to pure white
+        ax.set_facecolor('white')
+        
+        # Y-axis formatting - Use n_yticks and ensure integers
+        ax.yaxis.set_major_locator(MaxNLocator(nbins=n_yticks, integer=True))
+        ax.yaxis.set_major_formatter(FuncFormatter(lambda x, pos: f"{int(x)}"))
+        
+        # Set x ticks
+        ax.set_xticks(unique_scales, minor=True)
+
+    # --- Plot Design Results (Left Column - Panel a) ---
+    ax_design_avg.set_title('Pedestrian Arrival Time')
+    design_paths = [realworld_unsig_path, design_unsig_path] # Original order kept from previous edits
+    design_labels = ['Real-world', 'Design Agent (Ours)'] # Original order kept from previous edits
+    design_legend_handles = []
+
+    for path, label in zip(design_paths, design_labels):
+        # Ensure label exists in COLORS, otherwise handle potential KeyError
+        if label not in COLORS:
+             print(f"Warning: Label '{label}' not found in COLORS dictionary. Skipping color assignment.")
+             color = 'black' # Default color or handle error appropriately
+        else:
+             color = COLORS[label] # Uses new COLORS dict
+
+        # Use cached data
+        scales, _, _, avg_vals, _, _, avg_std = data_cache[path]['total_false']
+        _, _, _, tot_vals, _, _, tot_std = data_cache[path]['total_true']
+
+        # Average Plot - Enhanced line styles with gradient - higher z-order
+        h = create_gradient_line(ax_design_avg, scales, avg_vals, color, lw=3.0, zorder=20, label=label)
+        design_legend_handles.append(h) # Store handle for legend
+        
+        # Display standard deviation based on chosen visualization method - higher z-order
+        if use_error_bars:
+            ax_design_avg.errorbar(scales, avg_vals, yerr=avg_std, color=color, capsize=4.5, 
+                                  elinewidth=2.0, capthick=2.2, alpha=0.85, fmt='none', zorder=10)
+        else:
+            ax_design_avg.fill_between(scales, avg_vals - avg_std, avg_vals + avg_std, 
+                                     color=color, alpha=0.2, zorder=5)
+
+        # Total Plot - Enhanced line styles with gradient - higher z-order
+        tot_k = tot_vals / 1000.0
+        tot_k_std = tot_std / 1000.0
+        create_gradient_line(ax_design_tot, scales, tot_k, color, lw=3.0, zorder=20)
+        
+        # Display standard deviation based on chosen visualization method - higher z-order
+        if use_error_bars:
+            ax_design_tot.errorbar(scales, tot_k, yerr=tot_k_std, color=color, capsize=4.5, 
+                                  elinewidth=2.0, capthick=2.2, alpha=0.85, fmt='none', zorder=10)
+        else:
+            ax_design_tot.fill_between(scales, tot_k - tot_k_std, tot_k + tot_k_std, 
+                                     color=color, alpha=0.2, zorder=5)
+
+    # Specific Y limits for design average plot
+    ax_design_avg.set_ylim(bottom=50, top=120)
+    ax_design_tot.set_ylim(bottom=-0.5)
+
+    # --- Plot Control Results (Middle and Right Columns - Panels b, c) ---
+    ax_control_ped_avg.set_title('Pedestrian Wait Time')
+    ax_control_veh_avg.set_title('Vehicle Wait Time')
+
+    # Note: 'Unsignalized' uses the *design_unsig_path* data for comparison consistency
+    control_paths = [control_tl_path, design_unsig_path, control_ppo_path]
+    control_labels = ['Signalized', 'Unsignalized', 'Control Agent (Ours)'] # Original labels kept
+    control_legend_handles = []
+    max_veh_tot_val = -np.inf # Keep track of max value for veh_tot plot
+
+    for path, label in zip(control_paths, control_labels):
+         # Ensure label exists in COLORS
+        if label not in COLORS:
+             print(f"Warning: Label '{label}' not found in COLORS dictionary. Skipping color assignment.")
+             color = 'black'
+        else:
+             color = COLORS[label] # Uses new COLORS dict
+
+        # Use cached data
+        scales, veh_avg_mean, ped_avg_mean, _, veh_avg_std, ped_avg_std, _ = data_cache[path]['total_false']
+        _, veh_tot, ped_tot, _, veh_tot_std, ped_tot_std, _ = data_cache[path]['total_true']
+
+        # Pedestrian Average Wait (Middle Top) - Enhanced line styles with gradient - higher z-order
+        h_ped = create_gradient_line(ax_control_ped_avg, scales, ped_avg_mean, color, lw=3.0, zorder=20, label=label)
+        
+        # Display standard deviation based on chosen visualization method - higher z-order
+        if use_error_bars:
+            ax_control_ped_avg.errorbar(scales, ped_avg_mean, yerr=ped_avg_std, color=color, 
+                                 capsize=4.5, elinewidth=2.0, capthick=2.2, alpha=0.85, fmt='none', zorder=10)
+        else:
+            ax_control_ped_avg.fill_between(scales,
+                                         ped_avg_mean - ped_avg_std,
+                                         ped_avg_mean + ped_avg_std,
+                                         color=color, alpha=0.2, zorder=5)
+        
+        # Store unique handles for legend
+        if label not in [h.get_label() for h in control_legend_handles]:
+             control_legend_handles.append(h_ped)
+
+        # Pedestrian Total Wait (Middle Bottom) - Enhanced line styles with gradient - higher z-order
+        create_gradient_line(ax_control_ped_tot, scales, ped_tot/1000, color, lw=3.0, zorder=20)
+        
+        # Display standard deviation based on chosen visualization method - higher z-order
+        if use_error_bars:
+            ax_control_ped_tot.errorbar(scales, ped_tot/1000, yerr=ped_tot_std/1000, color=color, 
+                                 capsize=4.5, elinewidth=2.0, capthick=2.2, alpha=0.85, fmt='none', zorder=10)
+        else:
+            ax_control_ped_tot.fill_between(scales,
+                                        (ped_tot - ped_tot_std)/1000,
+                                        (ped_tot + ped_tot_std)/1000,
+                                        color=color, alpha=0.2, zorder=5)
+
+        # Vehicle Average Wait (Right Top) - Enhanced line styles with gradient - higher z-order
+        create_gradient_line(ax_control_veh_avg, scales, veh_avg_mean, color, lw=3.0, zorder=20)
+        
+        # Display standard deviation based on chosen visualization method - higher z-order
+        if use_error_bars:
+            ax_control_veh_avg.errorbar(scales, veh_avg_mean, yerr=veh_avg_std, color=color, 
+                                 capsize=4.5, elinewidth=2.0, capthick=2.2, alpha=0.85, fmt='none', zorder=10)
+        else:
+            ax_control_veh_avg.fill_between(scales,
+                                        veh_avg_mean - veh_avg_std,
+                                        veh_avg_mean + veh_avg_std,
+                                        color=color, alpha=0.2, zorder=5)
+
+        # Vehicle Total Wait (Right Bottom) - Enhanced line styles with gradient - higher z-order
+        veh_tot_k = veh_tot / 1000.0
+        veh_tot_k_std = veh_tot_std / 1000.0
+        create_gradient_line(ax_control_veh_tot, scales, veh_tot_k, color, lw=3.0, zorder=20)
+        
+        # Display standard deviation based on chosen visualization method - higher z-order
+        if use_error_bars:
+            ax_control_veh_tot.errorbar(scales, veh_tot_k, yerr=veh_tot_k_std, color=color, 
+                                 capsize=4.5, elinewidth=2.0, capthick=2.2, alpha=0.85, fmt='none', zorder=10)
+        else:
+            ax_control_veh_tot.fill_between(scales,
+                                        veh_tot_k - veh_tot_k_std,
+                                        veh_tot_k + veh_tot_k_std,
+                                        color=color, alpha=0.2, zorder=5)
+                                         
+        # Update max value seen in this plot (including std dev)
+        current_max = np.max(veh_tot_k + veh_tot_k_std)
+        if current_max > max_veh_tot_val:
+            max_veh_tot_val = current_max
+
+
+    # Order control legend handles to match labels
+    ordered_control_handles = []
+    temp_handle_dict = {h.get_label(): h for h in control_legend_handles}
+    for lbl in control_labels:
+        if lbl in temp_handle_dict:
+            ordered_control_handles.append(temp_handle_dict[lbl])
+
+    # Set Y limits for control plots
+    for ax in control_ped_panels + control_veh_panels:
+        # Set bottom limit first
+        ax.set_ylim(bottom=-0.5)
+
+    ax_control_veh_tot.set_ylim(top=3.9)
+    ax_control_veh_avg.set_ylim(top=75)
+
+    # --- Draw grid lines AFTER setting all y-limits ---
+    # This ensures grid lines align with the final tick positions
+    for ax in all_panels:
+        # Create custom grid manually with explicit z-order
+        # Get y ticks and draw horizontal grid lines - now after y-limits are set
+        y_ticks = ax.get_yticks()
+        for y in y_ticks:
+            ax.axhline(y=y, color='#cccccc', linestyle='--', linewidth=1.0, alpha=0.75, zorder=-90)
+        
+        # Draw vertical grid lines for all scales
+        for x in unique_scales:
+            ax.axvline(x=x, color='#cccccc', linestyle='--', linewidth=0.9, alpha=0.65, zorder=-90)
+    
+    # --- X-axis Ticks and Labels ---
+    # Select every other scale, EXCLUDING the last one
+    scales_to_show = unique_scales[:-1:2] # Select every other scale from all but the last
+
+    x_tick_labels = []
+    for s in scales_to_show:
+        if abs(s * 10 - round(s * 10)) < 1e-6:
+            x_tick_labels.append(f"{s:.1f}x")
+        else:
+            x_tick_labels.append(f"{s:.2f}x")
+
+    for ax in bottom_panels:
+        ax.set_xticks(scales_to_show) # Set major ticks only at these locations
+        ax.set_xticklabels(x_tick_labels)
+        ax.set_xlabel('Demand Scale', fontsize=fs + 1, fontweight='medium') # Use updated fs
+
+    for ax in top_panels:
+        ax.tick_params(labelbottom=False) # Hide x-labels on top plots
+
+    # --- Y-axis Labels (using fig.text) ---
+    # Simplified labels, keeping units
+    # Adjusted positions for better centering relative to the taller figure
+    avg_y_pos = 0.72 # Adjusted vertical center for top row
+    tot_y_pos = 0.32 # Adjusted vertical center for bottom row
+
+    # Direct assignment for each position instead of using a loop with condition
+    fig.text(0.04, avg_y_pos, 'Average (s)', va='center', rotation='vertical', 
+             fontsize=fs+1, fontweight='medium')
+    fig.text(0.04, tot_y_pos, 'Total (×10³ s)', va='center', rotation='vertical', 
+             fontsize=fs+1, fontweight='medium')
+
+    fig.text(0.36, avg_y_pos, 'Average (s)', va='center', rotation='vertical', 
+             fontsize=fs+1, fontweight='medium')
+    fig.text(0.36, tot_y_pos, 'Total (×10³ s)', va='center', rotation='vertical', 
+             fontsize=fs+1, fontweight='medium')
+
+    fig.text(0.68, avg_y_pos, 'Average (s)', va='center', rotation='vertical', 
+             fontsize=fs+1, fontweight='medium')
+    fig.text(0.68, tot_y_pos, 'Total (×10³ s)', va='center', rotation='vertical', 
+             fontsize=fs+1, fontweight='medium')
+
+    # --- Legends (Split) with Rounded White Boxes ---
+    legend_kwargs = {
+        'loc': 'lower center',
+        'fontsize': fs - 1,        # Slightly larger legend font
+        'frameon': True,           # Turn on frame
+        'fancybox': True,          # Use rounded corners
+        'facecolor': 'white',      # Updated background to white
+        'edgecolor': '#cccccc',    # Slightly darker gray border
+        'framealpha': 0.95,        # Make box more opaque
+        'borderpad': 0.7,          # Padding inside the box
+        'labelspacing': 0.5,       # Spacing between legend entries
+        'handletextpad': 0.6,      # Space between line and text
+        'handlelength': 2.5,       # Longer line handles
+        'markerscale': 1.1         # Slightly larger markers in legend
+    }
+
+    # Design Legend (a) - Centered under first column
+    # Adjusted y anchor for taller figure and space above
+    leg_a = fig.legend(handles=design_legend_handles, labels=design_labels,
+                       ncol=2,
+                       bbox_to_anchor=(0.215, -0.03), # Moved legend down
+                       **legend_kwargs)
+
+    # Control Legend (b, c) - Centered under middle/right columns
+    # Adjusted y anchor for taller figure and space above
+    leg_b_c = fig.legend(handles=ordered_control_handles, labels=control_labels,
+                         ncol=3,
+                         bbox_to_anchor=(0.675, -0.03), # Moved legend down
+                         **legend_kwargs)
+                         
+    # Increase the linewidth in the legends
+    for legend in [leg_a, leg_b_c]:
+        for line in legend.get_lines():
+            line.set_linewidth(3.5)  # Thicker lines in legend only
+
+    # --- Panel Labels (a), (b), (c) ---
+    # Positioned below the legends - Adjusted y position to be closer to legends
+    label_y_pos = -0.08 # Moved labels up relative to legends
+    label_fontsize = fs + 2 # Match title font size
+    fig.text(0.215, label_y_pos, '(a)', ha='center', va='center', fontsize=label_fontsize, fontweight='bold')
+    fig.text(0.505, label_y_pos, '(b)', ha='center', va='center', fontsize=label_fontsize, fontweight='bold')
+    fig.text(0.835, label_y_pos, '(c)', ha='center', va='center', fontsize=label_fontsize, fontweight='bold')
+
+
+    # --- Final Adjustments and Save ---
+    # Adjusted margins for taller figure and repositioned lower elements
+    plt.subplots_adjust(left=0.08, right=0.98, top=0.93, bottom=0.13) # Adjusted bottom margin
+    plt.savefig("design_control_results.png", bbox_inches='tight', dpi=300)
+    plt.close(fig)
+
+
 # # plot_design_results(new_design_unsignalized_results_path, 
 # #                     real_world_design_unsignalized_results_path,
 # #                     in_range_demand_scales = irds)
@@ -1956,18 +2159,19 @@ def plot_demand(
 # #                                  in_range_demand_scales = irds)
 
 
-def plot(design_and_control = False, 
-         graphs_and_gmm = True,
-         rewards_results = False):
+def plot(design_and_control = True, 
+         graphs_and_gmm = False,
+         rewards_results = True):
     
     run_dir = "May09_11-34-05"
 
     if design_and_control:
         eval_dir = "eval_May10_16-16-52"
+        policy = "policy_at_7603200"# "best_eval_policy"
         real_world_design_unsignalized_results_path = f'./runs/{run_dir}/results/{eval_dir}/realworld_unsignalized.json'
-        new_design_ppo_results_path = f'./runs/{run_dir}/results/{eval_dir}/best_eval_policy_ppo.json'
-        new_design_tl_results_path = f'./runs/{run_dir}/results/{eval_dir}/best_eval_policy_tl.json'
-        new_design_unsignalized_results_path = f'./runs/{run_dir}/results/{eval_dir}/best_eval_policy_unsignalized.json'
+        new_design_ppo_results_path = f'./runs/{run_dir}/results/{eval_dir}/{policy}_ppo.json'
+        new_design_tl_results_path = f'./runs/{run_dir}/results/{eval_dir}/{policy}_tl.json'
+        new_design_unsignalized_results_path = f'./runs/{run_dir}/results/{eval_dir}/{policy}_unsignalized.json'
 
         irds = [1.0, 1.25, 1.5, 1.75, 2.0, 2.25]
 
@@ -1990,14 +2194,13 @@ def plot(design_and_control = False,
         
     if rewards_results:
         rewards_results_plot(
-            combined_csv_codesign = "./runs/combined_steps_rewards_wide.csv",
-            combined_csv_control = "./runs/combined_steps_rewards_wide.csv",
-            result_1 = "",
-            result_2 = ""
+            combined_csv_codesign = "./runs/combined_rewards_codesign.csv",
+            combined_csv_control = "./runs/combined_rewards_control_only.csv",
         )
         
-plot()
+# plot()
 
 # plot_demand()
 
 # plot_gmm_top_down(gmm_pkl_path = "./runs/May09_12-21-15/gmm_iterations/gmm_i_eval14400000_b0_data.pkl")
+
