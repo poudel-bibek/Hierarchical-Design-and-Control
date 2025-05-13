@@ -1254,10 +1254,11 @@ def plot_graphs_and_gmm( graph_a_path,
 
 def rewards_results_plot(combined_csv_codesign, 
                          combined_csv_control, 
-                         results_codesign,
-                         results_separate,
-                         data_type = "total", # average or total
-                         use_error_bars = True):
+                         codesign_added,
+                         codesign_removed,
+                         separate_added,
+                         separate_removed,
+                         data_type = "total", ):
     """
     (a) Contains both codesign and control reward plot
     (b) Pedestrian wait time results
@@ -1393,19 +1394,16 @@ def rewards_results_plot(combined_csv_codesign,
     ax2 = fig.add_subplot(gs[0, 1])
     ax3 = fig.add_subplot(gs[0, 2])
 
-    # Define colors - use the same colors across all subplots
+    # Define colors for part (a)
     COLOR_CODESIGN = '#3C9F40'  # Subdued green for CoDesign
     COLOR_CONTROL = '#3771A1'   # Subdued blue for Control
-
-    # Plot (a): CoDesign - Background raw data (individual runs)
-    # Removing raw data lines as per user request
     
     # Co-design: Add std deviation band around the moving average - without border
     ax1.fill_between(x_c, ma_c - std_c, ma_c + std_c, alpha=0.3, color=COLOR_CODESIGN, 
                      edgecolor='none', zorder=2)
     
     # Co-design: Main line (moving average)
-    codesign_line, = ax1.plot(x_c, ma_c, color=COLOR_CODESIGN, linewidth=2.5, zorder=3)
+    codesign_line, = ax1.plot(x_c, ma_c, color=COLOR_CODESIGN, linewidth=2.5, zorder=3, label="Co-design")
 
     # Plot (a): Control - Background raw data (individual runs)
     # Removing raw data lines as per user request
@@ -1415,7 +1413,7 @@ def rewards_results_plot(combined_csv_codesign,
                      edgecolor='none', zorder=2)
     
     # Separate control: Main line (moving average)
-    control_line, = ax1.plot(x_ctrl, ma_ctrl, color=COLOR_CONTROL, linewidth=2.5, zorder=3)
+    control_line, = ax1.plot(x_ctrl, ma_ctrl, color=COLOR_CONTROL, linewidth=2.5, zorder=3, label="Separate")
 
     # Set y-axis limits for ax1
     ax1.set_ylim(-1450, 150)
@@ -1439,6 +1437,20 @@ def rewards_results_plot(combined_csv_codesign,
     ax1.spines['top'].set_visible(False)
     ax1.spines['right'].set_visible(False)
     ax1.grid(True, linestyle='--', linewidth=0.8, alpha=0.7, zorder=-5)
+    
+    # Create legend for subplot (a) below it
+    legend_a = ax1.legend(handles=[codesign_line, control_line], 
+                         loc='upper center', 
+                         bbox_to_anchor=(0.5, -0.15),
+                         ncol=2, 
+                         fontsize=fs-2,
+                         frameon=True,
+                         fancybox=True,
+                         edgecolor='#cccccc')
+                         
+    # Make the legend for (a) match the appearance of the legend for (b) and (c)
+    for handle in legend_a.get_lines():
+        handle.set_linewidth(3.5)
     
     # --- Implement subplots (b) and (c) ---
     # Function for gradient line creation (similar to plot_design_and_control_results)
@@ -1483,19 +1495,27 @@ def rewards_results_plot(combined_csv_codesign,
             return dummy_line
         return line
     
-    # Fixed demand scales for x-axis
-    fixed_scales = [0.5, 1.0, 1.5, 2.0, 2.5]
-    fixed_scale_labels = [f'{s:.1f}x' for s in fixed_scales]
+    # Load results data for subplots (b) and (c) using get_averages
+    data_cache = {}
+    # Load data using get_averages - same approach as in plot_design_and_control_results
+    for path in [codesign_added, codesign_removed, separate_added, separate_removed]:
+        if path and path not in data_cache:
+            data_false = get_averages(path, total=False)
+            data_true = get_averages(path, total=True)
+            data_cache[path] = {'total_false': data_false, 'total_true': data_true}
+    
+    # Extract all scales from all results files
+    all_scales = []
+    for path in [codesign_added, codesign_removed, separate_added, separate_removed]:
+        if path and path in data_cache:
+            all_scales.extend(data_cache[path]['total_false'][0])
+    unique_scales = np.sort(np.unique(np.array(all_scales)))
     
     # Set y-label text based on data_type
     if data_type == "average":
         y_label = 'Average Wait Time (s)'
     else:  # total
         y_label = 'Total Wait Time (×10³ s)'
-    
-    # Load results data for subplot (b) - Pedestrian
-    # Cache data to avoid redundant loading
-    data_cache = {}
     
     # Define configurations for the two plots
     plot_configs = [
@@ -1504,57 +1524,54 @@ def rewards_results_plot(combined_csv_codesign,
         (ax3, "Vehicle", "vehicle")
     ]
     
-    # Store legend handles and labels
-    all_legend_handles = []
-    all_legend_labels = []
+    # Store legend handles and labels for subplots (b) and (c)
+    bc_legend_handles = []
+    bc_legend_labels = []
     
     # Process results for pedestrian and vehicle
     for ax, title, domain in plot_configs:
-        for path, plot_title, color in [
-            (results_codesign, "Co-design", COLOR_CODESIGN),
-            (results_separate, "Separate-control", COLOR_CONTROL)
+        for path, plot_title, color, marker in [
+            (codesign_added, "Co-design +1", COLOR_CODESIGN, 'o'),   # Green with circle marker
+            (codesign_removed, "Co-design -1", COLOR_CODESIGN, '^'), # Green with triangle marker
+            (separate_added, "Separate +1", COLOR_CONTROL, 'o'),     # Blue with circle marker
+            (separate_removed, "Separate -1", COLOR_CONTROL, '^')    # Blue with triangle marker
         ]:
-            if not path:  # Skip if path is not provided
-                ax.axis('off')
+            if not path or path not in data_cache:  # Skip if path is not provided or data not available
                 continue
                 
-            # Load data using get_averages
-            if path not in data_cache:
-                data_false = get_averages(path, total=False)
-                data_true = get_averages(path, total=True)
-                data_cache[path] = {'total_false': data_false, 'total_true': data_true}
-            
             # Get appropriate data based on domain and data_type
             if domain == "pedestrian":
                 if data_type == "average":
-                    scales, _, _, values, _, _, values_std = data_cache[path]['total_false']
+                    scales, _, ped_avg_mean, _, _, ped_avg_std, _ = data_cache[path]['total_false']
+                    values = ped_avg_mean
+                    values_std = ped_avg_std
                 else:  # total
-                    scales, _, _, values, _, _, values_std = data_cache[path]['total_true']
-                    values = values / 1000.0  # Convert to thousands
-                    values_std = values_std / 1000.0
+                    scales, _, _, ped_tot, _, _, ped_tot_std = data_cache[path]['total_true']
+                    values = ped_tot / 1000.0  # Convert to thousands
+                    values_std = ped_tot_std / 1000.0
             else:  # vehicle
                 if data_type == "average":
-                    scales, values, _, _, values_std, _, _ = data_cache[path]['total_false']
+                    scales, veh_avg_mean, _, _, veh_avg_std, _, _ = data_cache[path]['total_false']
+                    values = veh_avg_mean
+                    values_std = veh_avg_std
                 else:  # total
-                    scales, values, _, _, values_std, _, _ = data_cache[path]['total_true']
-                    values = values / 1000.0  # Convert to thousands
-                    values_std = values_std / 1000.0
+                    scales, veh_tot, _, _, veh_tot_std, _, _ = data_cache[path]['total_true']
+                    values = veh_tot / 1000.0  # Convert to thousands
+                    values_std = veh_tot_std / 1000.0
             
             # Set up the axis
             ax.set_facecolor('white')
             ax.spines['top'].set_visible(False)
             ax.spines['right'].set_visible(False)
             
-            # Create plot
-            h = create_gradient_line(ax, scales, values, color, lw=3.0, zorder=20, label=plot_title)
+            # Plot line with markers - simplified approach instead of gradient line
+            h, = ax.plot(scales, values, color=color, linewidth=2.5, 
+                        marker=marker, markersize=12, markeredgecolor='white', 
+                        markeredgewidth=1.5, label=plot_title, zorder=20)
             
-            # Add error visualization based on preference
-            if use_error_bars:
-                ax.errorbar(scales, values, yerr=values_std, color=color, capsize=4.5,
-                           elinewidth=2.0, capthick=2.2, alpha=0.85, fmt='none', zorder=10)
-            else:
-                ax.fill_between(scales, values - values_std, values + values_std,
-                               color=color, alpha=0.2, zorder=5)
+            # Add error bars
+            ax.errorbar(scales, values, yerr=values_std, color=color, capsize=4.5,
+                       elinewidth=2.0, capthick=2.2, alpha=0.85, fmt='none', zorder=10)
                 
             # Style the axis
             ax.set_title(title, fontsize=fs+2, fontweight='bold', pad=12)
@@ -1562,9 +1579,10 @@ def rewards_results_plot(combined_csv_codesign,
             ax.set_xlabel('Demand Scale', fontsize=fs, labelpad=10)
             ax.tick_params(axis='both', labelsize=fs-1)
             
-            # Use fixed x ticks
+            # Use fixed x ticks instead of scales from data
+            fixed_scales = [0.5, 1.0, 1.5, 2.0, 2.5]
             ax.set_xticks(fixed_scales)
-            ax.set_xticklabels(fixed_scale_labels)
+            ax.set_xticklabels([f'{s:.1f}x' for s in fixed_scales])
             
             # Set y-axis formatting with 5 ticks
             ax.yaxis.set_major_locator(MaxNLocator(nbins=5, integer=True))
@@ -1574,41 +1592,63 @@ def rewards_results_plot(combined_csv_codesign,
             ax.grid(True, linestyle='--', linewidth=0.8, alpha=0.7, zorder=-5)
             
             # Save handle for joint legend
-            if plot_title not in all_legend_labels:
-                all_legend_handles.append(h)
-                all_legend_labels.append(plot_title)
-        
-        # Set specific y-axis limits for average data type
-        # if data_type == "average":
-        #     if domain == "pedestrian":
-        #         ax.set_ylim(115, 185)  # For subplot (b) - Pedestrian
-        #     else:  # vehicle
-        #         ax.set_ylim(-10, 200)  # For subplot (c) - Vehicle
+            if plot_title not in bc_legend_labels:
+                bc_legend_handles.append(h)
+                bc_legend_labels.append(plot_title)
 
-    # Create a single shared legend in the middle of the figure
-    legend_kwargs = {
-        'loc': 'lower center',
-        'ncol': 2,  # Force legend into a single line
-        'bbox_to_anchor': (0.52, -0.125),  # Position it below the panels
-        'fontsize': fs - 2,
-        'frameon': True,
-        'fancybox': True,
-        'facecolor': 'white',
-        'edgecolor': '#cccccc',
-        'framealpha': 1.0,
-        'borderpad': 0.6,
-        'labelspacing': 0.4
-    }
+    # # Set specific y-axis limits for average data type
+    # if data_type == "average":
+    #     # Set y-limits for subplot (b) - Pedestrian
+    #     ax2.set_ylim(115, 185)
+    #     # Set y-limits for subplot (c) - Vehicle
+    #     ax3.set_ylim(-10, 200)
+
+    # Create legend for subplot (a)
+    legend_a = ax1.legend(
+        handles=[codesign_line, control_line],
+        labels=["Co-design", "Separate"],
+        loc='upper center',
+        bbox_to_anchor=(0.5, -0.15),
+        ncol=2,
+        fontsize=fs - 2,
+        frameon=True,
+        fancybox=True,
+        facecolor='white',
+        edgecolor='#cccccc',
+        framealpha=1.0,
+        borderpad=0.6,
+        labelspacing=0.4,
+        handletextpad=0.6,
+        handlelength=2.5
+    )
     
-    # Add shared legend directly using handles from all subplots
-    legend = fig.legend(all_legend_handles, all_legend_labels, **legend_kwargs)
+
+    # Create a figure legend for subplots (b) and (c)
+    bc_legend = fig.legend(
+        handles=bc_legend_handles,
+        labels=bc_legend_labels,
+        loc='upper center',
+        bbox_to_anchor=(0.68, 0.01),
+        ncol=4,
+        fontsize=fs - 2,
+        frameon=True,
+        fancybox=True,
+        facecolor='white',
+        edgecolor='#cccccc',
+        framealpha=1.0,
+        borderpad=0.6,
+        labelspacing=0.4,
+        handletextpad=0.6,
+        handlelength=2.5
+    )
     
-    # Increase the linewidth in the legend
-    for line in legend.get_lines():
-        line.set_linewidth(3.5)  # Thicker lines in legend only
+    # Increase the linewidth in the legends
+    for legend in [legend_a, bc_legend]:
+        for line in legend.get_lines():
+            line.set_linewidth(3.5)  # Thicker lines in legend only
 
     # Subplot labels below each panel
-    label_y = -0.16  # Position for panel labels - moved up from -0.33 to -0.26
+    label_y = -0.17  # Position for panel labels
     label_fontsize = fs + 2
     fig.text(0.215, label_y, "(a)", ha="center", va="center", fontsize=label_fontsize, fontweight="bold")
     fig.text(0.505, label_y, "(b)", ha="center", va="center", fontsize=label_fontsize, fontweight="bold")
@@ -2268,7 +2308,7 @@ def plot_design_and_control_results(design_unsig_path, realworld_unsig_path,
     # Control Legend (b, c) - Centered under middle/right columns
     # Adjusted y anchor for taller figure and space above
     leg_b_c = fig.legend(handles=ordered_control_handles, labels=control_labels,
-                         ncol=3,
+                         ncol=1,
                          bbox_to_anchor=(0.675, -0.03), # Moved legend down
                          **legend_kwargs)
                          
@@ -2340,8 +2380,10 @@ def plot(design_and_control = False,
         rewards_results_plot(
             combined_csv_codesign = "./runs/combined_rewards_codesign.csv",
             combined_csv_control = "./runs/combined_rewards_control_only.csv",
-            results_codesign = "./runs/May09_11-34-05/results/eval_May13_16-25-03/policy_at_7603200_ppo.json",
-            results_separate = "./runs/May11_10-18-09/results/eval_May13_16-28-32/policy_at_11923200_ppo.json",
+            codesign_added = "./runs/May09_11-34-05/results/codesign_added.json",
+            codesign_removed = "./runs/May09_11-34-05/results/codesign_removed.json",
+            separate_added = "./runs/May11_10-18-09/results/separate_added.json",
+            separate_removed = "./runs/May11_10-18-09/results/separate_removed.json",
             data_type = "average"
         )
         
