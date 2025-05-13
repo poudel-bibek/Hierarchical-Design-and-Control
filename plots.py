@@ -1250,13 +1250,13 @@ def plot_graphs_and_gmm( graph_a_path,
     cbar.ax.set_position([bcbar_final.x0, bcbar_final.y0 + dy, bcbar_final.width, bcbar_final.height])
 
     # Save figure tightly
-    fig.savefig('./graphs_gmm.png', dpi=dpi, bbox_inches='tight', pad_inches=0)
+    fig.savefig('./graphs_gmm.pdf', dpi=dpi, bbox_inches='tight', pad_inches=0)
 
 def rewards_results_plot(combined_csv_codesign, 
                          combined_csv_control, 
                          results_codesign,
                          results_separate,
-                         data_type = "average", # average or total
+                         data_type = "total", # average or total
                          use_error_bars = True):
     """
     (a) Contains both codesign and control reward plot
@@ -1609,7 +1609,7 @@ def rewards_results_plot(combined_csv_codesign,
 
     # Final adjustments
     plt.subplots_adjust(left=0.08, right=0.98, top=0.93, bottom=0.13)
-    plt.savefig("rewards_results_plot.png", dpi=dpi, bbox_inches='tight', pad_inches=0.1)
+    plt.savefig("rewards_results_plot.pdf", dpi=dpi, bbox_inches='tight', pad_inches=0.1)
     plt.close(fig)
 
 def plot_gmm_top_down(gmm_pkl_path: str, 
@@ -2282,7 +2282,7 @@ def plot_design_and_control_results(design_unsig_path, realworld_unsig_path,
     # --- Final Adjustments and Save ---
     # Adjusted margins for taller figure and repositioned lower elements
     plt.subplots_adjust(left=0.08, right=0.98, top=0.93, bottom=0.13) # Adjusted bottom margin
-    plt.savefig("design_control_results.png", bbox_inches='tight', dpi=300)
+    plt.savefig("design_control_results.pdf", bbox_inches='tight', dpi=300)
     plt.close(fig)
 
 
@@ -2334,7 +2334,7 @@ def plot(design_and_control = True,
             combined_csv_codesign = "./runs/combined_rewards_codesign.csv",
             combined_csv_control = "./runs/combined_rewards_control_only.csv",
             results_codesign = "./runs/May09_11-34-05/results/eval_May13_13-07-37/policy_at_7603200_ppo.json",
-            results_separate = "./runs/May09_11-34-05/results/eval_May13_13-07-37/policy_at_7603200_ppo.json"
+            results_separate = "./runs/May11_10-18-09/results/eval_May13_14-14-41/policy_at_11980800_ppo.json"
 
         )
         

@@ -844,7 +844,7 @@ class GAT_v2_ActorCritic(nn.Module):
 
         # # For testing, explicitly keep only selected proposals and invalidate others
         # # [0.1250, 0.9750], [0.4000, 0.4875], [0.7250, 0.5750], [0.8500, 0.0500]
-        # desired_proposals = torch.tensor([[0.1250, 0.9750], [0.4000, 0.4875]], device=device)
+        # desired_proposals = torch.tensor([[0.7250, 0.5750], [0.8500, 0.0500]], device=device)
         # num_desired = desired_proposals.shape[0]
 
         # # Reset all proposals to -1
