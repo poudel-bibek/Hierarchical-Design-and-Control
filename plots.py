@@ -1579,11 +1579,11 @@ def rewards_results_plot(combined_csv_codesign,
                 all_legend_labels.append(plot_title)
         
         # Set specific y-axis limits for average data type
-        if data_type == "average":
-            if domain == "pedestrian":
-                ax.set_ylim(115, 185)  # For subplot (b) - Pedestrian
-            else:  # vehicle
-                ax.set_ylim(-10, 200)  # For subplot (c) - Vehicle
+        # if data_type == "average":
+        #     if domain == "pedestrian":
+        #         ax.set_ylim(115, 185)  # For subplot (b) - Pedestrian
+        #     else:  # vehicle
+        #         ax.set_ylim(-10, 200)  # For subplot (c) - Vehicle
 
     # Create a single shared legend in the middle of the figure
     legend_kwargs = {
@@ -2304,8 +2304,8 @@ def plot_design_and_control_results(design_unsig_path, realworld_unsig_path,
 
 
 def plot(design_and_control = False, 
-         graphs_and_gmm = True,
-         rewards_results = False):
+         graphs_and_gmm = False,
+         rewards_results = True):
     
     run_dir = "May09_11-34-05"
 
@@ -2340,8 +2340,8 @@ def plot(design_and_control = False,
         rewards_results_plot(
             combined_csv_codesign = "./runs/combined_rewards_codesign.csv",
             combined_csv_control = "./runs/combined_rewards_control_only.csv",
-            results_codesign = "./runs/May09_11-34-05/results/eval_May13_15-12-38/policy_at_7603200_ppo.json",
-            results_separate = "./runs/May11_10-18-09/results/eval_May13_15-17-33/policy_at_11923200_ppo.json",
+            results_codesign = "./runs/May09_11-34-05/results/eval_May13_16-25-03/policy_at_7603200_ppo.json",
+            results_separate = "./runs/May11_10-18-09/results/eval_May13_16-28-32/policy_at_11923200_ppo.json",
             data_type = "average"
         )
         
