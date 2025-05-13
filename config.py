@@ -88,7 +88,7 @@ def get_config():
 
         # Evaluation
         "eval_model_path": "./runs/May11_10-18-09/saved_policies/policy_at_11923200.pth",  # Path to the saved PPO model for evaluation. replace xyz.
-        "eval_lower_timesteps": 600,  # Number of timesteps to each episode. Warmup not counted.
+        "eval_lower_timesteps": 450,  # Number of timesteps to each episode. Warmup not counted.
         "eval_lower_workers": 10,  # Parallelizes how many demands can be evaluated at the same time.
         "eval_worker_device": "gpu",  # Policy during eval can be run in GPU 
     }
