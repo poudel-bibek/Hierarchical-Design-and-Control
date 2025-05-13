@@ -442,17 +442,18 @@ def main(config):
         eval_args['eval_save_dir'] = eval_save_dir
         eval_args['lower_state_dim'] = dummy_env.observation_space.shape
         
+        real_world_design_unsignalized_results_path = ""
         # Evaluate the real-world design in the unsignalized setting. A control policy was never trained on the real-world design. 
-        real_world_design_unsignalized_results_path = eval(design_args, 
-                                                           control_args, 
-                                                           higher_ppo_args, 
-                                                           lower_ppo_args, 
-                                                           eval_args, 
-                                                           policy_path=None, 
-                                                           global_step="_final", 
-                                                           tl=True, 
-                                                           unsignalized=True, 
-                                                           real_world=True) 
+        # real_world_design_unsignalized_results_path = eval(design_args, 
+        #                                                    control_args, 
+        #                                                    higher_ppo_args, 
+        #                                                    lower_ppo_args, 
+        #                                                    eval_args, 
+        #                                                    policy_path=None, 
+        #                                                    global_step="_final", 
+        #                                                    tl=True, 
+        #                                                    unsignalized=True, 
+        #                                                    real_world=True) 
         
         # Evaluate the ``new design`` in the all three settings. The new design network has to be same across all three settings.
         # Load the policy params (model sizes etc) from the config file. 
@@ -472,24 +473,24 @@ def main(config):
                                            policy_path=config['eval_model_path'], 
                                            global_step="_final")
         
-        new_design_tl_results_path = eval(design_args,
-                                           control_args, 
-                                           higher_ppo_args, 
-                                           lower_ppo_args, 
-                                           eval_args, 
-                                           policy_path=config['eval_model_path'], # Although this wont use the policy, provide path.
-                                           global_step="_final", 
-                                           tl=True) 
+        # new_design_tl_results_path = eval(design_args,
+        #                                    control_args, 
+        #                                    higher_ppo_args, 
+        #                                    lower_ppo_args, 
+        #                                    eval_args, 
+        #                                    policy_path=config['eval_model_path'], # Although this wont use the policy, provide path.
+        #                                    global_step="_final", 
+        #                                    tl=True) 
 
-        new_design_unsignalized_results_path = eval(design_args, 
-                                                    control_args, 
-                                                    higher_ppo_args, 
-                                                    lower_ppo_args, 
-                                                    eval_args, 
-                                                    policy_path=config['eval_model_path'], # Although this wont use the policy, provide path.
-                                                    global_step="_final", 
-                                                    tl=True, 
-                                                    unsignalized=True)
+        # new_design_unsignalized_results_path = eval(design_args, 
+        #                                             control_args, 
+        #                                             higher_ppo_args, 
+        #                                             lower_ppo_args, 
+        #                                             eval_args, 
+        #                                             policy_path=config['eval_model_path'], # Although this wont use the policy, provide path.
+        #                                             global_step="_final", 
+        #                                             tl=True, 
+        #                                             unsignalized=True)
 
         # plot_control_results(new_design_unsignalized_results_path,  
         #                   new_design_tl_results_path,

@@ -19,7 +19,6 @@ def create_new_sumocfg(save_dir, network_iteration):
     <configuration>
         <input>
             <net-file value="network_iterations/network_iteration_{network_iteration}.net.xml"/>
-            <gui-settings-file value="../view.xml"/>
         </input>
         <output>
             <log value="sumo_logfile.txt"/>
